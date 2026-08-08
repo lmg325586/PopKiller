@@ -4,6 +4,5 @@ namespace winui
     runtimeclass HomePage : Microsoft.UI.Xaml.Controls.Page
     {
         HomePage();
-        Int32 MyProperty;
     }
 }
