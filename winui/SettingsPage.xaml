@@ -4,15 +4,42 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <StackPanel Padding="32" Spacing="16">
-        <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}"/>
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <FontIcon Glyph="&#xE713;" FontSize="20" FontFamily="{ThemeResource SymbolThemeFontFamily}" 
+                      Foreground="{ThemeResource SystemControlHighlightAccentBrush}"/>
+            <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}"/>
+        </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="16">
             <TextBlock Text="主题材质" VerticalAlignment="Center"/>
             <ComboBox x:Name="ThemeComboBox" Width="150"
-                    SelectionChanged="ThemeComboBox_SelectionChanged">
+                      SelectionChanged="ThemeComboBox_SelectionChanged">
                 <ComboBoxItem Content="默认"/>
                 <ComboBoxItem Content="Mica"/>
             </ComboBox>
+        </StackPanel>
+
+        <StackPanel Spacing="12">
+            <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <TextBlock FontSize="14">
+                <Run Text="作者：" />
+                <Hyperlink NavigateUri="https://github.com/">
+                    <Run Text="Lmg325586" />
+                </Hyperlink>
+            </TextBlock>
+
+            <TextBlock FontSize="14">
+                <Run Text="许可证：" />
+                <Hyperlink NavigateUri="https://mit-license.org/">
+                    <Run Text="MIT License" FontWeight="SemiBold" />
+                </Hyperlink>
+            </TextBlock>
+
+            <TextBlock FontSize="14">
+                <Run Text="版本：" />
+                <Run Text="Bete 0.0.1" />
+            </TextBlock>
         </StackPanel>
     </StackPanel>
 </Page>
