@@ -4,8 +4,5 @@ namespace winui
     runtimeclass HomePage : Microsoft.UI.Xaml.Controls.Page
     {
         HomePage();
-        void GlowPointerEntered(Object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args);
-        void GlowPointerMoved(Object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args);
-        void GlowPointerExited(Object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args);
     }
 }

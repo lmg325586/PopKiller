@@ -8,38 +8,30 @@
 
             <TextBlock Text="Home" Style="{StaticResource TitleTextBlockStyle}"/>
 
-            <Border x:Name="GlowCard"
-                    Background="Transparent"
-                    HorizontalAlignment="Left" MaxWidth="600"
-                    PointerEntered="GlowPointerEntered"
-                    PointerMoved="GlowPointerMoved"
-                    PointerExited="GlowPointerExited">
-                <Grid>
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="0"
+                    Padding="24"
+                    HorizontalAlignment="Left"
+                    MaxWidth="800">
 
-                    <Border Background="White"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            Margin="2">
-                        <StackPanel Spacing="0" Padding="24">
-                            <TextBlock Text="Microsoft Windows" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
-                            <TextBlock x:Name="VersionLineText" FontSize="13" Margin="0,0,0,6"/>
-                            <TextBlock Text="© Microsoft Corporation。保留所有权利。" FontSize="13" Margin="0,0,0,28"/>
-                            <TextBlock x:Name="EditionText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,28"/>
-                            <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,14">
-                                根据 <Hyperlink NavigateUri="https://www.microsoft.com/zh-cn/legal/terms-of-use">Microsoft 软件许可条款</Hyperlink>，许可如下用户使用本产品:
-                            </TextBlock>
-                            <TextBlock x:Name="OwnerText" FontSize="13" Margin="24,0,0,4"/>
-                            <TextBlock x:Name="OrgText" FontSize="13" Margin="24,0,0,0"/>
-                        </StackPanel>
-                    </Border>
+                <StackPanel Spacing="0">
+                    <TextBlock Text="Microsoft Windows" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
 
-                    <Grid x:Name="GlowRing" Opacity="0" IsHitTestVisible="False">
-                        <Rectangle x:Name="EdgeTop"    Height="2" VerticalAlignment="Top"/>
-                        <Rectangle x:Name="EdgeBottom" Height="2" VerticalAlignment="Bottom"/>
-                        <Rectangle x:Name="EdgeLeft"   Width="2"  HorizontalAlignment="Left"/>
-                        <Rectangle x:Name="EdgeRight"  Width="2"  HorizontalAlignment="Right"/>
-                    </Grid>
-                </Grid>
+                    <TextBlock x:Name="VersionLineText" FontSize="13" Margin="0,0,0,6"/>
+
+                    <TextBlock Text="© Microsoft Corporation。保留所有权利。" FontSize="13" Margin="0,0,0,28"/>
+
+                    <TextBlock x:Name="EditionText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,28"/>
+
+                    <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,14">
+                        根据 <Hyperlink NavigateUri="https://www.microsoft.com/zh-cn/legal/terms-of-use">Microsoft 软件许可条款</Hyperlink>，许可如下用户使用本产品:
+                    </TextBlock>
+
+                    <TextBlock x:Name="OwnerText" FontSize="13" Margin="24,0,0,4"/>
+                    <TextBlock x:Name="OrgText" FontSize="13" Margin="24,0,0,0"/>
+                </StackPanel>
             </Border>
 
         </StackPanel>
