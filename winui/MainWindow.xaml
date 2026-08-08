@@ -30,7 +30,7 @@
             <NavigationView.FooterMenuItems>
                 <NavigationViewItem Content="设置" Tag="Settings">
                     <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Setting"/>
+                        <FontIcon Glyph="&#xE713;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.FooterMenuItems>
