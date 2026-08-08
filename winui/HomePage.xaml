@@ -2,10 +2,38 @@
     x:Class="winui.HomePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <StackPanel Margin="24" Spacing="8">
-        <TextBlock Text="Home" FontSize="28"/>
 
-        <TextBlock x:Name="WindowsVersionText" FontSize="14" 
-                   Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
-    </StackPanel>
+    <ScrollViewer>
+        <StackPanel Padding="32,24" Spacing="16">
+
+            <TextBlock Text="Home" Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="0"
+                    Padding="24"
+                    HorizontalAlignment="Left"
+                    MaxWidth="800">
+
+                <StackPanel Spacing="0">
+                    <TextBlock Text="Microsoft Windows" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
+
+                    <TextBlock x:Name="VersionLineText" FontSize="13" Margin="0,0,0,6"/>
+
+                    <TextBlock Text="© Microsoft Corporation。保留所有权利。" FontSize="13" Margin="0,0,0,28"/>
+
+                    <TextBlock x:Name="EditionText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,28"/>
+
+                    <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,14">
+                        根据 <Hyperlink NavigateUri="https://www.microsoft.com/zh-cn/legal/terms-of-use">Microsoft 软件许可条款</Hyperlink>，许可如下用户使用本产品:
+                    </TextBlock>
+
+                    <TextBlock x:Name="OwnerText" FontSize="13" Margin="24,0,0,4"/>
+                    <TextBlock x:Name="OrgText" FontSize="13" Margin="24,0,0,0"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
 </Page>
