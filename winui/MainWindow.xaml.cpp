@@ -2,11 +2,11 @@
 #include "MainWindow.xaml.h"
 #include "HomePage.xaml.h"
 #include "SettingsPage.xaml.h"
+#include "winrt/Windows.UI.Xaml.Interop.h"
 #include <commctrl.h>
 #pragma comment(lib, "comctl32.lib")
 #include <microsoft.ui.xaml.window.h>
 #include "AppTheme.h"
-#include "winrt/Windows.UI.Xaml.Interop.h"
 #if __has_include("MainWindow.g.cpp")
 #include "MainWindow.g.cpp"
 #endif
@@ -52,7 +52,8 @@ namespace winrt::winui::implementation
             SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
         }
 
-        ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
+
+        contentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
 
         auto native = this->try_as<::IWindowNative>();
         if (native)
@@ -63,12 +64,19 @@ namespace winrt::winui::implementation
                 ::SetWindowSubclass(hwnd, MinSizeSubclass, 0, 0);
             }
         }
-
     }
 
     void MainWindow::NavView_SelectionChanged(NavigationView const&,
         NavigationViewSelectionChangedEventArgs const& args)
     {
+
+        if (args.IsSettingsSelected())
+        {
+            contentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
+            return;
+        }
+
+
         auto item = args.SelectedItem().try_as<NavigationViewItem>();
         if (!item)
         {
@@ -78,11 +86,7 @@ namespace winrt::winui::implementation
         hstring tag = unbox_value<hstring>(item.Tag());
         if (tag == L"Home")
         {
-            ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
-        }
-        else if (tag == L"Settings")
-        {
-            ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
+            contentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
         }
     }
 }

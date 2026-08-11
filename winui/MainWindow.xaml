@@ -8,34 +8,20 @@
             <RowDefinition Height="32"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        
+
         <Grid x:Name="AppTitleBar" Background="White">
             <TextBlock Text="winui" VerticalAlignment="Center" Margin="16,0,0,0" FontSize="14"/>
         </Grid>
 
         <NavigationView x:Name="NavView" Grid.Row="1"
                         IsBackButtonVisible="Collapsed"
-                        IsSettingsVisible="False"
-                        OpenPaneLength="280"
-                        CompactPaneLength="48"
+                        IsSettingsVisible="True"
                         SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="主页" Tag="Home">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Home"/>
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
+                <NavigationViewItem Icon="Home" Content="主页" Tag="Home" />
             </NavigationView.MenuItems>
 
-            <NavigationView.FooterMenuItems>
-                <NavigationViewItem Content="设置" Tag="Settings">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Setting"/>
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-            </NavigationView.FooterMenuItems>
-
-            <Frame x:Name="ContentFrame"/>
+            <Frame x:Name="contentFrame"/>
         </NavigationView>
     </Grid>
 </Window>
