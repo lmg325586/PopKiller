@@ -2,6 +2,8 @@
 #include "SettingsPage.xaml.h"
 #include "App.xaml.h"
 #include "AppTheme.h"
+#include "LicensePage.xaml.h"
+#include "winrt/Windows.UI.Xaml.Interop.h"
 #if __has_include("SettingsPage.g.cpp")
 #include "SettingsPage.g.cpp"
 #endif
@@ -16,6 +18,11 @@ namespace winrt::winui::implementation
         InitializeComponent();
         ThemeComboBox().SelectedIndex(AppTheme::Index);
         m_initialized = true;
+    }
+
+    void SettingsPage::LicenseLink_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        Frame().Navigate(xaml_typename<winrt::winui::LicensePage>());
     }
 
     void SettingsPage::ThemeComboBox_SelectionChanged(IInspectable const&,

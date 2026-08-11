@@ -11,6 +11,9 @@ namespace winrt::winui::implementation
         void ThemeComboBox_SelectionChanged(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& args);
 
+        void LicenseLink_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+
         bool m_initialized{ false };
     };
 }

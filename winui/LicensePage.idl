@@ -1,0 +1,9 @@
+namespace winui
+{
+    [default_interface]
+    runtimeclass LicensePage : Microsoft.UI.Xaml.Controls.Page
+    {
+        LicensePage();
+        void BackButton_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+    }
+}

@@ -29,12 +29,12 @@
                 </Hyperlink>
             </TextBlock>
 
-            <TextBlock FontSize="14">
-                <Run Text="许可证：" />
-                <Hyperlink NavigateUri="https://mit-license.org/">
-                    <Run Text="MIT License" FontWeight="SemiBold" />
-                </Hyperlink>
-            </TextBlock>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock FontSize="14" Text="许可证："/>
+                <HyperlinkButton Content="MIT License" FontWeight="SemiBold"
+                     Padding="0" Margin="0,-4,0,0"
+                     Click="LicenseLink_Click"/>
+            </StackPanel>
 
             <TextBlock FontSize="14">
                 <Run Text="版本：" />
