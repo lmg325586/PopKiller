@@ -52,7 +52,11 @@ namespace winrt::winui::implementation
             SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
         }
 
-        ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
+        auto menuItems = NavView().MenuItems();
+        if (menuItems.Size() > 0)
+        {
+            NavView().SelectedItem(menuItems.GetAt(0));
+        }
 
         auto native = this->try_as<::IWindowNative>();
         if (native)
@@ -63,7 +67,6 @@ namespace winrt::winui::implementation
                 ::SetWindowSubclass(hwnd, MinSizeSubclass, 0, 0);
             }
         }
-
     }
 
     void MainWindow::NavView_SelectionChanged(NavigationView const&,
