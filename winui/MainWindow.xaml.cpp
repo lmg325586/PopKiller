@@ -69,6 +69,14 @@ namespace winrt::winui::implementation
     void MainWindow::NavView_SelectionChanged(NavigationView const&,
         NavigationViewSelectionChangedEventArgs const& args)
     {
+
+        if (args.IsSettingsSelected())
+        {
+            ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
+            return;
+        }
+
+
         auto item = args.SelectedItem().try_as<NavigationViewItem>();
         if (!item)
         {
@@ -79,10 +87,6 @@ namespace winrt::winui::implementation
         if (tag == L"Home")
         {
             ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
-        }
-        else if (tag == L"Settings")
-        {
-            ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
         }
     }
 }
