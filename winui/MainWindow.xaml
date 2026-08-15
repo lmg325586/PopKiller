@@ -25,6 +25,7 @@
                         <SymbolIcon Symbol="Home"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem Content="弹窗拦截" Tag="Blocker" Icon="Cancel"/>
             </NavigationView.MenuItems>
 
             <Frame x:Name="ContentFrame"/>
