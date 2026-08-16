@@ -45,6 +45,10 @@ namespace winrt::winui::implementation
         this->Closed([](auto&&, auto&&)
         {
             PopupBlocker::Stop();
+
+            FILE* f{};
+            if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"wb") == 0 && f)
+                ::fclose(f);
         });
 
         auto titleBar = this->AppWindow().TitleBar();

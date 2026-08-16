@@ -34,6 +34,18 @@ namespace
         ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), -1, wide.data(), need);
         return wide;
     }
+
+    uint64_t LogWriteTime()
+    {
+        WIN32_FILE_ATTRIBUTE_DATA a{};
+        if (!::GetFileAttributesExW(PopupBlocker::LogPath().c_str(),
+            GetFileExInfoStandard, &a))
+            return 0;
+        ULARGE_INTEGER u{};
+        u.LowPart = a.ftLastWriteTime.dwLowDateTime;
+        u.HighPart = a.ftLastWriteTime.dwHighDateTime;
+        return u.QuadPart;
+    }
 }
 
 namespace winrt::winui::implementation
@@ -42,6 +54,16 @@ namespace winrt::winui::implementation
     {
         InitializeComponent();
         Load();
+
+        m_timer = DispatcherTimer();
+        m_timer.Interval(std::chrono::seconds(1));
+        m_timer.Tick({ this, &BlockLogPage::Timer_Tick });
+        m_timer.Start();
+
+        this->Unloaded([this](auto&&, auto&&)
+            {
+                if (m_timer) m_timer.Stop();
+            });
     }
 
     void BlockLogPage::Load()
@@ -58,6 +80,18 @@ namespace winrt::winui::implementation
         }
         for (auto it = lines.rbegin(); it != lines.rend(); ++it)
             LogList().Items().Append(box_value(hstring(*it)));
+
+        m_lastWrite = LogWriteTime();
+    }
+
+    void BlockLogPage::Timer_Tick(IInspectable const&, IInspectable const&)
+    {
+        uint64_t t = LogWriteTime();
+        if (t != m_lastWrite)
+        {
+            m_lastWrite = t;
+            Load();
+        }
     }
 
     void BlockLogPage::Refresh_Click(IInspectable const&, RoutedEventArgs const&)

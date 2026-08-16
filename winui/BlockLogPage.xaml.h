@@ -15,6 +15,11 @@ namespace winrt::winui::implementation
 
     private:
         void Load();
+        void Timer_Tick(winrt::Windows::Foundation::IInspectable const&,
+            winrt::Windows::Foundation::IInspectable const&);
+
+        winrt::Microsoft::UI::Xaml::DispatcherTimer m_timer{ nullptr };
+        uint64_t m_lastWrite{ 0 };
     };
 }
 
