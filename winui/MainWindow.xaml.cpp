@@ -3,6 +3,7 @@
 #include "HomePage.xaml.h"
 #include "SettingsPage.xaml.h"
 #include "PopupBlockerPage.xaml.h"
+#include "AppSettings.h"
 #include "PopupBlocker.h"
 #include <commctrl.h>
 #pragma comment(lib, "comctl32.lib")
@@ -39,14 +40,19 @@ namespace winrt::winui::implementation
     MainWindow::MainWindow()
     {
         InitializeComponent();
-        //::MessageBoxW(nullptr, AppSettings::IniPath().c_str(), L"IniPath", MB_OK);
+
+        this->Closed([](winrt::Microsoft::UI::Xaml::Window const&,
+            winrt::Microsoft::UI::Xaml::WindowEventArgs const&)
+            {
+                PopupBlocker::Stop();
+            });
+
         auto titleBar = this->AppWindow().TitleBar();
         titleBar.IconShowOptions(winrt::Microsoft::UI::Windowing::IconShowOptions::HideIconAndSystemMenu);
-
+        AppTheme::Index = AppSettings::ReadInt(L"UI", L"Material", 0);
         ExtendsContentIntoTitleBar(true);
         SetTitleBar(AppTitleBar());
         AppTheme::TitleBarElement = AppTitleBar();
-
         AppTheme::ApplyTitleBar(titleBar);
 
         if (AppTheme::Index == 1)
@@ -54,6 +60,7 @@ namespace winrt::winui::implementation
             SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
         }
 
+        PopupBlocker::EnsureDefaultRules();
         if (AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1)
         {
             PopupBlocker::SyncFromSettings();

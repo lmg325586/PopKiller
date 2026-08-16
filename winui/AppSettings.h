@@ -6,24 +6,11 @@ namespace AppSettings
 {
     inline std::wstring IniPath()
     {
-        WCHAR buf[MAX_PATH]{};
-        DWORD len = ::GetEnvironmentVariableW(L"APPDATA", buf, MAX_PATH);
-        std::wstring dir;
-
-        if (len > 0 && len < MAX_PATH)
-        {
-            dir = std::wstring(buf) + L"\\winui";
-            ::CreateDirectoryW(dir.c_str(), nullptr);
-        }
-        else
-        {
-            WCHAR path[MAX_PATH]{};
-            ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-            dir = path;
-            auto pos = dir.find_last_of(L"\\/");
-            if (pos != std::wstring::npos) dir = dir.substr(0, pos);
-        }
-
+        WCHAR path[MAX_PATH]{};
+        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
+        std::wstring dir(path);
+        auto pos = dir.find_last_of(L"\\/");
+        if (pos != std::wstring::npos) dir = dir.substr(0, pos);
         return dir + L"\\winui.ini";
     }
 

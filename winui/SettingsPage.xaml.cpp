@@ -2,6 +2,7 @@
 #include "SettingsPage.xaml.h"
 #include "App.xaml.h"
 #include "AppTheme.h"
+#include "AppSettings.h"
 #include "LicensePage.xaml.h"
 #include "winrt/Windows.UI.Xaml.Interop.h"
 #if __has_include("SettingsPage.g.cpp")
@@ -34,6 +35,7 @@ namespace winrt::winui::implementation
         }
 
         AppTheme::Index = ThemeComboBox().SelectedIndex();
+        AppSettings::WriteInt(L"UI", L"Material", AppTheme::Index);
 
         auto window = winrt::winui::implementation::App::window;
         if (!window)

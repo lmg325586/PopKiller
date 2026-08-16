@@ -26,6 +26,6 @@
         <Button Content="删除选中规则" Click="DeleteRule_Click"/>
 
         <TextBlock FontSize="12" Foreground="Gray" TextWrapping="Wrap"
-                   Text="进程=exe 名子串；标题=窗口标题子串；类名=窗口类名子串。规则保存在注册表，拦截引擎将在后续版本接入。"/>
+                   Text="进程=exe 名子串；标题=窗口标题子串；类名=窗口类名子串。"/>
     </StackPanel>
 </Page>

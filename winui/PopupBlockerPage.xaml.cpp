@@ -39,6 +39,8 @@ namespace winrt::winui::implementation
     {
         InitializeComponent();
 
+        PopupBlocker::EnsureDefaultRules();
+
         EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
 
         int count = AppSettings::ReadInt(L"Blocker", L"RuleCount", 0);

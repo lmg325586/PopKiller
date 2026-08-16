@@ -20,7 +20,7 @@ namespace winrt::winui::implementation
     private:
         void RefreshList();
         void Save();
-        std::vector<std::pair<int, std::wstring>> m_rules; // {类型下标, 模式}
+        std::vector<std::pair<int, std::wstring>> m_rules;
     };
 }
 
