@@ -1,0 +1,10 @@
+namespace winui
+{
+    [default_interface]
+    runtimeclass BlockLogPage : Microsoft.UI.Xaml.Controls.Page
+    {
+        BlockLogPage();
+        void Refresh_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void Clear_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+    }
+}

@@ -4,6 +4,7 @@
 #include "SettingsPage.xaml.h"
 #include "PopupBlockerPage.xaml.h"
 #include "AppSettings.h"
+#include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include <commctrl.h>
 #pragma comment(lib, "comctl32.lib")
@@ -93,7 +94,6 @@ namespace winrt::winui::implementation
             return;
         }
 
-
         auto item = args.SelectedItem().try_as<NavigationViewItem>();
         if (!item)
         {
@@ -108,6 +108,10 @@ namespace winrt::winui::implementation
         else if (tag == L"Blocker")
         {
             ContentFrame().Navigate(xaml_typename<winrt::winui::PopupBlockerPage>());
+        }
+        else if (tag == L"BlockLog")
+        {
+            ContentFrame().Navigate(xaml_typename<winrt::winui::BlockLogPage>());
         }
     }
 }

@@ -26,6 +26,7 @@
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="弹窗拦截" Tag="Blocker" Icon="Cancel"/>
+                <NavigationViewItem Content="拦截日志" Tag="BlockLog" Icon="Document"/>
             </NavigationView.MenuItems>
 
             <Frame x:Name="ContentFrame"/>

@@ -13,6 +13,16 @@ namespace PopupBlocker
 {
     enum class RuleType { Exe, Title, Class };
 
+    inline std::wstring LogPath()
+    {
+        WCHAR path[MAX_PATH]{};
+        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
+        std::wstring p(path);
+        auto pos = p.find_last_of(L"\\/");
+        p = p.substr(0, pos + 1) + L"blocklog.txt";
+        return p;
+    }
+
     struct Rule
     {
         RuleType type;
@@ -92,11 +102,7 @@ namespace PopupBlocker
 
         inline void Log(std::wstring const& s)
         {
-            WCHAR path[MAX_PATH]{};
-            ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-            std::wstring p(path);
-            auto pos = p.find_last_of(L"\\/");
-            p = p.substr(0, pos + 1) + L"blocklog.txt";
+            std::wstring p = LogPath();
 
             bool isNew = (::GetFileAttributesW(p.c_str()) == INVALID_FILE_ATTRIBUTES);
 
@@ -110,7 +116,7 @@ namespace PopupBlocker
             FILE* f{};
             if (_wfopen_s(&f, p.c_str(), L"ab") == 0 && f)
             {
-                if (isNew) ::fwrite("\xEF\xBB\xBF", 1, 3, f); // UTF-8 BOM
+                if (isNew) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
                 int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
                 if (need > 0)
                 {

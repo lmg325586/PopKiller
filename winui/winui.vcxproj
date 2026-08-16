@@ -124,6 +124,10 @@
   <ItemGroup>
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="AppTheme.h" />
+    <ClInclude Include="BlockLogPage.xaml.h">
+      <DependentUpon>BlockLogPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClInclude>
     <ClInclude Include="HomePage.xaml.h">
       <DependentUpon>HomePage.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -151,6 +155,9 @@
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
+    <Page Include="BlockLogPage.xaml">
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="HomePage.xaml">
       <SubType>Designer</SubType>
     </Page>
@@ -166,6 +173,10 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BlockLogPage.xaml.cpp">
+      <DependentUpon>BlockLogPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClCompile>
     <ClCompile Include="HomePage.xaml.cpp">
       <DependentUpon>HomePage.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -194,6 +205,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <Midl Include="BlockLogPage.idl">
+      <DependentUpon>BlockLogPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Midl>
     <Midl Include="HomePage.idl">
       <DependentUpon>HomePage.xaml</DependentUpon>
       <SubType>Code</SubType>
