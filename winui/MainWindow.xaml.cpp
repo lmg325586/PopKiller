@@ -40,13 +40,6 @@ namespace winrt::winui::implementation
     MainWindow::MainWindow()
     {
         InitializeComponent();
-
-        this->Closed([](winrt::Microsoft::UI::Xaml::Window const&,
-            winrt::Microsoft::UI::Xaml::WindowEventArgs const&)
-            {
-                PopupBlocker::Stop();
-            });
-
         auto titleBar = this->AppWindow().TitleBar();
         titleBar.IconShowOptions(winrt::Microsoft::UI::Windowing::IconShowOptions::HideIconAndSystemMenu);
         AppTheme::Index = AppSettings::ReadInt(L"UI", L"Material", 0);
