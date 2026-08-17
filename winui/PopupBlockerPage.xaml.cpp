@@ -46,6 +46,19 @@ namespace winrt::winui::implementation
 
         EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
 
+        PopupBlocker::EnabledChangedCallback = [this]()
+            {
+                m_initialized = false;
+                EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
+                m_initialized = true;
+            };
+        this->Unloaded([this](auto&&, auto&&)
+            {
+                PopupBlocker::EnabledChangedCallback = nullptr;
+            });
+
+        m_initialized = true;
+
         int count = AppSettings::ReadInt(L"Blocker", L"RuleCount", 0);
         for (int i = 0; i < count; ++i)
         {

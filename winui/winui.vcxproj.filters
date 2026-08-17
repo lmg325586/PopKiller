@@ -24,6 +24,7 @@
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="PopupBlocker.h" />
     <ClInclude Include="WindowPicker.h" />
+    <ClInclude Include="TrayIcon.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Wide310x150Logo.scale-200.png">

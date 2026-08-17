@@ -22,6 +22,7 @@ namespace winrt::winui::implementation
     private:
         void RefreshList();
         void Save();
+        bool m_initialized{ false };
         std::vector<std::pair<int, std::wstring>> m_rules;
     };
 }

@@ -152,6 +152,7 @@
       <DependentUpon>SettingsPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClInclude>
+    <ClInclude Include="TrayIcon.h" />
     <ClInclude Include="WindowPicker.h" />
   </ItemGroup>
   <ItemGroup>

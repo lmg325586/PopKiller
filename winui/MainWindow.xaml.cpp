@@ -7,6 +7,7 @@
 #include "WindowPicker.h"
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
+#include "TrayIcon.h"
 #include <commctrl.h>
 #pragma comment(lib, "comctl32.lib")
 #include <microsoft.ui.xaml.window.h>
@@ -25,6 +26,8 @@ namespace
     LRESULT CALLBACK MinSizeSubclass(HWND h, UINT msg, WPARAM wp, LPARAM lp,
         UINT_PTR, DWORD_PTR)
     {
+        if (TrayIcon::Handle(msg, wp, lp)) return 0;
+
         if (msg == WM_GETMINMAXINFO)
         {
             auto* mmi = reinterpret_cast<MINMAXINFO*>(lp);
@@ -86,6 +89,7 @@ namespace winrt::winui::implementation
             if (SUCCEEDED(native->get_WindowHandle(&hwnd)) && hwnd)
             {
                 ::SetWindowSubclass(hwnd, MinSizeSubclass, 0, 0);
+                TrayIcon::Init(hwnd);
             }
         }
     }

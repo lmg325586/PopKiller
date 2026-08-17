@@ -5,6 +5,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <functional>
 #include <algorithm>
 #include "AppSettings.h"
 #include <cstdio>
@@ -32,6 +33,7 @@ namespace PopupBlocker
     inline std::vector<Rule> Rules;
     inline std::mutex RulesMutex;
     inline std::atomic<bool> Running{ false };
+    inline std::function<void()> EnabledChangedCallback;
 
     inline std::wstring Lower(std::wstring s)
     {
