@@ -7,5 +7,6 @@ namespace winui
         void EnableToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void AddRule_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void DeleteRule_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void Pick_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
     }
 }

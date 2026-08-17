@@ -2,6 +2,9 @@
 #include "PopupBlockerPage.xaml.h"
 #include "AppSettings.h"
 #include "PopupBlocker.h"
+#include "WindowPicker.h"
+#include "App.xaml.h"
+#include <microsoft.ui.xaml.window.h>
 #include <sstream>
 #if __has_include("PopupBlockerPage.g.cpp")
 #include "PopupBlockerPage.g.cpp"
@@ -121,5 +124,33 @@ namespace winrt::winui::implementation
         Save();
         PopupBlocker::SyncFromSettings();
         RefreshList();
+    }
+
+    void PopupBlockerPage::Pick_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        auto window = winrt::winui::implementation::App::window;
+        if (!window) return;
+        auto native = window.try_as<::IWindowNative>();
+        HWND hwnd{};
+        if (!native || FAILED(native->get_WindowHandle(&hwnd)) || !hwnd) return;
+
+        WindowPicker::Start(hwnd, [this](WindowPicker::PickResult r)
+            {
+
+                int idx = RuleTypeCombo().SelectedIndex();
+                std::wstring value;
+                switch (idx)
+                {
+                case 0:  value = r.exe;        break;
+                case 1:  value = r.title;      break;
+                default: value = r.className;  break;
+                }
+                if (value.empty()) value = r.exe;
+
+                PatternInput().Text(hstring(value));
+                PickInfo().Text(L"exe: " + r.exe +
+                    L"\nclass: " + r.className +
+                    L"\ntitle: " + r.title);
+            });
     }
 }

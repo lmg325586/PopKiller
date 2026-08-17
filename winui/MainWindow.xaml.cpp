@@ -4,6 +4,7 @@
 #include "SettingsPage.xaml.h"
 #include "PopupBlockerPage.xaml.h"
 #include "AppSettings.h"
+#include "WindowPicker.h"
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include <commctrl.h>
@@ -44,6 +45,7 @@ namespace winrt::winui::implementation
 
         this->Closed([](auto&&, auto&&)
         {
+             WindowPicker::Cancel();
             PopupBlocker::Stop();
 
             FILE* f{};

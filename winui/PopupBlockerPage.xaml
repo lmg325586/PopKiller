@@ -19,11 +19,14 @@
             <TextBox x:Name="PatternInput" Width="260"
                      PlaceholderText="如 xxx.exe 或标题关键字"/>
             <Button Content="添加" Click="AddRule_Click"/>
+            <Button Content="选取窗口" Click="Pick_Click"/>
         </StackPanel>
 
         <ListView x:Name="RulesList" Height="240"/>
 
         <Button Content="删除选中规则" Click="DeleteRule_Click"/>
+
+        <TextBlock x:Name="PickInfo" FontSize="12" Foreground="Gray" TextWrapping="Wrap"/>
 
         <TextBlock FontSize="12" Foreground="Gray" TextWrapping="Wrap"
                    Text="进程=exe 名子串；标题=窗口标题子串；类名=窗口类名子串。"/>
