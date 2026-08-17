@@ -124,9 +124,7 @@ namespace winrt::winui::implementation
         VersionLineText().Text(hstring(versionLine));
 
         std::wstring baseName = (build >= 22000) ? L"Windows 11" : L"Windows 10";
-        std::wstring edition = baseName + L" " + EditionName(editionId) +
-            L" 操作系统及其用户界面受美国和其他国家/地区的商标法"
-            L"和其他待颁布或已颁布的知识产权法保护。";
+        std::wstring edition = baseName + L" " + EditionName(editionId);
         EditionText().Text(hstring(edition));
 
         OwnerText().Text(hstring(owner));
