@@ -185,16 +185,43 @@ namespace winrt::winui::implementation
         hstring text = PatternInput().Text();
         if (text.empty()) return;
 
-        m_rules.push_back({
-            ListTypeCombo().SelectedIndex(),
-            RuleTypeCombo().SelectedIndex(),
-            MatchModeCombo().SelectedIndex(),
-            std::wstring(text)
-            });
+        int listType = ListTypeCombo().SelectedIndex();
+        int fieldType = RuleTypeCombo().SelectedIndex();
+        int matchMode = MatchModeCombo().SelectedIndex();
+        std::wstring pattern{ text };
+        std::wstring patternLower = PopupBlocker::Lower(pattern);
+
+        bool conflict = false;
+        for (auto const& r : m_rules)
+        {
+            if (r.listType != listType &&
+                r.fieldType == fieldType &&
+                r.matchMode == matchMode &&
+                PopupBlocker::Lower(r.pattern) == patternLower)
+            {
+                conflict = true;
+                break;
+            }
+        }
+
+        m_rules.push_back({ listType, fieldType, matchMode, pattern });
         PatternInput().Text(L"");
         Save();
         PopupBlocker::SyncFromSettings();
         RefreshList();
+
+        if (conflict)
+        {
+            PickInfo().Text(L"⚠ 注意：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
+            PickInfo().Foreground(Media::SolidColorBrush(
+                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C })); // 橙色警告
+        }
+        else
+        {
+            PickInfo().Text(L"");
+            PickInfo().Foreground(Media::SolidColorBrush(
+                winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 })); // 恢复灰
+        }
     }
 
     void PopupBlockerPage::DeleteRule_Click(IInspectable const&, RoutedEventArgs const&)
@@ -233,6 +260,8 @@ namespace winrt::winui::implementation
                     L"\npath: " + r.processPath +
                     L"\nclass: " + r.className +
                     L"\ntitle: " + r.title);
+                PickInfo().Foreground(Media::SolidColorBrush(
+                    winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
             });
     }
 }
