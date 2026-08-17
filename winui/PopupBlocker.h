@@ -34,11 +34,22 @@ namespace PopupBlocker
     inline std::mutex RulesMutex;
     inline std::atomic<bool> Running{ false };
     inline std::function<void()> EnabledChangedCallback;
+    inline bool ForceBlock = false;
+    inline std::wstring SelfExe;
 
     inline std::wstring Lower(std::wstring s)
     {
         std::transform(s.begin(), s.end(), s.begin(), ::towlower);
         return s;
+    }
+
+    inline void InitSelfExe()
+    {
+        WCHAR path[MAX_PATH]{};
+        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
+        std::wstring p(path);
+        auto pos = p.find_last_of(L"\\/");
+        SelfExe = Lower((pos == std::wstring::npos) ? p : p.substr(pos + 1));
     }
 
     inline bool LooksLikePopup(HWND hwnd)
@@ -63,10 +74,10 @@ namespace PopupBlocker
         if (AppSettings::ReadInt(L"Blocker", L"RuleCount", 0) == 0)
         {
             static const wchar_t* defaults[] = {
-                L"exe:flashcenter.exe",  
-                L"exe:minipage.exe",      
-                L"exe:popwnd.exe",        
-                L"exe:birdpaper.exe",     
+                L"exe:flashcenter.exe",
+                L"exe:minipage.exe",
+                L"exe:popwnd.exe",
+                L"exe:birdpaper.exe",
                 L"title:热点",
                 L"title:资讯",
             };
@@ -81,6 +92,7 @@ namespace PopupBlocker
 
     inline void SyncFromSettings()
     {
+        ForceBlock = AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1;
         std::lock_guard lock(RulesMutex);
         Rules.clear();
         int count = AppSettings::ReadInt(L"Blocker", L"RuleCount", 0);
@@ -112,7 +124,8 @@ namespace PopupBlocker
             ::GetLocalTime(&st);
             WCHAR ts[32]{};
             swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
-                st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+                st.wYear, st.wMonth, st.wDay,
+                st.wHour, st.wMinute, st.wSecond);
             std::wstring full = ts + s;
 
             FILE* f{};
@@ -157,12 +170,15 @@ namespace PopupBlocker
 
         inline bool IsProtected(HWND hwnd)
         {
+            std::wstring exe = GetProcessName(hwnd);
+
+            if (!SelfExe.empty() && exe == SelfExe) return true;
+
             static const wchar_t* list[] = {
                 L"explorer.exe", L"dwm.exe", L"winlogon.exe", L"logonui.exe",
                 L"taskmgr.exe", L"searchui.exe", L"startmenuexperiencehost.exe",
                 L"shellexperiencehost.exe", L"applicationframehost.exe",
             };
-            std::wstring exe = GetProcessName(hwnd);
             for (auto p : list)
                 if (exe == p) return true;
             return false;
@@ -220,7 +236,8 @@ namespace PopupBlocker
 
             int idx = Match(hwnd);
             if (idx < 0) return;
-            if (!LooksLikePopup(hwnd)) return;
+
+            if (!ForceBlock && !LooksLikePopup(hwnd)) return;
 
             std::wstring ruleText;
             {
@@ -268,6 +285,7 @@ namespace PopupBlocker
     inline void Start()
     {
         if (Running.exchange(true)) return;
+        InitSelfExe();
         detail::Worker = std::thread([] { detail::ThreadMain(nullptr); });
     }
 

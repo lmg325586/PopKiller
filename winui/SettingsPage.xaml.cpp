@@ -4,6 +4,7 @@
 #include "AppTheme.h"
 #include "AppSettings.h"
 #include "LicensePage.xaml.h"
+#include "PopupBlocker.h"
 #include "winrt/Windows.UI.Xaml.Interop.h"
 #if __has_include("SettingsPage.g.cpp")
 #include "SettingsPage.g.cpp"
@@ -18,6 +19,7 @@ namespace winrt::winui::implementation
     {
         InitializeComponent();
         ThemeComboBox().SelectedIndex(AppTheme::Index);
+        ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
         m_initialized = true;
     }
 
@@ -53,5 +55,12 @@ namespace winrt::winui::implementation
         }
 
         AppTheme::ApplyTitleBar(window.AppWindow().TitleBar());
+    }
+
+    void SettingsPage::ForceBlockToggle_Toggled(IInspectable const& sender, RoutedEventArgs const&)
+    {
+        bool on = sender.as<Controls::ToggleSwitch>().IsOn();
+        AppSettings::WriteInt(L"Blocker", L"ForceBlock", on ? 1 : 0);
+        PopupBlocker::ForceBlock = on;
     }
 }

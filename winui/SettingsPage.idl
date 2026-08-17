@@ -6,5 +6,6 @@ namespace winui
         SettingsPage();
         void ThemeComboBox_SelectionChanged(Object sender, Microsoft.UI.Xaml.Controls.SelectionChangedEventArgs args);
         void LicenseLink_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void ForceBlockToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
     }
 }

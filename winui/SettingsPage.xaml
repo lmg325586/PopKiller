@@ -19,6 +19,18 @@
             </ComboBox>
         </StackPanel>
 
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <FontIcon Glyph="&#xE72E;" FontSize="20" FontFamily="{ThemeResource SymbolThemeFontFamily}" 
+              Foreground="{ThemeResource SystemControlHighlightAccentBrush}"/>
+            <TextBlock Text="弹窗拦截设置" Style="{StaticResource TitleTextBlockStyle}"/>
+        </StackPanel>
+
+        <ToggleSwitch x:Name="ForceBlockToggle"
+              Header="规则内是否一律拦截"
+              OffContent="当前:仅拦弹窗形态 (推荐)" OnContent="当前:命中即拦"
+              Toggled="ForceBlockToggle_Toggled"
+              Margin="0,16,0,0"/>
+
         <StackPanel Spacing="12">
             <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}"/>
 
