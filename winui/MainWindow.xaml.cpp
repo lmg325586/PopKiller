@@ -47,14 +47,14 @@ namespace winrt::winui::implementation
         InitializeComponent();
 
         this->Closed([](auto&&, auto&&)
-        {
-             WindowPicker::Cancel();
-            PopupBlocker::Stop();
+            {
+                WindowPicker::Cancel();
+                PopupBlocker::Stop();
 
-            FILE* f{};
-            if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"wb") == 0 && f)
-                ::fclose(f);
-        });
+                FILE* f{};
+                if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"wb") == 0 && f)
+                    ::fclose(f);
+            });
 
         auto titleBar = this->AppWindow().TitleBar();
         titleBar.IconShowOptions(winrt::Microsoft::UI::Windowing::IconShowOptions::HideIconAndSystemMenu);
@@ -90,6 +90,32 @@ namespace winrt::winui::implementation
             {
                 ::SetWindowSubclass(hwnd, MinSizeSubclass, 0, 0);
                 TrayIcon::Init(hwnd);
+
+                TrayIcon::OnHideToTray = [this]()
+                    {
+                        ContentFrame().Content(nullptr);
+                        SystemBackdrop(nullptr);
+                    };
+
+                TrayIcon::OnRestoreFromTray = [this]()
+                    {
+                        if (AppTheme::Index == 1)
+                            SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
+
+                        auto item = NavView().SelectedItem().try_as<NavigationViewItem>();
+                        if (!item)
+                        {
+                            ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
+                            return;
+                        }
+                        hstring tag = unbox_value<hstring>(item.Tag());
+                        if (tag == L"Blocker")
+                            ContentFrame().Navigate(xaml_typename<winrt::winui::PopupBlockerPage>());
+                        else if (tag == L"BlockLog")
+                            ContentFrame().Navigate(xaml_typename<winrt::winui::BlockLogPage>());
+                        else
+                            ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
+                    };
             }
         }
     }
@@ -97,7 +123,6 @@ namespace winrt::winui::implementation
     void MainWindow::NavView_SelectionChanged(NavigationView const&,
         NavigationViewSelectionChangedEventArgs const& args)
     {
-
         if (args.IsSettingsSelected())
         {
             ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());

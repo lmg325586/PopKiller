@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include <windows.h>
 #include <shellapi.h>
+#include <functional>
 #include "PopupBlocker.h"
 #include "AppSettings.h"
 #pragma comment(lib, "shell32.lib")
@@ -14,6 +15,8 @@ namespace TrayIcon
 
     inline HWND Hwnd{};
     inline bool Visible = false;
+    inline std::function<void()> OnHideToTray;
+    inline std::function<void()> OnRestoreFromTray;
 
     inline HICON GetIcon()
     {
@@ -54,12 +57,15 @@ namespace TrayIcon
     {
         Add();
         ::ShowWindow(Hwnd, SW_HIDE);
+        if (OnHideToTray) OnHideToTray();
+        ::SetProcessWorkingSetSize(::GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
     }
 
     inline void Restore()
     {
         Remove();
         ::ShowWindow(Hwnd, SW_SHOW);
+        if (OnRestoreFromTray) OnRestoreFromTray();
         ::SetForegroundWindow(Hwnd);
     }
 
