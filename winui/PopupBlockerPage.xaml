@@ -32,6 +32,10 @@
             <Button Content="选取" Click="Pick_Click"/>
         </StackPanel>
 
+        <TextBox x:Name="SearchInput" Width="260" HorizontalAlignment="Left"
+                 PlaceholderText="搜索规则..."
+                 TextChanged="SearchInput_TextChanged"/>
+
         <ListView x:Name="RulesList" Height="240"/>
 
         <Button Content="删除选中规则" Click="DeleteRule_Click"/>

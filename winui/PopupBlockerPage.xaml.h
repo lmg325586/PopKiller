@@ -18,6 +18,8 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void Pick_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void SearchInput_TextChanged(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const& args);
 
     private:
         void RefreshList();
@@ -30,6 +32,8 @@ namespace winrt::winui::implementation
             std::wstring pattern;
         };
         std::vector<RuleItem> m_rules;
+        std::wstring m_searchText;
+        std::vector<size_t> m_visibleIndex;
     };
 }
 

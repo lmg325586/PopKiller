@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <commctrl.h>
 #include <functional>
@@ -128,13 +128,18 @@ namespace WindowPicker
                 WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED,
                 L"WinuiPickerOverlay", nullptr, WS_POPUP,
                 x, y, w, hh, nullptr, nullptr, wc.hInstance, nullptr);
-            ::SetLayeredWindowAttributes(OverlayHwnd, 0, 1, LWA_ALPHA);
+            // 使用稍高的透明度（10），确保鼠标命中且视觉上几乎不可见
+            ::SetLayeredWindowAttributes(OverlayHwnd, 0, 10, LWA_ALPHA);
         }
 
         inline void Teardown(bool commit)
         {
             HWND t = Target;
             Target = nullptr;
+            if (OverlayHwnd) {
+                ::UnregisterHotKey(OverlayHwnd, 1);  // 即使注册失败也无害
+                ::ReleaseCapture();                  // 释放鼠标捕获
+            }
             if (FrameHwnd) ::ShowWindow(FrameHwnd, SW_HIDE);
             if (OverlayHwnd) ::ShowWindow(OverlayHwnd, SW_HIDE);
             if (commit && t && OnPicked)
@@ -156,10 +161,14 @@ namespace WindowPicker
             {
                 POINT pt{};
                 ::GetCursorPos(&pt);
+
+                // 短暂隐藏自身以查询下方的窗口
                 ::ShowWindow(h, SW_HIDE);
                 HWND t = ::ChildWindowFromPointEx(::GetDesktopWindow(), pt,
                     CWP_SKIPINVISIBLE | CWP_SKIPTRANSPARENT);
                 ::ShowWindow(h, SW_SHOWNA);
+
+                // 排除自身和框架窗口
                 if (t == FrameHwnd || t == h) t = Target;
                 if (t != Target)
                 {
@@ -168,16 +177,25 @@ namespace WindowPicker
                 }
                 return 0;
             }
+
+            // 使用右键抬起，避免因窗口短暂隐藏而丢失消息
+            case WM_RBUTTONUP:
+                Teardown(false);
+                return 0;
+
             case WM_LBUTTONUP:
                 if (::GetTickCount64() - StartTick > 200)
                     Teardown(true);
                 return 0;
-            case WM_RBUTTONDOWN:
+
+            case WM_HOTKEY:
                 Teardown(false);
                 return 0;
+
             case WM_KEYDOWN:
                 if (wp == VK_ESCAPE) Teardown(false);
                 return 0;
+
             default:
                 return ::DefWindowProcW(h, msg, wp, lp);
             }
@@ -189,14 +207,27 @@ namespace WindowPicker
         detail::MainHwnd = mainHwnd;
         detail::OnPicked = std::move(cb);
         if (detail::OverlayHwnd && ::IsWindowVisible(detail::OverlayHwnd)) return;
+
         detail::EnsureFrame();
         detail::EnsureOverlay();
         if (!detail::OverlayHwnd) return;
+
+        // 注册 ESC 全局热键，并检查是否成功
+        if (!::RegisterHotKey(detail::OverlayHwnd, 1, 0, VK_ESCAPE))
+        {
+            // 注册失败时的备选方案：可以依赖 WM_KEYDOWN（需焦点）
+            OutputDebugStringW(L"RegisterHotKey(ESC) failed!\n");
+        }
+
         detail::Target = nullptr;
         detail::StartTick = ::GetTickCount64();
+
         ::ShowWindow(detail::OverlayHwnd, SW_SHOW);
         ::SetForegroundWindow(detail::OverlayHwnd);
         ::SetFocus(detail::OverlayHwnd);
+
+        // 捕获鼠标，确保右键/左键消息可靠送达
+        ::SetCapture(detail::OverlayHwnd);
     }
 
     inline void Cancel()

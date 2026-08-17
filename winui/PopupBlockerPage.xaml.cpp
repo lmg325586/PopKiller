@@ -136,12 +136,21 @@ namespace winrt::winui::implementation
     void PopupBlockerPage::RefreshList()
     {
         RulesList().Items().Clear();
-        for (auto const& r : m_rules)
+        m_visibleIndex.clear();
+        for (size_t i = 0; i < m_rules.size(); ++i)
         {
-            RulesList().Items().Append(box_value(hstring(
-                std::wstring(ListTypeLabel(r.listType)) + L" | " +
+            auto const& r = m_rules[i];
+            std::wstring display = std::wstring(ListTypeLabel(r.listType)) + L" | " +
                 FieldLabel(r.fieldType) + L" | " +
-                MatchModeLabel(r.matchMode) + L"：" + r.pattern)));
+                MatchModeLabel(r.matchMode) + L"：" + r.pattern;
+
+            // 搜索过滤逻辑
+            if (!m_searchText.empty() &&
+                PopupBlocker::Lower(display).find(m_searchText) == std::wstring::npos)
+                continue;
+
+            m_visibleIndex.push_back(i);
+            RulesList().Items().Append(box_value(hstring(display)));
         }
     }
 
@@ -227,9 +236,10 @@ namespace winrt::winui::implementation
     void PopupBlockerPage::DeleteRule_Click(IInspectable const&, RoutedEventArgs const&)
     {
         int idx = RulesList().SelectedIndex();
-        if (idx < 0 || idx >= static_cast<int>(m_rules.size())) return;
+        if (idx < 0 || idx >= static_cast<int>(m_visibleIndex.size())) return;
 
-        m_rules.erase(m_rules.begin() + idx);
+        size_t real = m_visibleIndex[static_cast<size_t>(idx)];
+        m_rules.erase(m_rules.begin() + real);
         Save();
         PopupBlocker::SyncFromSettings();
         RefreshList();
@@ -263,5 +273,12 @@ namespace winrt::winui::implementation
                 PickInfo().Foreground(Media::SolidColorBrush(
                     winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
             });
+    }
+
+    void PopupBlockerPage::SearchInput_TextChanged(IInspectable const&,
+        Controls::TextChangedEventArgs const&)
+    {
+        m_searchText = PopupBlocker::Lower(std::wstring(SearchInput().Text()));
+        RefreshList();
     }
 }
