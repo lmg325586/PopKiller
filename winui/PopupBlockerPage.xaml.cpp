@@ -15,23 +15,44 @@ using namespace Microsoft::UI::Xaml;
 
 namespace
 {
-    const wchar_t* TypeKey(int idx)
+    const wchar_t* ListTypeKey(int idx) { return idx == 1 ? L"W" : L"B"; }
+    const wchar_t* ListTypeLabel(int idx) { return idx == 1 ? L"白名单" : L"黑名单"; }
+
+    const wchar_t* FieldKey(int idx)
     {
-        switch (idx)
-        {
+        switch (idx) {
         case 0:  return L"exe";
-        case 1:  return L"title";
+        case 1:  return L"path";
+        case 2:  return L"title";
         default: return L"class";
         }
     }
 
-    const wchar_t* TypeLabel(int idx)
+    const wchar_t* FieldLabel(int idx)
     {
-        switch (idx)
-        {
+        switch (idx) {
         case 0:  return L"进程";
-        case 1:  return L"标题";
+        case 1:  return L"路径";
+        case 2:  return L"标题";
         default: return L"类名";
+        }
+    }
+
+    const wchar_t* MatchModeKey(int idx)
+    {
+        switch (idx) {
+        case 0:  return L"contains";
+        case 1:  return L"exact";
+        default: return L"wildcard";
+        }
+    }
+
+    const wchar_t* MatchModeLabel(int idx)
+    {
+        switch (idx) {
+        case 0:  return L"包含";
+        case 1:  return L"精确";
+        default: return L"通配符";
         }
     }
 }
@@ -64,11 +85,50 @@ namespace winrt::winui::implementation
         {
             std::wstring line = AppSettings::ReadString(
                 L"Blocker", (L"Rule" + std::to_wstring(i)).c_str());
-            auto pos = line.find(L':');
-            if (pos == std::wstring::npos) continue;
-            std::wstring t = line.substr(0, pos);
-            int idx = (t == L"exe") ? 0 : (t == L"title") ? 1 : 2;
-            m_rules.push_back({ idx, line.substr(pos + 1) });
+
+            RuleItem item{ 0, 0, 0, L"" }; // 默认: 黑名单, 进程, 包含
+            size_t p1 = line.find(L':');
+            if (p1 == std::wstring::npos) continue;
+
+            std::wstring first = line.substr(0, p1);
+            size_t p2 = line.find(L':', p1 + 1);
+
+            if (first == L"B" || first == L"W") {
+                item.listType = (first == L"W") ? 1 : 0;
+                if (p2 == std::wstring::npos) continue;
+                std::wstring f_str = line.substr(p1 + 1, p2 - p1 - 1);
+                size_t p3 = line.find(L':', p2 + 1);
+                std::wstring m_str, p_str;
+                if (p3 == std::wstring::npos) {
+                    m_str = L"contains"; p_str = line.substr(p2 + 1);
+                }
+                else {
+                    m_str = line.substr(p2 + 1, p3 - p2 - 1);
+                    p_str = line.substr(p3 + 1);
+                }
+
+                if (f_str == L"exe") item.fieldType = 0;
+                else if (f_str == L"path") item.fieldType = 1;
+                else if (f_str == L"title") item.fieldType = 2;
+                else if (f_str == L"class") item.fieldType = 3;
+                else continue;
+
+                if (m_str == L"exact") item.matchMode = 1;
+                else if (m_str == L"wildcard") item.matchMode = 2;
+                else item.matchMode = 0;
+                item.pattern = p_str;
+            }
+            else {
+                // 兼容旧格式: exe:pattern
+                item.listType = 0;
+                if (first == L"exe") item.fieldType = 0;
+                else if (first == L"title") item.fieldType = 2;
+                else if (first == L"class") item.fieldType = 3;
+                else continue;
+                item.matchMode = 0;
+                item.pattern = line.substr(p1 + 1);
+            }
+            m_rules.push_back(item);
         }
         RefreshList();
     }
@@ -79,7 +139,9 @@ namespace winrt::winui::implementation
         for (auto const& r : m_rules)
         {
             RulesList().Items().Append(box_value(hstring(
-                std::wstring(TypeLabel(r.first)) + L"：" + r.second)));
+                std::wstring(ListTypeLabel(r.listType)) + L" | " +
+                FieldLabel(r.fieldType) + L" | " +
+                MatchModeLabel(r.matchMode) + L"：" + r.pattern)));
         }
     }
 
@@ -90,9 +152,11 @@ namespace winrt::winui::implementation
         int i = 0;
         for (auto const& r : m_rules)
         {
+            std::wstring line = std::wstring(ListTypeKey(r.listType)) + L":" +
+                FieldKey(r.fieldType) + L":" +
+                MatchModeKey(r.matchMode) + L":" + r.pattern;
             AppSettings::WriteString(L"Blocker",
-                (L"Rule" + std::to_wstring(i)).c_str(),
-                std::wstring(TypeKey(r.first)) + L":" + r.second);
+                (L"Rule" + std::to_wstring(i)).c_str(), line);
             ++i;
         }
         for (; i < oldCount; ++i)
@@ -121,7 +185,12 @@ namespace winrt::winui::implementation
         hstring text = PatternInput().Text();
         if (text.empty()) return;
 
-        m_rules.push_back({ RuleTypeCombo().SelectedIndex(), std::wstring(text) });
+        m_rules.push_back({
+            ListTypeCombo().SelectedIndex(),
+            RuleTypeCombo().SelectedIndex(),
+            MatchModeCombo().SelectedIndex(),
+            std::wstring(text)
+            });
         PatternInput().Text(L"");
         Save();
         PopupBlocker::SyncFromSettings();
@@ -149,19 +218,19 @@ namespace winrt::winui::implementation
 
         WindowPicker::Start(hwnd, [this](WindowPicker::PickResult r)
             {
-
-                int idx = RuleTypeCombo().SelectedIndex();
+                int fieldIdx = RuleTypeCombo().SelectedIndex();
                 std::wstring value;
-                switch (idx)
-                {
-                case 0:  value = r.exe;        break;
-                case 1:  value = r.title;      break;
-                default: value = r.className;  break;
+                switch (fieldIdx) {
+                case 0:  value = r.exe;         break;
+                case 1:  value = r.processPath; break;
+                case 2:  value = r.title;       break;
+                default: value = r.className;   break;
                 }
                 if (value.empty()) value = r.exe;
 
                 PatternInput().Text(hstring(value));
                 PickInfo().Text(L"exe: " + r.exe +
+                    L"\npath: " + r.processPath +
                     L"\nclass: " + r.className +
                     L"\ntitle: " + r.title);
             });

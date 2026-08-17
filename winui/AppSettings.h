@@ -32,8 +32,8 @@ namespace AppSettings
 
     inline std::wstring ReadString(const wchar_t* section, const wchar_t* key, const std::wstring& def = L"")
     {
-        WCHAR buffer[8192]{};
-        ::GetPrivateProfileStringW(section, key, def.c_str(), buffer, 8192, IniPath().c_str());
+        WCHAR buffer[4096]{};
+        ::GetPrivateProfileStringW(section, key, def.c_str(), buffer, 4096, IniPath().c_str());
         return buffer;
     }
 

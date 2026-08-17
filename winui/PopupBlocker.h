@@ -9,10 +9,31 @@
 #include <algorithm>
 #include "AppSettings.h"
 #include <cstdio>
+#include <cwchar>
 
 namespace PopupBlocker
 {
-    enum class RuleType { Exe, Title, Class };
+    enum class RuleField { Exe, Path, Title, Class };
+    enum class MatchMode { Contains, Exact, Wildcard };
+
+    struct Rule
+    {
+        bool isWhitelist = false;
+        RuleField field = RuleField::Exe;
+        MatchMode mode = MatchMode::Contains;
+        std::wstring pattern;
+    };
+
+    inline std::vector<Rule> Rules;
+    inline std::mutex RulesMutex;
+    inline std::atomic<bool> Running{ false };
+    inline std::function<void()> EnabledChangedCallback;
+    inline bool ForceBlock = false;
+    inline std::wstring SelfExe;
+
+    // 启发式配置缓存（避免在钩子线程中频繁读取 INI）
+    inline int HeuristicMode = 0;      // 0=关, 1=仅记录, 2=自动拦截
+    inline int HeuristicThreshold = 70; // 触发拦截的分数阈值
 
     inline std::wstring LogPath()
     {
@@ -24,23 +45,23 @@ namespace PopupBlocker
         return p;
     }
 
-    struct Rule
-    {
-        RuleType type;
-        std::wstring pattern;
-    };
-
-    inline std::vector<Rule> Rules;
-    inline std::mutex RulesMutex;
-    inline std::atomic<bool> Running{ false };
-    inline std::function<void()> EnabledChangedCallback;
-    inline bool ForceBlock = false;
-    inline std::wstring SelfExe;
-
     inline std::wstring Lower(std::wstring s)
     {
         std::transform(s.begin(), s.end(), s.begin(), ::towlower);
         return s;
+    }
+
+    inline bool WildcardMatch(const wchar_t* str, const wchar_t* pat) {
+        const wchar_t* s = str, * p = pat;
+        const wchar_t* star_s = nullptr, * star_p = nullptr;
+        while (*s) {
+            if (*p == L'?' || ::towlower(*p) == ::towlower(*s)) { s++; p++; }
+            else if (*p == L'*') { star_p = p++; star_s = s; }
+            else if (star_p) { p = star_p + 1; s = ++star_s; }
+            else return false;
+        }
+        while (*p == L'*') p++;
+        return *p == L'\0';
     }
 
     inline void InitSelfExe()
@@ -74,12 +95,10 @@ namespace PopupBlocker
         if (AppSettings::ReadInt(L"Blocker", L"RuleCount", 0) == 0)
         {
             static const wchar_t* defaults[] = {
-                L"exe:flashcenter.exe",
-                L"exe:minipage.exe",
-                L"exe:popwnd.exe",
-                L"exe:birdpaper.exe",
-                L"title:热点",
-                L"title:资讯",
+                L"B:exe:contains:flashcenter.exe",
+                L"B:exe:contains:minipage.exe",
+                L"B:title:contains:热点",
+                L"W:exe:contains:explorer.exe"
             };
             int i = 0;
             for (auto d : defaults)
@@ -93,6 +112,9 @@ namespace PopupBlocker
     inline void SyncFromSettings()
     {
         ForceBlock = AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1;
+        HeuristicMode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
+        HeuristicThreshold = AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70);
+
         std::lock_guard lock(RulesMutex);
         Rules.clear();
         int count = AppSettings::ReadInt(L"Blocker", L"RuleCount", 0);
@@ -100,50 +122,55 @@ namespace PopupBlocker
         {
             std::wstring line = AppSettings::ReadString(
                 L"Blocker", (L"Rule" + std::to_wstring(i)).c_str());
-            auto pos = line.find(L':');
-            if (pos == std::wstring::npos) continue;
-            std::wstring t = line.substr(0, pos);
-            auto p = line.substr(pos + 1);
-            if (p.empty()) continue;
-            RuleType rt = (t == L"exe") ? RuleType::Exe
-                : (t == L"title") ? RuleType::Title : RuleType::Class;
-            Rules.push_back({ rt, Lower(p) });
+
+            Rule r;
+            size_t p1 = line.find(L':');
+            if (p1 == std::wstring::npos) continue;
+
+            std::wstring first = line.substr(0, p1);
+            size_t p2 = line.find(L':', p1 + 1);
+
+            if (first == L"B" || first == L"W") {
+                r.isWhitelist = (first == L"W");
+                if (p2 == std::wstring::npos) continue;
+                std::wstring f_str = line.substr(p1 + 1, p2 - p1 - 1);
+                size_t p3 = line.find(L':', p2 + 1);
+                std::wstring m_str, p_str;
+                if (p3 == std::wstring::npos) {
+                    m_str = L"contains"; p_str = line.substr(p2 + 1);
+                }
+                else {
+                    m_str = line.substr(p2 + 1, p3 - p2 - 1);
+                    p_str = line.substr(p3 + 1);
+                }
+
+                if (f_str == L"exe") r.field = RuleField::Exe;
+                else if (f_str == L"path") r.field = RuleField::Path;
+                else if (f_str == L"title") r.field = RuleField::Title;
+                else if (f_str == L"class") r.field = RuleField::Class;
+                else continue;
+
+                if (m_str == L"exact") r.mode = MatchMode::Exact;
+                else if (m_str == L"wildcard") r.mode = MatchMode::Wildcard;
+                else r.mode = MatchMode::Contains;
+                r.pattern = Lower(p_str);
+            }
+            else {
+                r.isWhitelist = false;
+                if (first == L"exe") r.field = RuleField::Exe;
+                else if (first == L"title") r.field = RuleField::Title;
+                else if (first == L"class") r.field = RuleField::Class;
+                else continue;
+                r.mode = MatchMode::Contains;
+                r.pattern = Lower(line.substr(p1 + 1));
+            }
+
+            if (!r.pattern.empty()) Rules.push_back(r);
         }
     }
 
     namespace detail
     {
-
-        inline void Log(std::wstring const& s)
-        {
-            std::wstring p = LogPath();
-
-            bool isNew = (::GetFileAttributesW(p.c_str()) == INVALID_FILE_ATTRIBUTES);
-
-            SYSTEMTIME st{};
-            ::GetLocalTime(&st);
-            WCHAR ts[32]{};
-            swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
-                st.wYear, st.wMonth, st.wDay,
-                st.wHour, st.wMinute, st.wSecond);
-            std::wstring full = ts + s;
-
-            FILE* f{};
-            if (_wfopen_s(&f, p.c_str(), L"ab") == 0 && f)
-            {
-                if (isNew) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
-                int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
-                if (need > 0)
-                {
-                    std::string utf8(static_cast<size_t>(need) - 1, '\0');
-                    ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, utf8.data(), need, nullptr, nullptr);
-                    utf8 += "\r\n";
-                    ::fwrite(utf8.data(), 1, utf8.size(), f);
-                }
-                ::fclose(f);
-            }
-        }
-
         inline std::thread Worker;
         inline HWINEVENTHOOK HookShow{};
         inline HWINEVENTHOOK HookFg{};
@@ -168,10 +195,24 @@ namespace PopupBlocker
             return Lower(name);
         }
 
+        inline std::wstring GetProcessPath(HWND hwnd)
+        {
+            DWORD pid{};
+            ::GetWindowThreadProcessId(hwnd, &pid);
+            if (!pid) return {};
+            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (!h) return {};
+            WCHAR path[MAX_PATH]{};
+            DWORD size = MAX_PATH;
+            std::wstring result;
+            if (::QueryFullProcessImageNameW(h, 0, path, &size)) result = path;
+            ::CloseHandle(h);
+            return Lower(result);
+        }
+
         inline bool IsProtected(HWND hwnd)
         {
             std::wstring exe = GetProcessName(hwnd);
-
             if (!SelfExe.empty() && exe == SelfExe) return true;
 
             static const wchar_t* list[] = {
@@ -179,120 +220,126 @@ namespace PopupBlocker
                 L"taskmgr.exe", L"searchui.exe", L"startmenuexperiencehost.exe",
                 L"shellexperiencehost.exe", L"applicationframehost.exe",
             };
-            for (auto p : list)
-                if (exe == p) return true;
+            for (auto p : list) if (exe == p) return true;
             return false;
         }
 
-        inline std::wstring GetTitle(HWND hwnd)
-        {
-            WCHAR buf[256]{};
-            ::GetWindowTextW(hwnd, buf, 256);
-            return Lower(buf);
+        inline std::wstring GetTitle(HWND hwnd) { WCHAR buf[256]{}; ::GetWindowTextW(hwnd, buf, 256); return Lower(buf); }
+        inline std::wstring GetClass(HWND hwnd) { WCHAR buf[256]{}; ::GetClassNameW(hwnd, buf, 256); return Lower(buf); }
+
+        inline bool MatchRule(HWND hwnd, const Rule& r, std::wstring& exe, std::wstring& path, std::wstring& title, std::wstring& cls) {
+            std::wstring target;
+            switch (r.field) {
+            case RuleField::Exe: if (exe.empty()) exe = GetProcessName(hwnd); target = exe; break;
+            case RuleField::Path: if (path.empty()) path = GetProcessPath(hwnd); target = path; break;
+            case RuleField::Title: if (title.empty()) title = GetTitle(hwnd); target = title; break;
+            case RuleField::Class: if (cls.empty()) cls = GetClass(hwnd); target = cls; break;
+            }
+            switch (r.mode) {
+            case MatchMode::Exact: return target == r.pattern;
+            case MatchMode::Contains: return target.find(r.pattern) != std::wstring::npos;
+            case MatchMode::Wildcard: return WildcardMatch(target.c_str(), r.pattern.c_str());
+            }
+            return false;
         }
 
-        inline std::wstring GetClass(HWND hwnd)
-        {
-            WCHAR buf[256]{};
-            ::GetClassNameW(hwnd, buf, 256);
-            return Lower(buf);
-        }
+        // 0=未命中, 1=白名单, 2=黑名单
+        inline int Match(HWND hwnd) {
+            std::vector<Rule> rules;
+            { std::lock_guard lock(RulesMutex); rules = Rules; }
+            if (rules.empty()) return 0;
 
-        inline int Match(HWND hwnd)
-        {
-            std::lock_guard lock(RulesMutex);
-            if (Rules.empty()) return -1;
-
-            std::wstring exe, title, cls;
-            for (size_t i = 0; i < Rules.size(); ++i)
-            {
-                auto const& r = Rules[i];
-                switch (r.type)
-                {
-                case RuleType::Exe:
-                    if (exe.empty()) exe = GetProcessName(hwnd);
-                    if (exe.find(r.pattern) != std::wstring::npos) return static_cast<int>(i);
-                    break;
-                case RuleType::Title:
-                    if (title.empty()) title = GetTitle(hwnd);
-                    if (title.find(r.pattern) != std::wstring::npos) return static_cast<int>(i);
-                    break;
-                case RuleType::Class:
-                    if (cls.empty()) cls = GetClass(hwnd);
-                    if (cls.find(r.pattern) != std::wstring::npos) return static_cast<int>(i);
-                    break;
+            std::wstring exe, path, title, cls;
+            bool matchedW = false, matchedB = false;
+            for (auto const& r : rules) {
+                if (MatchRule(hwnd, r, exe, path, title, cls)) {
+                    if (r.isWhitelist) matchedW = true; else matchedB = true;
                 }
             }
-            return -1;
+            if (matchedW) return 1;
+            if (matchedB) return 2;
+            return 0;
         }
 
-        inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD, HWND hwnd,
-            LONG idObject, LONG idChild, DWORD, DWORD)
+        inline int CalculateSuspicionScore(HWND hwnd) {
+            int score = 0;
+            LONG style = ::GetWindowLongW(hwnd, GWL_STYLE);
+            LONG ex = ::GetWindowLongW(hwnd, GWL_EXSTYLE);
+            if (::GetWindow(hwnd, GW_OWNER)) score += 20;
+            if (ex & WS_EX_TOOLWINDOW) score += 30;
+            if (ex & WS_EX_TOPMOST) score += 20;
+            if (!(style & WS_THICKFRAME) && !(style & WS_MINIMIZEBOX)) score += 20;
+            if (GetTitle(hwnd).empty()) score += 10;
+            return score;
+        }
+
+        inline void Log(std::wstring const& s) {
+            std::wstring p = LogPath();
+            bool isNew = (::GetFileAttributesW(p.c_str()) == INVALID_FILE_ATTRIBUTES);
+            SYSTEMTIME st{}; ::GetLocalTime(&st);
+            WCHAR ts[32]{}; swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+            std::wstring full = ts + s;
+            FILE* f{};
+            if (_wfopen_s(&f, p.c_str(), L"ab") == 0 && f) {
+                if (isNew) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
+                int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                if (need > 0) {
+                    std::string utf8(static_cast<size_t>(need) - 1, '\0');
+                    ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, utf8.data(), need, nullptr, nullptr);
+                    utf8 += "\r\n"; ::fwrite(utf8.data(), 1, utf8.size(), f);
+                }
+                ::fclose(f);
+            }
+        }
+
+        inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG idChild, DWORD, DWORD)
         {
             if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF) return;
             if (!::IsWindowVisible(hwnd)) return;
             if (::GetAncestor(hwnd, GA_ROOT) != hwnd) return;
             if (IsProtected(hwnd)) return;
 
-            int idx = Match(hwnd);
-            if (idx < 0) return;
+            int matchResult = Match(hwnd);
+            if (matchResult == 1) return; // 白名单放行
 
-            if (!ForceBlock && !LooksLikePopup(hwnd)) return;
+            bool isPopup = LooksLikePopup(hwnd);
+            bool shouldBlock = false;
+            std::wstring reason = L"none";
 
-            std::wstring ruleText;
-            {
-                std::lock_guard lock(RulesMutex);
-                if (idx < static_cast<int>(Rules.size()))
-                {
-                    auto const& r = Rules[idx];
-                    const wchar_t* t = r.type == RuleType::Exe ? L"exe"
-                        : r.type == RuleType::Title ? L"title" : L"class";
-                    ruleText = std::wstring(t) + L":" + r.pattern;
+            if (matchResult == 2) {
+                if (ForceBlock || isPopup) { shouldBlock = true; reason = L"blacklist"; }
+            }
+            else {
+                if (HeuristicMode > 0) {
+                    int score = CalculateSuspicionScore(hwnd);
+                    if (score >= HeuristicThreshold) {
+                        reason = L"heuristic(" + std::to_wstring(score) + L")";
+                        if (HeuristicMode == 2 && isPopup) shouldBlock = true;
+                    }
                 }
             }
-            Log(L"rule=" + ruleText
-                + L" | title=" + GetTitle(hwnd)
-                + L" | class=" + GetClass(hwnd)
-                + L" | exe=" + GetProcessName(hwnd));
 
-            ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
-            ::ShowWindow(hwnd, SW_HIDE);
-        }
-
-        inline DWORD WINAPI ThreadMain(LPVOID)
-        {
-            HookShow = ::SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW,
-                nullptr, WinEventProc, 0, 0,
-                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            HookFg = ::SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
-                nullptr, WinEventProc, 0, 0,
-                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-
-            MSG msg;
-            while (::GetMessageW(&msg, nullptr, 0, 0) > 0)
-            {
-                ::TranslateMessage(&msg);
-                ::DispatchMessageW(&msg);
+            if (reason != L"none") {
+                Log(L"action=" + std::wstring(shouldBlock ? L"block" : L"monitor") +
+                    L" | reason=" + reason + L" | title=" + GetTitle(hwnd) +
+                    L" | class=" + GetClass(hwnd) + L" | exe=" + GetProcessName(hwnd));
             }
 
-            if (HookShow) ::UnhookWinEvent(HookShow);
-            if (HookFg) ::UnhookWinEvent(HookFg);
-            HookShow = HookFg = nullptr;
-            return 0;
+            if (shouldBlock) {
+                ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                ::ShowWindow(hwnd, SW_HIDE);
+            }
+        }
+
+        inline DWORD WINAPI ThreadMain(LPVOID) {
+            HookShow = ::SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            HookFg = ::SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            MSG msg; while (::GetMessageW(&msg, nullptr, 0, 0) > 0) { ::TranslateMessage(&msg); ::DispatchMessageW(&msg); }
+            if (HookShow) ::UnhookWinEvent(HookShow); if (HookFg) ::UnhookWinEvent(HookFg);
+            HookShow = HookFg = nullptr; return 0;
         }
     }
 
-    inline void Start()
-    {
-        if (Running.exchange(true)) return;
-        InitSelfExe();
-        detail::Worker = std::thread([] { detail::ThreadMain(nullptr); });
-    }
-
-    inline void Stop()
-    {
-        if (!Running.exchange(false)) return;
-        ::PostThreadMessageW(::GetThreadId(detail::Worker.native_handle()), WM_QUIT, 0, 0);
-        if (detail::Worker.joinable()) detail::Worker.join();
-    }
+    inline void Start() { if (Running.exchange(true)) return; InitSelfExe(); detail::Worker = std::thread([] { detail::ThreadMain(nullptr); }); }
+    inline void Stop() { if (!Running.exchange(false)) return; ::PostThreadMessageW(::GetThreadId(detail::Worker.native_handle()), WM_QUIT, 0, 0); if (detail::Worker.joinable()) detail::Worker.join(); }
 }

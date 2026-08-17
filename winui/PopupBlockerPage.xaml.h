@@ -23,7 +23,13 @@ namespace winrt::winui::implementation
         void RefreshList();
         void Save();
         bool m_initialized{ false };
-        std::vector<std::pair<int, std::wstring>> m_rules;
+        struct RuleItem {
+            int listType;
+            int fieldType;
+            int matchMode;
+            std::wstring pattern;
+        };
+        std::vector<RuleItem> m_rules;
     };
 }
 

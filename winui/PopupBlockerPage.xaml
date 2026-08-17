@@ -11,15 +11,25 @@
                       Toggled="EnableToggle_Toggled"/>
 
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <ComboBox x:Name="RuleTypeCombo" SelectedIndex="0" Width="90">
+            <ComboBox x:Name="ListTypeCombo" SelectedIndex="0" Width="91">
+                <ComboBoxItem Content="黑名单"/>
+                <ComboBoxItem Content="白名单"/>
+            </ComboBox>
+            <ComboBox x:Name="RuleTypeCombo" SelectedIndex="0" Width="85">
                 <ComboBoxItem Content="进程"/>
+                <ComboBoxItem Content="路径"/>
                 <ComboBoxItem Content="标题"/>
                 <ComboBoxItem Content="类名"/>
             </ComboBox>
-            <TextBox x:Name="PatternInput" Width="260"
-                     PlaceholderText="如 xxx.exe 或标题关键字"/>
+            <ComboBox x:Name="MatchModeCombo" SelectedIndex="0" Width="85">
+                <ComboBoxItem Content="包含"/>
+                <ComboBoxItem Content="精确"/>
+                <ComboBoxItem Content="通配符"/>
+            </ComboBox>
+            <TextBox x:Name="PatternInput" Width="180"
+                     PlaceholderText="如 *pop* 或完整路径"/>
             <Button Content="添加" Click="AddRule_Click"/>
-            <Button Content="选取窗口" Click="Pick_Click"/>
+            <Button Content="选取" Click="Pick_Click"/>
         </StackPanel>
 
         <ListView x:Name="RulesList" Height="240"/>
@@ -29,6 +39,6 @@
         <TextBlock x:Name="PickInfo" FontSize="12" Foreground="Gray" TextWrapping="Wrap"/>
 
         <TextBlock FontSize="12" Foreground="Gray" TextWrapping="Wrap"
-                   Text="进程=exe 名子串；标题=窗口标题子串；类名=窗口类名子串。"/>
+                   Text="支持黑名单拦截与白名单放行。匹配模式支持：包含(子串)、精确(全等)、通配符(支持 * 和 ?)。"/>
     </StackPanel>
 </Page>

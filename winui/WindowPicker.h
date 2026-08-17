@@ -13,6 +13,7 @@ namespace WindowPicker
     struct PickResult
     {
         std::wstring exe;
+        std::wstring processPath;
         std::wstring title;
         std::wstring className;
     };
@@ -140,6 +141,7 @@ namespace WindowPicker
             {
                 PickResult r;
                 r.exe = PopupBlocker::detail::GetProcessName(t);
+                r.processPath = PopupBlocker::detail::GetProcessPath(t);
                 r.title = PopupBlocker::detail::GetTitle(t);
                 r.className = PopupBlocker::detail::GetClass(t);
                 OnPicked(r);
@@ -189,6 +191,7 @@ namespace WindowPicker
         if (detail::OverlayHwnd && ::IsWindowVisible(detail::OverlayHwnd)) return;
         detail::EnsureFrame();
         detail::EnsureOverlay();
+        if (!detail::OverlayHwnd) return;
         detail::Target = nullptr;
         detail::StartTick = ::GetTickCount64();
         ::ShowWindow(detail::OverlayHwnd, SW_SHOW);

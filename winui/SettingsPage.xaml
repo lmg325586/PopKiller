@@ -39,6 +39,7 @@
                 <Hyperlink NavigateUri="https://github.com/">
                     <Run Text="Lmg325586" />
                 </Hyperlink>
+                <Run Text="   开发:Qwen-3.8-max   DeepSeek-V3.1" />
             </TextBlock>
 
             <StackPanel Orientation="Horizontal" Spacing="4">
