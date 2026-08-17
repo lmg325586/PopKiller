@@ -216,9 +216,45 @@ namespace PopupBlocker
             if (!SelfExe.empty() && exe == SelfExe) return true;
 
             static const wchar_t* list[] = {
-                L"explorer.exe", L"dwm.exe", L"winlogon.exe", L"logonui.exe",
-                L"taskmgr.exe", L"searchui.exe", L"startmenuexperiencehost.exe",
-                L"shellexperiencehost.exe", L"applicationframehost.exe",
+                // 外壳与桌面
+                L"explorer.exe", L"dwm.exe", L"sihost.exe",
+                L"shellexperiencehost.exe", L"startmenuexperiencehost.exe",
+                L"searchui.exe",          // Win10 搜索
+                L"searchhost.exe",        // Win11 搜索
+                L"searchapp.exe",         // Win10 新版搜索
+                L"lockapp.exe",           // 锁屏
+                L"applicationframehost.exe", L"backgroundtaskhost.exe",
+                L"runtimebroker.exe",     // UWP 权限提示
+                L"credentialuibroker.exe",// 凭据/密码弹窗
+                L"consent.exe",           // UAC
+                L"peopleexperiencehost.exe", // Win10“联系人”
+
+                // 登录与安全
+                L"winlogon.exe", L"logonui.exe",
+                L"smartscreen.exe",
+                L"securityhealthsystray.exe", // Windows 安全中心托盘
+
+                // 输入法与辅助功能
+                L"ctfmon.exe", L"textinputhost.exe",
+                L"tabtip.exe",  // 触摸键盘
+                L"osk.exe",     // 屏幕键盘
+                L"narrator.exe", L"magnify.exe", L"sethc.exe", L"utilman.exe",
+
+                // 系统工具与对话框
+                L"taskmgr.exe",
+                L"systemsettings.exe",        // 设置
+                L"systemsettingsbroker.exe",  // Win11 设置
+                L"control.exe",               // 控制面板
+                L"mmc.exe",                   // 管理控制台
+                L"openwith.exe",              // “打开方式”
+                L"msiexec.exe",               // 安装程序
+                L"sndvol.exe",                // 音量合成器
+                L"snippingtool.exe", L"screensketch.exe", // 截图
+                L"mstsc.exe",                 // 远程桌面
+                L"conhost.exe",               // 控制台窗口宿主
+
+                // Win11 小组件
+                L"widgets.exe", L"widgetservice.exe",
             };
             for (auto p : list) if (exe == p) return true;
             return false;
