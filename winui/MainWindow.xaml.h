@@ -10,6 +10,7 @@ namespace winrt::winui::implementation
 
         void NavView_SelectionChanged(winrt::Microsoft::UI::Xaml::Controls::NavigationView const& sender,
             winrt::Microsoft::UI::Xaml::Controls::NavigationViewSelectionChangedEventArgs const& args);
+        void NavigateToTag(winrt::hstring const& tag);
     };
 }
 

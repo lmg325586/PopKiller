@@ -4,18 +4,17 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer>
-        <StackPanel Padding="32,24" Spacing="16">
+        <StackPanel x:Name="RootPanel" Background="Transparent"
+                    Padding="32,24" Spacing="16"
+                    PointerMoved="RootPointerMoved"
+                    PointerExited="RootPointerExited">
 
             <TextBlock Text="Home" Style="{StaticResource TitleTextBlockStyle}"/>
-
 
             <Border x:Name="GlowCard"
                     Background="Transparent"
                     HorizontalAlignment="Left"
-                    MaxWidth="800"
-                    PointerEntered="GlowPointerEntered"
-                    PointerMoved="GlowPointerMoved"
-                    PointerExited="GlowPointerExited">
+                    MaxWidth="800">
                 <Grid>
 
                     <Canvas x:Name="GlowCanvas" Opacity="0" IsHitTestVisible="False">
@@ -35,7 +34,6 @@
                         <StackPanel Spacing="0" Padding="24">
                             <TextBlock Text="Microsoft Windows" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
                             <TextBlock x:Name="VersionLineText" FontSize="13" Margin="0,0,0,6"/>
-                            <TextBlock Text="© Microsoft Corporation。保留所有权利。" FontSize="13" Margin="0,0,0,28"/>
                             <TextBlock x:Name="EditionText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,28"/>
                             <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,14">
                                 根据 <Hyperlink NavigateUri="https://www.microsoft.com/zh-cn/legal/terms-of-use">Microsoft 软件许可条款</Hyperlink>，许可如下用户使用本产品:
@@ -43,6 +41,41 @@
                             <TextBlock x:Name="OwnerText" FontSize="13" Margin="24,0,0,4"/>
                             <TextBlock x:Name="OrgText" FontSize="13" Margin="24,0,0,0"/>
                         </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Border x:Name="GlowCard2"
+                    Background="Transparent"
+                    HorizontalAlignment="Left"
+                    MaxWidth="800"
+                    Tapped="GoToBlocker_Tapped">
+                <Grid>
+                    <Canvas x:Name="GlowCanvas2" Opacity="0" IsHitTestVisible="False">
+                        <Ellipse x:Name="Glow2Layer5" Width="240" Height="240" Fill="#19D9D9D9"/>
+                        <Ellipse x:Name="Glow2Layer4" Width="200" Height="200" Fill="#26D9D9D9"/>
+                        <Ellipse x:Name="Glow2Layer3" Width="160" Height="160" Fill="#40D9D9D9"/>
+                        <Ellipse x:Name="Glow2Layer2" Width="120" Height="120" Fill="#59D9D9D9"/>
+                        <Ellipse x:Name="Glow2Layer1" Width="80"  Height="80"  Fill="#73D9D9D9"/>
+                    </Canvas>
+
+                    <Border Background="White"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" Margin="2" Padding="24">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon Glyph="&#xEA18;" FontSize="32" Margin="0,0,24,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                <TextBlock Text="弹窗拦截" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock Text="配置拦截规则 自动关闭广告与干扰弹窗"
+                                           FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
                     </Border>
                 </Grid>
             </Border>

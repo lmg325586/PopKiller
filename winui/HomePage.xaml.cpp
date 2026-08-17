@@ -1,16 +1,20 @@
 ﻿#include "pch.h"
 #include "HomePage.xaml.h"
+#include "App.xaml.h"
+#include "MainWindow.xaml.h"
 #include <winrt/Windows.System.Profile.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Microsoft.UI.Input.h>
 #include <string>
 #include <algorithm>
+#include <cmath>
 #if __has_include("HomePage.g.cpp")
 #include "HomePage.g.cpp"
 #endif
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
+using namespace Microsoft::UI::Xaml::Input;
 
 namespace
 {
@@ -53,6 +57,32 @@ namespace
             static_cast<float>(el.ActualHeight()) });
         el.Clip(clip);
     }
+
+    void UpdateGlow(FrameworkElement const& card, UIElement const& canvas,
+        std::initializer_list<Shapes::Ellipse> layers,
+        winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& e)
+    {
+        auto pos = e.GetCurrentPoint(card).Position();
+        double w = card.ActualWidth();
+        double h = card.ActualHeight();
+        const double R = 100.0;
+
+        double dx = pos.X < 0 ? -pos.X : (pos.X > w ? pos.X - w : 0.0);
+        double dy = pos.Y < 0 ? -pos.Y : (pos.Y > h ? pos.Y - h : 0.0);
+        double dist = std::sqrt(dx * dx + dy * dy);
+
+        if (dist >= R)
+        {
+            canvas.Opacity(0.0);
+            return;
+        }
+
+        canvas.Opacity(1.0 - dist / R);
+
+        double cx = std::clamp(static_cast<double>(pos.X), 0.0, w);
+        double cy = std::clamp(static_cast<double>(pos.Y), 0.0, h);
+        for (auto const& el : layers) PlaceEllipse(el, cx, cy);
+    }
 }
 
 namespace winrt::winui::implementation
@@ -66,10 +96,15 @@ namespace winrt::winui::implementation
                 ClipToSelf(GlowCanvas());
             });
 
+        GlowCard2().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
+            {
+                ClipToSelf(GlowCanvas2());
+            });
+
         uint64_t v = std::stoull(winrt::to_string(
             winrt::Windows::System::Profile::AnalyticsInfo::VersionInfo().DeviceFamilyVersion()));
         uint16_t build = static_cast<uint16_t>((v & 0x00000000FFFF0000) >> 16);
-        uint16_t rev = static_cast<uint16_t>(v & 0x000000000000FFFF);
+        uint16_t rev = static_cast<uint16_t>(v & 0x00000000FFFF);
 
         std::wstring displayVersion, editionId, owner, org;
         HKEY key{};
@@ -84,11 +119,9 @@ namespace winrt::winui::implementation
             ::RegCloseKey(key);
         }
 
-
         std::wstring versionLine = L"版本 " + displayVersion +
             L" (OS 内部版本 " + std::to_wstring(build) + L"." + std::to_wstring(rev) + L")";
         VersionLineText().Text(hstring(versionLine));
-
 
         std::wstring baseName = (build >= 22000) ? L"Windows 11" : L"Windows 10";
         std::wstring edition = baseName + L" " + EditionName(editionId) +
@@ -100,30 +133,26 @@ namespace winrt::winui::implementation
         OrgText().Text(hstring(org));
     }
 
-    void HomePage::GlowPointerEntered(IInspectable const&,
-        winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+    void HomePage::RootPointerMoved(IInspectable const&, PointerRoutedEventArgs const& e)
     {
-        GlowCanvas().Opacity(1.0);
+        UpdateGlow(GlowCard(), GlowCanvas(),
+            { GlowLayer5(), GlowLayer4(), GlowLayer3(), GlowLayer2(), GlowLayer1() }, e);
+        UpdateGlow(GlowCard2(), GlowCanvas2(),
+            { Glow2Layer5(), Glow2Layer4(), Glow2Layer3(), Glow2Layer2(), Glow2Layer1() }, e);
     }
 
-    void HomePage::GlowPointerMoved(IInspectable const&,
-        winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& e)
-    {
-        auto pos = e.GetCurrentPoint(GlowCard()).Position();
-        double x = pos.X;
-        double y = pos.Y;
-
-
-        PlaceEllipse(GlowLayer5(), x, y);
-        PlaceEllipse(GlowLayer4(), x, y);
-        PlaceEllipse(GlowLayer3(), x, y);
-        PlaceEllipse(GlowLayer2(), x, y);
-        PlaceEllipse(GlowLayer1(), x, y);
-    }
-
-    void HomePage::GlowPointerExited(IInspectable const&,
-        winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+    void HomePage::RootPointerExited(IInspectable const&, PointerRoutedEventArgs const&)
     {
         GlowCanvas().Opacity(0.0);
+        GlowCanvas2().Opacity(0.0);
+    }
+
+    void HomePage::GoToBlocker_Tapped(IInspectable const&, TappedRoutedEventArgs const&)
+    {
+        auto window = winrt::winui::implementation::App::window;
+        if (auto mainWindow = window.try_as<winrt::winui::MainWindow>())
+        {
+            mainWindow.NavigateToTag(L"Blocker");
+        }
     }
 }

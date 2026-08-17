@@ -149,4 +149,21 @@ namespace winrt::winui::implementation
             ContentFrame().Navigate(xaml_typename<winrt::winui::BlockLogPage>());
         }
     }
+
+    void MainWindow::NavigateToTag(hstring const& tag)
+    {
+        auto items = NavView().MenuItems();
+        for (uint32_t i = 0; i < items.Size(); ++i)
+        {
+            if (auto item = items.GetAt(i).try_as<NavigationViewItem>())
+            {
+                auto itemTag = item.Tag().try_as<hstring>();
+                if (itemTag && *itemTag == tag)
+                {
+                    NavView().SelectedItem(item);
+                    return;
+                }
+            }
+        }
+    }
 }

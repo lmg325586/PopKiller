@@ -6,5 +6,6 @@ namespace winui
         MainWindow();
         void NavView_SelectionChanged(Microsoft.UI.Xaml.Controls.NavigationView sender,
                                       Microsoft.UI.Xaml.Controls.NavigationViewSelectionChangedEventArgs args);
+        void NavigateToTag(String tag);
     }
 }

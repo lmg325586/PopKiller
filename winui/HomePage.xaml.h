@@ -8,12 +8,13 @@ namespace winrt::winui::implementation
     {
         HomePage();
 
-        void GlowPointerEntered(winrt::Windows::Foundation::IInspectable const& sender,
+        void RootPointerMoved(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
-        void GlowPointerMoved(winrt::Windows::Foundation::IInspectable const& sender,
+        void RootPointerExited(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
-        void GlowPointerExited(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
+
+        void GoToBlocker_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& args);
     };
 }
 
