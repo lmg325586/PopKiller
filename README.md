@@ -4,7 +4,7 @@
 > 通过黑白名单规则与启发式特征打分，自动识别并关闭广告及流氓软件弹窗。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey.svg)]()
 [![Language](https://img.shields.io/badge/language-C%2B%2B17-yellow.svg)]()
 
 ---
@@ -13,7 +13,8 @@
 
 - [功能](#功能)
 - [编译环境](#编译环境)
-- [编译步骤](#编译步骤)
+- [依赖的 NuGet 包](#依赖的-nuget-包)
+- [生成项目](#生成项目)
 - [使用说明](#使用说明)
 - [规则格式](#规则格式)
 - [配置文件](#配置文件)
@@ -46,7 +47,20 @@
 | 语言标准 | C++17 及以上 |
 | 系统 | Windows 11 |
 
-## 编译步骤
+## 依赖的 NuGet 包
+
+项目通过 NuGet 引用以下包（具体版本以 `winui/winui.vcxproj` 中的 `PackageReference` 为准）：
+
+| 包名 | 版本 | 用途 |
+| :--- | :--- | :--- |
+| Microsoft.Windows.CppWinRT | 3.0.260715.1 | C++/WinRT 语言投影与 `.g.h/.g.cpp` 代码生成 |
+| Microsoft.WindowsAppSDK | *见 vcxproj* | WinUI 3 运行时、窗口与控件 API |
+| Microsoft.Windows.SDK.BuildTools | 传递依赖 | WinRT 元数据与构建工具 |
+| Microsoft.Web.WebView2 | 传递依赖 | Windows App SDK 传递依赖 |
+
+> `packages/` 目录不入库，克隆后需联网还原。
+
+## 生成项目
 
 ```bash
 # 克隆仓库
@@ -55,8 +69,15 @@ cd PopKiller
 ```
 
 1. 双击 `winui.slnx` 打开解决方案；
-2. 选择 `x64 / Release`；
-3. 生成解决方案。
+2. 右键解决方案 → **还原 NuGet 包**（首次生成时 VS 通常也会自动还原）；
+3. 选择 `x64 / Release`（调试可选 `Debug`）；
+4. 点击 **生成解决方案**。
+
+> **提示**：若遇到 `C1060 编译器的堆空间不足`，请在 `winui/winui.vcxproj` 的任意 `<PropertyGroup>` 中添加：
+> ```xml
+> <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+> ```
+> 切换到 64 位编译器工具集后重新生成即可解决。
 
 ## 使用说明
 
@@ -128,4 +149,8 @@ Rule2=B:title:wildcard:*热点*
 ## 免责声明
 
 > 本工具仅供学习与研究使用。启发式打分基于经验权重，存在误判可能；
-> 
+> 请谨慎开启“自动拦截”与“顽固强杀”功能。因使用本工具造成的任何数据丢失或系统异常，作者不承担责任。
+
+## 许可证
+
+基于 [MIT License](LICENSE.txt) 开源。
