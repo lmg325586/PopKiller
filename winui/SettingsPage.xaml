@@ -31,10 +31,16 @@
               Toggled="ForceBlockToggle_Toggled"
               Margin="0,16,0,0"/>
 
-        <ToggleSwitch x:Name="HeuristicToggle" Header="启发式拦截（实验性）"
-                      OnContent="开" OffContent="关"
-                      Toggled="HeuristicToggle_Toggled"/>
-        <TextBlock Text="根据窗口特征（如无签名、置顶、小尺寸等）自动识别并拦截未知弹窗。"
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Text="启发式拦截（实验性）" VerticalAlignment="Center"/>
+            <ComboBox x:Name="HeuristicModeCombo" SelectedIndex="0" Width="120"
+                      SelectionChanged="HeuristicModeCombo_SelectionChanged">
+                <ComboBoxItem Content="关闭"/>
+                <ComboBoxItem Content="启用"/>
+                <ComboBoxItem Content="仅记录"/>
+            </ComboBox>
+        </StackPanel>
+        <TextBlock Text="根据窗口特征自动识别未知弹窗。启用=超阈值自动拦截；仅记录=只写日志不拦截。"
                    FontSize="12" Foreground="Gray" TextWrapping="Wrap" Margin="0,-8,0,16"/>
 
         <StackPanel Spacing="12">

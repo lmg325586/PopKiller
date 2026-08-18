@@ -13,14 +13,42 @@
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 
+namespace
+{
+    // 界面下标 -> HeuristicMode：0=关闭(0), 1=启用(2), 2=仅记录(1)
+    int IndexToMode(int idx)
+    {
+        switch (idx) {
+        case 1:  return 2;
+        case 2:  return 1;
+        default: return 0;
+        }
+    }
+
+    // HeuristicMode -> 界面下标
+    int ModeToIndex(int mode)
+    {
+        switch (mode) {
+        case 2:  return 1;
+        case 1:  return 2;
+        default: return 0;
+        }
+    }
+}
+
 namespace winrt::winui::implementation
 {
     SettingsPage::SettingsPage()
     {
         InitializeComponent();
-        HeuristicToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0) > 0);
+
+        // 初始化启发式模式下拉框
+        int mode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
+        HeuristicModeCombo().SelectedIndex(ModeToIndex(mode));
+
         ThemeComboBox().SelectedIndex(AppTheme::Index);
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
+
         m_initialized = true;
     }
 
@@ -65,12 +93,13 @@ namespace winrt::winui::implementation
         PopupBlocker::ForceBlock = on;
     }
 
-    void SettingsPage::HeuristicToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
+    void SettingsPage::HeuristicModeCombo_SelectionChanged(IInspectable const&,
+        Controls::SelectionChangedEventArgs const&)
     {
-        bool on = HeuristicToggle().IsOn();
-        // 开启时设为 2（自动拦截），关闭时设为 0（完全停用）。
-        // 注：如果需要“仅记录”模式(1)，可以在 PopupBlockerPage 中做更细致的配置。
-        AppSettings::WriteInt(L"Blocker", L"HeuristicMode", on ? 2 : 0);
+        if (!m_initialized) return;
+
+        int mode = IndexToMode(HeuristicModeCombo().SelectedIndex());
+        AppSettings::WriteInt(L"Blocker", L"HeuristicMode", mode);
 
         // 实时同步配置到拦截引擎
         PopupBlocker::SyncFromSettings();
