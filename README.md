@@ -73,12 +73,6 @@ cd PopKiller
 3. 选择 `x64 / Release`（调试可选 `Debug`）；
 4. 点击 **生成解决方案**。
 
-> **提示**：若遇到 `C1060 编译器的堆空间不足`，请在 `winui/winui.vcxproj` 的任意 `<PropertyGroup>` 中添加：
-> ```xml
-> <PreferredToolArchitecture>x64</PreferredToolArchitecture>
-> ```
-> 切换到 64 位编译器工具集后重新生成即可解决。
-
 ## 使用说明
 
 1. 运行程序，在“弹窗拦截”页打开总开关；
