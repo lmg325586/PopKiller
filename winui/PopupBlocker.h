@@ -8,7 +8,7 @@
 #include <functional>
 #include <algorithm>
 #include "AppSettings.h"
-#include "HeuristicScorer.h" // 引入独立的启发式打分模块
+#include "HeuristicScorer.h"
 #include <cstdio>
 #include <cwchar>
 
@@ -32,9 +32,9 @@ namespace PopupBlocker
     inline bool ForceBlock = false;
     inline std::wstring SelfExe;
 
-    // 启发式配置缓存（避免在钩子线程中频繁读取 INI）
     inline int HeuristicMode = 0;      // 0=关, 1=仅记录, 2=自动拦截
     inline int HeuristicThreshold = 70; // 触发拦截的分数阈值
+    inline bool VerboseLog = false;     // 是否启用详细日志（记录所有窗口）
 
     inline std::wstring LogPath()
     {
@@ -115,6 +115,7 @@ namespace PopupBlocker
         ForceBlock = AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1;
         HeuristicMode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
         HeuristicThreshold = AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70);
+        VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
 
         std::lock_guard lock(RulesMutex);
         Rules.clear();
@@ -233,10 +234,12 @@ namespace PopupBlocker
                 L"taskmgr.exe", L"systemsettings.exe", L"systemsettingsbroker.exe",
                 L"control.exe", L"mmc.exe", L"openwith.exe", L"msiexec.exe",
                 L"sndvol.exe", L"snippingtool.exe", L"screensketch.exe",
-                L"mstsc.exe", L"conhost.exe",L"shellhost.exe",L"snippingtool.exe",
-                L"screensketch.exe",L"mspaint.exe",L"calc.exe",
+                L"mstsc.exe", L"conhost.exe", L"shellhost.exe", L"snippingtool.exe",
+                L"screensketch.exe", L"mspaint.exe", L"calc.exe",
                 // Win11 小组件
                 L"widgets.exe", L"widgetservice.exe",
+                //常见软件
+                L"msedge.exe",L"windowterminal.exe",L"chrome.exe",L"firefox.exe",
             };
             for (auto p : list) if (exe == p) return true;
             return false;
@@ -345,22 +348,31 @@ namespace PopupBlocker
                 }
             }
 
-            // 拼装日志：记录所有经过基础过滤的窗口
-            std::wstring logMsg = L"action=" + action + L" | reason=" + reason;
-            if (!detail.empty()) {
-                logMsg += L" | " + detail;
+            // 判断是否需要写日志
+            bool shouldLog = VerboseLog;
+            if (!shouldLog) {
+                // 非详细模式下：只记录被拦截的，或者命中黑/白名单的
+                if (shouldBlock || matchResult == 1 || matchResult == 2) {
+                    shouldLog = true;
+                }
             }
-            logMsg += L" | title=" + GetTitle(hwnd) +
-                L" | class=" + GetClass(hwnd) + L" | exe=" + GetProcessName(hwnd);
 
-            Log(logMsg);
+            if (shouldLog) {
+                std::wstring logMsg = L"action=" + action + L" | reason=" + reason;
+                if (!detail.empty()) {
+                    logMsg += L" | " + detail;
+                }
+                logMsg += L" | title=" + GetTitle(hwnd) +
+                    L" | class=" + GetClass(hwnd) + L" | exe=" + GetProcessName(hwnd);
+
+                Log(logMsg);
+            }
 
             if (shouldBlock) {
                 ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
                 ::ShowWindow(hwnd, SW_HIDE);
 
-                // 【安全锁 1】：仅对黑名单(matchResult==2)执行强杀。
-                // 启发式(matchResult==0)有误杀风险，强杀会导致正常软件直接崩溃闪退。
+                //仅对黑名单(matchResult==2)执行强杀。
                 if (matchResult == 2) {
                     std::thread([hwnd]() {
                         ::Sleep(400);
@@ -368,7 +380,7 @@ namespace PopupBlocker
                             DWORD pid = 0;
                             ::GetWindowThreadProcessId(hwnd, &pid);
                             if (pid) {
-                                // 【安全锁 2】：重新获取进程路径，防止 400ms 内 PID 被系统复用导致误杀
+                                //重新获取进程路径，防止 400ms 内 PID 被系统复用导致误杀
                                 HANDLE hProcess = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pid);
                                 if (hProcess) {
                                     WCHAR path[MAX_PATH] = {};
@@ -377,7 +389,6 @@ namespace PopupBlocker
                                         std::wstring p = path;
                                         std::transform(p.begin(), p.end(), p.begin(), ::towlower);
 
-                                        // 绝对不杀 Windows 目录和 Program Files 目录下的进程（防止误杀正常软件）
                                         bool isSystemPath = (p.find(L"c:\\windows\\") == 0) ||
                                             (p.find(L"c:\\program files\\") == 0) ||
                                             (p.find(L"c:\\program files (x86)\\") == 0);

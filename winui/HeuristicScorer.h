@@ -52,15 +52,15 @@ namespace HeuristicScorer
     struct Weights
     {
         float owner = 15;
-        float toolWin = 15;
+        float toolWin = 12;
         float topmost = 20;
-        float noActivate = 10;
+        float noActivate = 5;
         float notResizable = 10;
         float resizable = -15;
         float noMinMax = 10;
         float hasMinMax = -10;
         float captionSysmenu = -10;
-        float smallWindow = 20;
+        float smallWindow = 19;
         float largeWindow = -20;
         float titleEmpty = 10;
         float titleKwHit = 46;

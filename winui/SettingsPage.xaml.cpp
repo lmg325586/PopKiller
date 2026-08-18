@@ -15,7 +15,7 @@ using namespace Microsoft::UI::Xaml;
 
 namespace
 {
-    // 界面下标 -> HeuristicMode：0=关闭(0), 1=启用(2), 2=仅记录(1)
+
     int IndexToMode(int idx)
     {
         switch (idx) {
@@ -25,7 +25,6 @@ namespace
         }
     }
 
-    // HeuristicMode -> 界面下标
     int ModeToIndex(int mode)
     {
         switch (mode) {
@@ -41,8 +40,7 @@ namespace winrt::winui::implementation
     SettingsPage::SettingsPage()
     {
         InitializeComponent();
-
-        // 初始化启发式模式下拉框
+        VerboseLogToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1);
         int mode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
         HeuristicModeCombo().SelectedIndex(ModeToIndex(mode));
 
@@ -101,7 +99,16 @@ namespace winrt::winui::implementation
         int mode = IndexToMode(HeuristicModeCombo().SelectedIndex());
         AppSettings::WriteInt(L"Blocker", L"HeuristicMode", mode);
 
-        // 实时同步配置到拦截引擎
+        PopupBlocker::SyncFromSettings();
+    }
+
+    void SettingsPage::VerboseLogToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_initialized) return;
+
+        bool on = VerboseLogToggle().IsOn();
+        AppSettings::WriteInt(L"Blocker", L"VerboseLog", on ? 1 : 0);
+
         PopupBlocker::SyncFromSettings();
     }
 }

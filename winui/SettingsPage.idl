@@ -8,5 +8,6 @@ namespace winui
         void LicenseLink_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void ForceBlockToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void HeuristicModeCombo_SelectionChanged(Object sender, Microsoft.UI.Xaml.Controls.SelectionChangedEventArgs args);
+        void VerboseLogToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
     }
 }

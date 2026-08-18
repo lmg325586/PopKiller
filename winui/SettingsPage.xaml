@@ -43,6 +43,10 @@
         <TextBlock Text="根据窗口特征自动识别未知弹窗。启用=超阈值自动拦截；仅记录=只写日志不拦截。"
                    FontSize="12" Foreground="Gray" TextWrapping="Wrap" Margin="0,-8,0,16"/>
 
+        <ToggleSwitch x:Name="VerboseLogToggle" Header="详细日志"
+                      OnContent="当前:记录所有窗口" OffContent="当前:仅记录拦截与命中"
+                      Toggled="VerboseLogToggle_Toggled"/>
+
         <StackPanel Spacing="12">
             <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}"/>
 

@@ -21,6 +21,8 @@ namespace winrt::winui::implementation
 
         void HeuristicModeCombo_SelectionChanged(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& args);
+        void VerboseLogToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
     };
 }
 
