@@ -55,14 +55,14 @@ namespace HeuristicScorer
         float toolWin = 12;
         float topmost = 20;
         float noActivate = 5;
-        float notResizable = 10;
+        float notResizable = 12;
         float resizable = -15;
-        float noMinMax = 10;
-        float hasMinMax = -10;
+        float noMinMax = 12;
+        float hasMinMax = -5;
         float captionSysmenu = -10;
-        float smallWindow = 19;
+        float smallWindow = 28;
         float largeWindow = -20;
-        float titleEmpty = 10;
+        float titleEmpty = 20;
         float titleKwHit = 46;
         float clsHex = 10;
         float pathTemp = 20;
@@ -70,7 +70,7 @@ namespace HeuristicScorer
         float youngProcess = 5;
         float unsignedExe = 12;
         float unsignedUserDir = 25;
-        float signedExe = -10;
+        float signedExe = -5;
     };
     inline Weights g_w{};
 
