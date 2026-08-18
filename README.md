@@ -51,12 +51,12 @@
 
 项目通过 NuGet 引用以下包（具体版本以 `winui/winui.vcxproj` 中的 `PackageReference` 为准）：
 
-| 包名 | 版本 | 用途 |
-| :--- | :--- | :--- |
-| Microsoft.Windows.CppWinRT | 3.0.260715.1 | C++/WinRT 语言投影与 `.g.h/.g.cpp` 代码生成 |
-| Microsoft.WindowsAppSDK | *见 vcxproj* | WinUI 3 运行时、窗口与控件 API |
-| Microsoft.Windows.SDK.BuildTools | 传递依赖 | WinRT 元数据与构建工具 |
-| Microsoft.Web.WebView2 | 传递依赖 | Windows App SDK 传递依赖 |
+| 包名 | 版本 |
+| :--- | :--- |
+| Microsoft.Windows.CppWinRT | 3.0.260715.1 |
+| Microsoft.WindowsAppSDK | 2.3.0 |
+| Microsoft.Windows.SDK.BuildTools | 传递依赖 |
+| Microsoft.Web.WebView2 | 传递依赖 |
 
 > `packages/` 目录不入库，克隆后需联网还原。
 
