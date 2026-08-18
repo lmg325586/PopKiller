@@ -210,6 +210,8 @@ namespace HeuristicScorer
     inline int ScoreWindow(Features const& f, std::wstring& detail)
     {
         if (f.cls == L"consolewindowclass" ||
+            f.cls.find(L"chrome_widgetwin") != std::wstring::npos ||
+            f.cls.find(L"microsoftwindowstooltip") != std::wstring::npos ||
             f.cls.find(L"pseudoconsole") != std::wstring::npos ||
             f.cls.rfind(L"hwndwrapper", 0) == 0 ||
             f.cls == L"tooltip" || f.cls.rfind(L"tooltip_", 0) == 0 ||
