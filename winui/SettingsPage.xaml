@@ -44,7 +44,7 @@
                    FontSize="12" Foreground="Gray" TextWrapping="Wrap" Margin="0,-8,0,16"/>
 
         <ToggleSwitch x:Name="VerboseLogToggle" Header="详细日志"
-                      OnContent="当前:记录所有窗口" OffContent="当前:仅记录拦截与命中"
+                      OnContent="当前:记录所有窗口" OffContent="当前:仅记录拦截与命中（推荐）"
                       Toggled="VerboseLogToggle_Toggled"/>
 
         <StackPanel Spacing="12">
