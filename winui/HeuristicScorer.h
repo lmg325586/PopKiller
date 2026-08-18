@@ -63,7 +63,7 @@ namespace HeuristicScorer
         float smallWindow = 20;
         float largeWindow = -20;
         float titleEmpty = 10;
-        float titleKwHit = 40;
+        float titleKwHit = 46;
         float clsHex = 10;
         float pathTemp = 20;
         float pathRoaming = 12;
