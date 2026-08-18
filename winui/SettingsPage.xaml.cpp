@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "SettingsPage.xaml.h"
 #include "App.xaml.h"
 #include "AppTheme.h"
@@ -18,6 +18,7 @@ namespace winrt::winui::implementation
     SettingsPage::SettingsPage()
     {
         InitializeComponent();
+        HeuristicToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0) > 0);
         ThemeComboBox().SelectedIndex(AppTheme::Index);
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
         m_initialized = true;
@@ -62,5 +63,16 @@ namespace winrt::winui::implementation
         bool on = sender.as<Controls::ToggleSwitch>().IsOn();
         AppSettings::WriteInt(L"Blocker", L"ForceBlock", on ? 1 : 0);
         PopupBlocker::ForceBlock = on;
+    }
+
+    void SettingsPage::HeuristicToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
+    {
+        bool on = HeuristicToggle().IsOn();
+        // 开启时设为 2（自动拦截），关闭时设为 0（完全停用）。
+        // 注：如果需要“仅记录”模式(1)，可以在 PopupBlockerPage 中做更细致的配置。
+        AppSettings::WriteInt(L"Blocker", L"HeuristicMode", on ? 2 : 0);
+
+        // 实时同步配置到拦截引擎
+        PopupBlocker::SyncFromSettings();
     }
 }

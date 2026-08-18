@@ -31,6 +31,12 @@
               Toggled="ForceBlockToggle_Toggled"
               Margin="0,16,0,0"/>
 
+        <ToggleSwitch x:Name="HeuristicToggle" Header="启发式拦截（实验性）"
+                      OnContent="开" OffContent="关"
+                      Toggled="HeuristicToggle_Toggled"/>
+        <TextBlock Text="根据窗口特征（如无签名、置顶、小尺寸等）自动识别并拦截未知弹窗。"
+                   FontSize="12" Foreground="Gray" TextWrapping="Wrap" Margin="0,-8,0,16"/>
+
         <StackPanel Spacing="12">
             <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}"/>
 

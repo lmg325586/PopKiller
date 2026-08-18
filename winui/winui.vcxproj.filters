@@ -25,6 +25,7 @@
     <ClInclude Include="PopupBlocker.h" />
     <ClInclude Include="WindowPicker.h" />
     <ClInclude Include="TrayIcon.h" />
+    <ClInclude Include="HeuristicScorer.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Wide310x150Logo.scale-200.png">

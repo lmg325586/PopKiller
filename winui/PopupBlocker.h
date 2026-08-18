@@ -8,6 +8,7 @@
 #include <functional>
 #include <algorithm>
 #include "AppSettings.h"
+#include "HeuristicScorer.h" // 引入独立的启发式打分模块
 #include <cstdio>
 #include <cwchar>
 
@@ -219,40 +220,21 @@ namespace PopupBlocker
                 // 外壳与桌面
                 L"explorer.exe", L"dwm.exe", L"sihost.exe",
                 L"shellexperiencehost.exe", L"startmenuexperiencehost.exe",
-                L"searchui.exe",          // Win10 搜索
-                L"searchhost.exe",        // Win11 搜索
-                L"searchapp.exe",         // Win10 新版搜索
-                L"lockapp.exe",           // 锁屏
-                L"applicationframehost.exe", L"backgroundtaskhost.exe",
-                L"runtimebroker.exe",     // UWP 权限提示
-                L"credentialuibroker.exe",// 凭据/密码弹窗
-                L"consent.exe",           // UAC
-                L"peopleexperiencehost.exe", // Win10“联系人”
-
+                L"searchui.exe", L"searchhost.exe", L"searchapp.exe",
+                L"lockapp.exe", L"applicationframehost.exe", L"backgroundtaskhost.exe",
+                L"runtimebroker.exe", L"credentialuibroker.exe", L"consent.exe",
+                L"peopleexperiencehost.exe",
                 // 登录与安全
-                L"winlogon.exe", L"logonui.exe",
-                L"smartscreen.exe",
-                L"securityhealthsystray.exe", // Windows 安全中心托盘
-
+                L"winlogon.exe", L"logonui.exe", L"smartscreen.exe", L"securityhealthsystray.exe",
                 // 输入法与辅助功能
-                L"ctfmon.exe", L"textinputhost.exe",
-                L"tabtip.exe",  // 触摸键盘
-                L"osk.exe",     // 屏幕键盘
+                L"ctfmon.exe", L"textinputhost.exe", L"tabtip.exe", L"osk.exe",
                 L"narrator.exe", L"magnify.exe", L"sethc.exe", L"utilman.exe",
-
                 // 系统工具与对话框
-                L"taskmgr.exe",
-                L"systemsettings.exe",        // 设置
-                L"systemsettingsbroker.exe",  // Win11 设置
-                L"control.exe",               // 控制面板
-                L"mmc.exe",                   // 管理控制台
-                L"openwith.exe",              // “打开方式”
-                L"msiexec.exe",               // 安装程序
-                L"sndvol.exe",                // 音量合成器
-                L"snippingtool.exe", L"screensketch.exe", // 截图
-                L"mstsc.exe",                 // 远程桌面
-                L"conhost.exe",               // 控制台窗口宿主
-
+                L"taskmgr.exe", L"systemsettings.exe", L"systemsettingsbroker.exe",
+                L"control.exe", L"mmc.exe", L"openwith.exe", L"msiexec.exe",
+                L"sndvol.exe", L"snippingtool.exe", L"screensketch.exe",
+                L"mstsc.exe", L"conhost.exe",L"shellhost.exe",L"snippingtool.exe",
+                L"screensketch.exe",L"mspaint.exe",L"calc.exe",
                 // Win11 小组件
                 L"widgets.exe", L"widgetservice.exe",
             };
@@ -297,18 +279,6 @@ namespace PopupBlocker
             return 0;
         }
 
-        inline int CalculateSuspicionScore(HWND hwnd) {
-            int score = 0;
-            LONG style = ::GetWindowLongW(hwnd, GWL_STYLE);
-            LONG ex = ::GetWindowLongW(hwnd, GWL_EXSTYLE);
-            if (::GetWindow(hwnd, GW_OWNER)) score += 20;
-            if (ex & WS_EX_TOOLWINDOW) score += 30;
-            if (ex & WS_EX_TOPMOST) score += 20;
-            if (!(style & WS_THICKFRAME) && !(style & WS_MINIMIZEBOX)) score += 20;
-            if (GetTitle(hwnd).empty()) score += 10;
-            return score;
-        }
-
         inline void Log(std::wstring const& s) {
             std::wstring p = LogPath();
             bool isNew = (::GetFileAttributesW(p.c_str()) == INVALID_FILE_ATTRIBUTES);
@@ -333,37 +303,95 @@ namespace PopupBlocker
             if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF) return;
             if (!::IsWindowVisible(hwnd)) return;
             if (::GetAncestor(hwnd, GA_ROOT) != hwnd) return;
-            if (IsProtected(hwnd)) return;
+            if (IsProtected(hwnd)) return; // 系统核心进程依然不记录，防止日志爆炸
 
             int matchResult = Match(hwnd);
-            if (matchResult == 1) return; // 白名单放行
-
             bool isPopup = LooksLikePopup(hwnd);
             bool shouldBlock = false;
-            std::wstring reason = L"none";
+            std::wstring reason;
+            std::wstring detail;
+            std::wstring action = L"monitor"; // 默认动作：仅观察记录
 
-            if (matchResult == 2) {
-                if (ForceBlock || isPopup) { shouldBlock = true; reason = L"blacklist"; }
+            if (matchResult == 1) {
+                // 命中白名单
+                reason = L"whitelist";
+                action = L"allow";
+            }
+            else if (matchResult == 2) {
+                // 命中黑名单
+                reason = L"blacklist";
+                if (ForceBlock || isPopup) {
+                    shouldBlock = true;
+                    action = L"block";
+                }
             }
             else {
+                // 未命中任何规则，进入启发式评估
                 if (HeuristicMode > 0) {
-                    int score = CalculateSuspicionScore(hwnd);
-                    if (score >= HeuristicThreshold) {
-                        reason = L"heuristic(" + std::to_wstring(score) + L")";
-                        if (HeuristicMode == 2 && isPopup) shouldBlock = true;
+                    HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
+                    int score = HeuristicScorer::ScoreWindow(f, detail);
+
+                    // 无论分数高低，都记录启发式结果
+                    reason = L"heuristic(" + std::to_wstring(score) + L")";
+
+                    // 只有分数达标且开启了自动拦截，才执行 block
+                    if (score >= HeuristicThreshold && HeuristicMode == 2) {
+                        shouldBlock = true;
+                        action = L"block";
                     }
+                }
+                else {
+                    reason = L"heuristic_off";
                 }
             }
 
-            if (reason != L"none") {
-                Log(L"action=" + std::wstring(shouldBlock ? L"block" : L"monitor") +
-                    L" | reason=" + reason + L" | title=" + GetTitle(hwnd) +
-                    L" | class=" + GetClass(hwnd) + L" | exe=" + GetProcessName(hwnd));
+            // 拼装日志：记录所有经过基础过滤的窗口
+            std::wstring logMsg = L"action=" + action + L" | reason=" + reason;
+            if (!detail.empty()) {
+                logMsg += L" | " + detail;
             }
+            logMsg += L" | title=" + GetTitle(hwnd) +
+                L" | class=" + GetClass(hwnd) + L" | exe=" + GetProcessName(hwnd);
+
+            Log(logMsg);
 
             if (shouldBlock) {
                 ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
                 ::ShowWindow(hwnd, SW_HIDE);
+
+                // 【安全锁 1】：仅对黑名单(matchResult==2)执行强杀。
+                // 启发式(matchResult==0)有误杀风险，强杀会导致正常软件直接崩溃闪退。
+                if (matchResult == 2) {
+                    std::thread([hwnd]() {
+                        ::Sleep(400);
+                        if (::IsWindow(hwnd)) {
+                            DWORD pid = 0;
+                            ::GetWindowThreadProcessId(hwnd, &pid);
+                            if (pid) {
+                                // 【安全锁 2】：重新获取进程路径，防止 400ms 内 PID 被系统复用导致误杀
+                                HANDLE hProcess = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pid);
+                                if (hProcess) {
+                                    WCHAR path[MAX_PATH] = {};
+                                    DWORD size = MAX_PATH;
+                                    if (::QueryFullProcessImageNameW(hProcess, 0, path, &size)) {
+                                        std::wstring p = path;
+                                        std::transform(p.begin(), p.end(), p.begin(), ::towlower);
+
+                                        // 绝对不杀 Windows 目录和 Program Files 目录下的进程（防止误杀正常软件）
+                                        bool isSystemPath = (p.find(L"c:\\windows\\") == 0) ||
+                                            (p.find(L"c:\\program files\\") == 0) ||
+                                            (p.find(L"c:\\program files (x86)\\") == 0);
+
+                                        if (!isSystemPath) {
+                                            ::TerminateProcess(hProcess, 0);
+                                        }
+                                    }
+                                    ::CloseHandle(hProcess);
+                                }
+                            }
+                        }
+                        }).detach();
+                }
             }
         }
 
