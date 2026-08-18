@@ -46,11 +46,11 @@
 
 | 项目 | 要求 |
 | :--- | :--- |
-| IDE | Visual Studio 2022 |
+| IDE | Visual Studio 2026 |
 | 工作负载 | 使用 C++ 的桌面开发 |
 | SDK | Windows App SDK (WinUI 3) |
 | 语言标准 | C++17 及以上 |
-| 系统 | Windows 10 1809+ / Windows 11 |
+| 系统 | Windows 11 |
 
 ## 编译步骤
 
@@ -63,10 +63,6 @@ cd PopKiller
 1. 双击 `winui.slnx` 打开解决方案；
 2. 选择 `x64 / Release`；
 3. 生成解决方案。
-
-> **提示**：若遇到 `C1060 编译器的堆空间不足`，在项目文件的
-> `<PropertyGroup>` 中添加 `<PreferredToolArchitecture>x64</PreferredToolArchitecture>`，
-> 切换到 64 位编译器工具集后重新生成。
 
 ## 使用说明
 
