@@ -1,0 +1,25 @@
+{
+    "version": 1,
+    "rules": [
+        { "list": "B", "field": "exe",   "mode": "contains", "pattern": "flashcenter.exe" },
+        { "list": "B", "field": "exe",   "mode": "contains", "pattern": "minipage.exe" },
+        { "list": "B", "field": "exe",   "mode": "contains", "pattern": "flashhelperservice.exe" },
+        { "list": "B", "field": "title", "mode": "contains", "pattern": "迷你首页" },
+        { "list": "B", "field": "title", "mode": "contains", "pattern": "热点" },
+
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "explorer.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "wechat.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "weixin.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "qq.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "tim.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "dingtalk.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "wxwork.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "snipaste.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "everything.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "listary.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "powertoys.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "utools.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "quicker.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "ditto.exe" }
+    ]
+}
