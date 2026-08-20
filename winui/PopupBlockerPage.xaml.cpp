@@ -2,6 +2,7 @@
 #include "PopupBlockerPage.xaml.h"
 #include "AppSettings.h"
 #include "PopupBlocker.h"
+#include "RuleStorage.h" // 引入以使用 LoadRulesJson
 #include "WindowPicker.h"
 #include "App.xaml.h"
 #include <microsoft.ui.xaml.window.h>
@@ -80,54 +81,28 @@ namespace winrt::winui::implementation
 
         m_initialized = true;
 
-        int count = AppSettings::ReadInt(L"Blocker", L"RuleCount", 0);
-        for (int i = 0; i < count; ++i)
+        // 从 JSON 加载规则
+        std::vector<PopupBlocker::Rule> loadedRules;
+        PopupBlocker::LoadRulesJson(loadedRules);
+
+        for (auto const& r : loadedRules)
         {
-            std::wstring line = AppSettings::ReadString(
-                L"Blocker", (L"Rule" + std::to_wstring(i)).c_str());
+            RuleItem item{ 0, 0, 0, r.pattern };
+            item.listType = r.isWhitelist ? 1 : 0;
 
-            RuleItem item{ 0, 0, 0, L"" }; // 默认: 黑名单, 进程, 包含
-            size_t p1 = line.find(L':');
-            if (p1 == std::wstring::npos) continue;
-
-            std::wstring first = line.substr(0, p1);
-            size_t p2 = line.find(L':', p1 + 1);
-
-            if (first == L"B" || first == L"W") {
-                item.listType = (first == L"W") ? 1 : 0;
-                if (p2 == std::wstring::npos) continue;
-                std::wstring f_str = line.substr(p1 + 1, p2 - p1 - 1);
-                size_t p3 = line.find(L':', p2 + 1);
-                std::wstring m_str, p_str;
-                if (p3 == std::wstring::npos) {
-                    m_str = L"contains"; p_str = line.substr(p2 + 1);
-                }
-                else {
-                    m_str = line.substr(p2 + 1, p3 - p2 - 1);
-                    p_str = line.substr(p3 + 1);
-                }
-
-                if (f_str == L"exe") item.fieldType = 0;
-                else if (f_str == L"path") item.fieldType = 1;
-                else if (f_str == L"title") item.fieldType = 2;
-                else if (f_str == L"class") item.fieldType = 3;
-                else continue;
-
-                if (m_str == L"exact") item.matchMode = 1;
-                else if (m_str == L"wildcard") item.matchMode = 2;
-                else item.matchMode = 0;
-                item.pattern = p_str;
+            switch (r.field) {
+            case PopupBlocker::RuleField::Exe:   item.fieldType = 0; break;
+            case PopupBlocker::RuleField::Path:  item.fieldType = 1; break;
+            case PopupBlocker::RuleField::Title: item.fieldType = 2; break;
+            case PopupBlocker::RuleField::Class: item.fieldType = 3; break;
             }
-            else {
-                // 兼容旧格式: exe:pattern
-                item.listType = 0;
-                if (first == L"exe") item.fieldType = 0;
-                else if (first == L"title") item.fieldType = 2;
-                else if (first == L"class") item.fieldType = 3;
-                else continue;
-                item.matchMode = 0;
-                item.pattern = line.substr(p1 + 1);
+
+            switch (r.mode) {
+            case PopupBlocker::MatchMode::Contains: item.matchMode = 0; break;
+            case PopupBlocker::MatchMode::Exact:    item.matchMode = 1; break;
+            case PopupBlocker::MatchMode::Wildcard: item.matchMode = 2; break;
             }
+
             m_rules.push_back(item);
         }
         RefreshList();
@@ -156,22 +131,31 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::Save()
     {
-        int oldCount = AppSettings::ReadInt(L"Blocker", L"RuleCount", 0);
-
-        int i = 0;
+        std::vector<PopupBlocker::Rule> newRules;
         for (auto const& r : m_rules)
         {
-            std::wstring line = std::wstring(ListTypeKey(r.listType)) + L":" +
-                FieldKey(r.fieldType) + L":" +
-                MatchModeKey(r.matchMode) + L":" + r.pattern;
-            AppSettings::WriteString(L"Blocker",
-                (L"Rule" + std::to_wstring(i)).c_str(), line);
-            ++i;
-        }
-        for (; i < oldCount; ++i)
-            AppSettings::DeleteKey(L"Blocker", (L"Rule" + std::to_wstring(i)).c_str());
+            PopupBlocker::Rule rule;
+            rule.isWhitelist = (r.listType == 1);
 
-        AppSettings::WriteInt(L"Blocker", L"RuleCount", static_cast<int>(m_rules.size()));
+            switch (r.fieldType) {
+            case 0: rule.field = PopupBlocker::RuleField::Exe; break;
+            case 1: rule.field = PopupBlocker::RuleField::Path; break;
+            case 2: rule.field = PopupBlocker::RuleField::Title; break;
+            case 3: rule.field = PopupBlocker::RuleField::Class; break;
+            }
+
+            switch (r.matchMode) {
+            case 0: rule.mode = PopupBlocker::MatchMode::Contains; break;
+            case 1: rule.mode = PopupBlocker::MatchMode::Exact; break;
+            case 2: rule.mode = PopupBlocker::MatchMode::Wildcard; break;
+            }
+
+            rule.pattern = r.pattern;
+            newRules.push_back(rule);
+        }
+
+        // 调用引擎封装的保存接口，自动写 JSON 并更新内存缓存
+        PopupBlocker::SaveRules(newRules);
     }
 
     void PopupBlockerPage::EnableToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
@@ -216,7 +200,7 @@ namespace winrt::winui::implementation
         m_rules.push_back({ listType, fieldType, matchMode, pattern });
         PatternInput().Text(L"");
         Save();
-        PopupBlocker::SyncFromSettings();
+        // Save() 内部已经调用了 SaveRules 更新了内存，无需再次 SyncFromSettings
         RefreshList();
 
         if (conflict)
@@ -241,7 +225,7 @@ namespace winrt::winui::implementation
         size_t real = m_visibleIndex[static_cast<size_t>(idx)];
         m_rules.erase(m_rules.begin() + real);
         Save();
-        PopupBlocker::SyncFromSettings();
+        // 同理，无需再次 SyncFromSettings
         RefreshList();
     }
 

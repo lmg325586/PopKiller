@@ -149,6 +149,8 @@
       <DependentUpon>PopupBlockerPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClInclude>
+    <ClInclude Include="RuleStorage.h" />
+    <ClInclude Include="RuleTypes.h" />
     <ClInclude Include="SettingsPage.xaml.h">
       <DependentUpon>SettingsPage.xaml</DependentUpon>
       <SubType>Code</SubType>

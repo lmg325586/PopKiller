@@ -9,21 +9,13 @@
 #include <algorithm>
 #include "AppSettings.h"
 #include "HeuristicScorer.h"
+#include "RuleTypes.h"
+#include "RuleStorage.h"
 #include <cstdio>
 #include <cwchar>
 
 namespace PopupBlocker
 {
-    enum class RuleField { Exe, Path, Title, Class };
-    enum class MatchMode { Contains, Exact, Wildcard };
-
-    struct Rule
-    {
-        bool isWhitelist = false;
-        RuleField field = RuleField::Exe;
-        MatchMode mode = MatchMode::Contains;
-        std::wstring pattern;
-    };
 
     inline std::vector<Rule> Rules;
     inline std::mutex RulesMutex;
@@ -32,9 +24,9 @@ namespace PopupBlocker
     inline bool ForceBlock = false;
     inline std::wstring SelfExe;
 
-    inline int HeuristicMode = 0;      // 0=关, 1=仅记录, 2=自动拦截
-    inline int HeuristicThreshold = 70; // 触发拦截的分数阈值
-    inline bool VerboseLog = false;     // 是否启用详细日志（记录所有窗口）
+    inline int HeuristicMode = 0;
+    inline int HeuristicThreshold = 70;
+    inline bool VerboseLog = false;
 
     inline std::wstring LogPath()
     {
@@ -44,12 +36,6 @@ namespace PopupBlocker
         auto pos = p.find_last_of(L"\\/");
         p = p.substr(0, pos + 1) + L"blocklog.txt";
         return p;
-    }
-
-    inline std::wstring Lower(std::wstring s)
-    {
-        std::transform(s.begin(), s.end(), s.begin(), ::towlower);
-        return s;
     }
 
     inline bool WildcardMatch(const wchar_t* str, const wchar_t* pat) {
@@ -89,25 +75,11 @@ namespace PopupBlocker
         return false;
     }
 
-    inline void EnsureDefaultRules()
+    inline void SaveRules(std::vector<Rule> const& newRules)
     {
-        if (AppSettings::ReadInt(L"Blocker", L"Initialized", 0) == 1) return;
-
-        if (AppSettings::ReadInt(L"Blocker", L"RuleCount", 0) == 0)
-        {
-            static const wchar_t* defaults[] = {
-                L"B:exe:contains:flashcenter.exe",
-                L"B:exe:contains:minipage.exe",
-                L"B:title:contains:热点",
-                L"W:exe:contains:explorer.exe"
-            };
-            int i = 0;
-            for (auto d : defaults)
-                AppSettings::WriteString(L"Blocker",
-                    (L"Rule" + std::to_wstring(i++)).c_str(), d);
-            AppSettings::WriteInt(L"Blocker", L"RuleCount", i);
-        }
-        AppSettings::WriteInt(L"Blocker", L"Initialized", 1);
+        SaveRulesJson(newRules);
+        std::lock_guard lock(RulesMutex);
+        Rules = newRules;
     }
 
     inline void SyncFromSettings()
@@ -117,58 +89,11 @@ namespace PopupBlocker
         HeuristicThreshold = AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70);
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
 
+        EnsureDefaultRules();
+        std::vector<Rule> rules;
+        LoadRulesJson(rules);
         std::lock_guard lock(RulesMutex);
-        Rules.clear();
-        int count = AppSettings::ReadInt(L"Blocker", L"RuleCount", 0);
-        for (int i = 0; i < count; ++i)
-        {
-            std::wstring line = AppSettings::ReadString(
-                L"Blocker", (L"Rule" + std::to_wstring(i)).c_str());
-
-            Rule r;
-            size_t p1 = line.find(L':');
-            if (p1 == std::wstring::npos) continue;
-
-            std::wstring first = line.substr(0, p1);
-            size_t p2 = line.find(L':', p1 + 1);
-
-            if (first == L"B" || first == L"W") {
-                r.isWhitelist = (first == L"W");
-                if (p2 == std::wstring::npos) continue;
-                std::wstring f_str = line.substr(p1 + 1, p2 - p1 - 1);
-                size_t p3 = line.find(L':', p2 + 1);
-                std::wstring m_str, p_str;
-                if (p3 == std::wstring::npos) {
-                    m_str = L"contains"; p_str = line.substr(p2 + 1);
-                }
-                else {
-                    m_str = line.substr(p2 + 1, p3 - p2 - 1);
-                    p_str = line.substr(p3 + 1);
-                }
-
-                if (f_str == L"exe") r.field = RuleField::Exe;
-                else if (f_str == L"path") r.field = RuleField::Path;
-                else if (f_str == L"title") r.field = RuleField::Title;
-                else if (f_str == L"class") r.field = RuleField::Class;
-                else continue;
-
-                if (m_str == L"exact") r.mode = MatchMode::Exact;
-                else if (m_str == L"wildcard") r.mode = MatchMode::Wildcard;
-                else r.mode = MatchMode::Contains;
-                r.pattern = Lower(p_str);
-            }
-            else {
-                r.isWhitelist = false;
-                if (first == L"exe") r.field = RuleField::Exe;
-                else if (first == L"title") r.field = RuleField::Title;
-                else if (first == L"class") r.field = RuleField::Class;
-                else continue;
-                r.mode = MatchMode::Contains;
-                r.pattern = Lower(line.substr(p1 + 1));
-            }
-
-            if (!r.pattern.empty()) Rules.push_back(r);
-        }
+        Rules = std::move(rules);
     }
 
     namespace detail
@@ -239,7 +164,7 @@ namespace PopupBlocker
                 // Win11 小组件
                 L"widgets.exe", L"widgetservice.exe",
                 //常见软件
-                L"msedge.exe",L"windowterminal.exe",L"chrome.exe",L"firefox.exe",
+                L"msedge.exe",L"windowsterminal.exe",L"chrome.exe",L"firefox.exe",
             };
             for (auto p : list) if (exe == p) return true;
             return false;
@@ -264,7 +189,6 @@ namespace PopupBlocker
             return false;
         }
 
-        // 0=未命中, 1=白名单, 2=黑名单
         inline int Match(HWND hwnd) {
             std::vector<Rule> rules;
             { std::lock_guard lock(RulesMutex); rules = Rules; }
@@ -306,22 +230,20 @@ namespace PopupBlocker
             if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF) return;
             if (!::IsWindowVisible(hwnd)) return;
             if (::GetAncestor(hwnd, GA_ROOT) != hwnd) return;
-            if (IsProtected(hwnd)) return; // 系统核心进程依然不记录，防止日志爆炸
+            if (IsProtected(hwnd)) return;
 
             int matchResult = Match(hwnd);
             bool isPopup = LooksLikePopup(hwnd);
             bool shouldBlock = false;
             std::wstring reason;
             std::wstring detail;
-            std::wstring action = L"monitor"; // 默认动作：仅观察记录
+            std::wstring action = L"monitor";
 
             if (matchResult == 1) {
-                // 命中白名单
                 reason = L"whitelist";
                 action = L"allow";
             }
             else if (matchResult == 2) {
-                // 命中黑名单
                 reason = L"blacklist";
                 if (ForceBlock || isPopup) {
                     shouldBlock = true;
@@ -329,15 +251,10 @@ namespace PopupBlocker
                 }
             }
             else {
-                // 未命中任何规则，进入启发式评估
                 if (HeuristicMode > 0) {
                     HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
                     int score = HeuristicScorer::ScoreWindow(f, detail);
-
-                    // 无论分数高低，都记录启发式结果
                     reason = L"heuristic(" + std::to_wstring(score) + L")";
-
-                    // 只有分数达标且开启了自动拦截，才执行 block
                     if (score >= HeuristicThreshold && HeuristicMode == 2) {
                         shouldBlock = true;
                         action = L"block";
@@ -348,10 +265,8 @@ namespace PopupBlocker
                 }
             }
 
-            // 判断是否需要写日志
             bool shouldLog = VerboseLog;
             if (!shouldLog) {
-                // 非详细模式下：只记录被拦截的，或者命中黑/白名单的
                 if (shouldBlock || matchResult == 1 || matchResult == 2) {
                     shouldLog = true;
                 }
@@ -372,7 +287,6 @@ namespace PopupBlocker
                 ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
                 ::ShowWindow(hwnd, SW_HIDE);
 
-                //仅对黑名单(matchResult==2)执行强杀。
                 if (matchResult == 2) {
                     std::thread([hwnd]() {
                         ::Sleep(400);
@@ -380,7 +294,6 @@ namespace PopupBlocker
                             DWORD pid = 0;
                             ::GetWindowThreadProcessId(hwnd, &pid);
                             if (pid) {
-                                //重新获取进程路径，防止 400ms 内 PID 被系统复用导致误杀
                                 HANDLE hProcess = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pid);
                                 if (hProcess) {
                                     WCHAR path[MAX_PATH] = {};
