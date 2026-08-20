@@ -3,56 +3,115 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <StackPanel Padding="32" Spacing="16">
-        <TextBlock Text="弹窗拦截" Style="{StaticResource TitleTextBlockStyle}"/>
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="20" MaxWidth="720" HorizontalAlignment="Left">
 
-        <ToggleSwitch x:Name="EnableToggle" Header="启用弹窗拦截"
-                      OnContent="开" OffContent="关"
-                      Toggled="EnableToggle_Toggled"/>
-        
-        <ToggleSwitch x:Name="CommunityRulesToggle" Header="启用社区规则库（联网自动更新）"
-              Toggled="CommunityRulesToggle_Toggled" Margin="0,10,0,0"/>
+            <TextBlock Text="弹窗拦截" Style="{StaticResource TitleTextBlockStyle}"/>
 
-        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-            <TextBlock x:Name="CommunityStatusText" Text="" FontSize="12"
-                       Foreground="#FF808080" VerticalAlignment="Center"/>
-            <Button x:Name="RetryFetchButton" Content="重试" Visibility="Collapsed"
-                    Click="RetryFetchButton_Click" Margin="8,-4,0,0" Padding="10,2"/>
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="12">
+                    <ToggleSwitch x:Name="EnableToggle"
+                                  Header="启用弹窗拦截"
+                                  OnContent="开" OffContent="关"
+                                  Toggled="EnableToggle_Toggled"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="8">
+                    <ToggleSwitch x:Name="CommunityRulesToggle"
+                                  Header="启用社区规则库"
+                                  OnContent="开" OffContent="关"
+                                  Toggled="CommunityRulesToggle_Toggled"/>
+                    <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="启动时自动从 GitHub 拉取最新社区规则，与本地规则合并生效，离线使用缓存。"
+                               TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock x:Name="CommunityStatusText" Text="" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <Button x:Name="RetryFetchButton" Content="重试"
+                                Visibility="Collapsed"
+                                Click="RetryFetchButton_Click"
+                                Padding="12,4"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="添加规则" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ComboBox x:Name="ListTypeCombo" SelectedIndex="0" MinWidth="80">
+                            <ComboBoxItem Content="黑名单"/>
+                            <ComboBoxItem Content="白名单"/>
+                        </ComboBox>
+                        <ComboBox x:Name="RuleTypeCombo" SelectedIndex="0" MinWidth="72">
+                            <ComboBoxItem Content="进程"/>
+                            <ComboBoxItem Content="路径"/>
+                            <ComboBoxItem Content="标题"/>
+                            <ComboBoxItem Content="类名"/>
+                        </ComboBox>
+                        <ComboBox x:Name="MatchModeCombo" SelectedIndex="0" MinWidth="72">
+                            <ComboBoxItem Content="包含"/>
+                            <ComboBoxItem Content="精确"/>
+                            <ComboBoxItem Content="通配符"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBox x:Name="PatternInput"
+                                 PlaceholderText="如 *pop* 或完整路径"
+                                 HorizontalAlignment="Stretch"
+                                 MinWidth="200"/>
+                        <Button Content="添加" Click="AddRule_Click"/>
+                        <Button Content="选取窗口" Click="Pick_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="PickInfo" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="规则列表" Style="{StaticResource SubtitleTextBlockStyle}"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="删除选中" Click="DeleteRule_Click"
+                                Grid.Column="1" Padding="12,4"/>
+                    </Grid>
+                    <TextBox x:Name="SearchInput"
+                             PlaceholderText="搜索规则..."
+                             TextChanged="SearchInput_TextChanged"/>
+                    <ListView x:Name="RulesList" Height="260"/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock FontSize="12"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Text="支持黑名单拦截与白名单放行（白名单优先级更高）。匹配模式支持：包含（子串）、精确（全等）、通配符（支持 * 和 ?）。所有规则自动保存到程序同目录的 rules.json。"/>
+
         </StackPanel>
-
-        <StackPanel Orientation="Horizontal" Spacing="8">
-            <ComboBox x:Name="ListTypeCombo" SelectedIndex="0" Width="91">
-                <ComboBoxItem Content="黑名单"/>
-                <ComboBoxItem Content="白名单"/>
-            </ComboBox>
-            <ComboBox x:Name="RuleTypeCombo" SelectedIndex="0" Width="85">
-                <ComboBoxItem Content="进程"/>
-                <ComboBoxItem Content="路径"/>
-                <ComboBoxItem Content="标题"/>
-                <ComboBoxItem Content="类名"/>
-            </ComboBox>
-            <ComboBox x:Name="MatchModeCombo" SelectedIndex="0" Width="85">
-                <ComboBoxItem Content="包含"/>
-                <ComboBoxItem Content="精确"/>
-                <ComboBoxItem Content="通配符"/>
-            </ComboBox>
-            <TextBox x:Name="PatternInput" Width="180"
-                     PlaceholderText="如 *pop* 或完整路径"/>
-            <Button Content="添加" Click="AddRule_Click"/>
-            <Button Content="选取" Click="Pick_Click"/>
-        </StackPanel>
-
-        <TextBox x:Name="SearchInput" Width="260" HorizontalAlignment="Left"
-                 PlaceholderText="搜索规则..."
-                 TextChanged="SearchInput_TextChanged"/>
-
-        <ListView x:Name="RulesList" Height="240"/>
-
-        <Button Content="删除选中规则" Click="DeleteRule_Click"/>
-
-        <TextBlock x:Name="PickInfo" FontSize="12" Foreground="Gray" TextWrapping="Wrap"/>
-
-        <TextBlock FontSize="12" Foreground="Gray" TextWrapping="Wrap"
-                   Text="支持黑名单拦截与白名单放行。匹配模式支持：包含(子串)、精确(全等)、通配符(支持 * 和 ?)。"/>
-    </StackPanel>
+    </ScrollViewer>
 </Page>
