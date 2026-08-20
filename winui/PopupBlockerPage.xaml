@@ -13,6 +13,13 @@
         <ToggleSwitch x:Name="CommunityRulesToggle" Header="启用社区规则库（联网自动更新）"
               Toggled="CommunityRulesToggle_Toggled" Margin="0,10,0,0"/>
 
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <TextBlock x:Name="CommunityStatusText" Text="" FontSize="12"
+                       Foreground="#FF808080" VerticalAlignment="Center"/>
+            <Button x:Name="RetryFetchButton" Content="重试" Visibility="Collapsed"
+                    Click="RetryFetchButton_Click" Margin="8,-4,0,0" Padding="10,2"/>
+        </StackPanel>
+
         <StackPanel Orientation="Horizontal" Spacing="8">
             <ComboBox x:Name="ListTypeCombo" SelectedIndex="0" Width="91">
                 <ComboBoxItem Content="黑名单"/>

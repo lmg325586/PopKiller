@@ -6,6 +6,7 @@
 #include "WindowPicker.h"
 #include "App.xaml.h"
 #include <microsoft.ui.xaml.window.h>
+#include <winrt/Windows.System.h> // 新增：用于 DispatcherQueue
 #include <sstream>
 #if __has_include("PopupBlockerPage.g.cpp")
 #include "PopupBlockerPage.g.cpp"
@@ -74,9 +75,21 @@ namespace winrt::winui::implementation
                 EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
                 m_initialized = true;
             };
+
+        // 注册社区规则拉取结果回调
+        PopupBlocker::CommunityRulesFetchCallback = [this](bool ok, std::wstring msg)
+            {
+                // 从后台网络线程切回 UI 线程更新界面
+                DispatcherQueue().TryEnqueue([this, ok, msg]()
+                    {
+                        UpdateCommunityStatus(ok, msg);
+                    });
+            };
+
         this->Unloaded([this](auto&&, auto&&)
             {
                 PopupBlocker::EnabledChangedCallback = nullptr;
+                PopupBlocker::CommunityRulesFetchCallback = nullptr; // 清理回调防止悬垂
             });
 
         m_initialized = true;
@@ -109,6 +122,7 @@ namespace winrt::winui::implementation
         // 初始化社区规则开关并触发首次拉取
         CommunityRulesToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) == 1);
         if (CommunityRulesToggle().IsOn()) {
+            CommunityStatusText().Text(L"正在拉取社区规则…");
             PopupBlocker::FetchCommunityRulesAsync();
         }
 
@@ -126,7 +140,6 @@ namespace winrt::winui::implementation
                 FieldLabel(r.fieldType) + L" | " +
                 MatchModeLabel(r.matchMode) + L"：" + r.pattern;
 
-            // 搜索过滤逻辑
             if (!m_searchText.empty() &&
                 PopupBlocker::Lower(display).find(m_searchText) == std::wstring::npos)
                 continue;
@@ -186,13 +199,44 @@ namespace winrt::winui::implementation
         AppSettings::WriteInt(L"Blocker", L"CommunityRulesEnabled", on ? 1 : 0);
 
         if (on) {
+            CommunityStatusText().Text(L"正在拉取社区规则…");
+            RetryFetchButton().Visibility(Visibility::Collapsed);
             PopupBlocker::FetchCommunityRulesAsync();
         }
         else {
-            // 关闭时清空内存中的社区规则
             std::lock_guard lock(PopupBlocker::RulesMutex);
             PopupBlocker::CommunityRules.clear();
+            CommunityStatusText().Text(L"");
+            RetryFetchButton().Visibility(Visibility::Collapsed);
         }
+    }
+
+    void PopupBlockerPage::UpdateCommunityStatus(bool ok, std::wstring const& msg)
+    {
+        if (!CommunityRulesToggle().IsOn()) {
+            CommunityStatusText().Text(L"");
+            RetryFetchButton().Visibility(Visibility::Collapsed);
+            return;
+        }
+        if (ok) {
+            CommunityStatusText().Text(L"社区规则已更新，共 " + winrt::hstring(msg) + L" 条");
+            CommunityStatusText().Foreground(Media::SolidColorBrush(
+                winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
+            RetryFetchButton().Visibility(Visibility::Collapsed);
+        }
+        else {
+            CommunityStatusText().Text(L"社区规则拉取失败：" + winrt::hstring(msg));
+            CommunityStatusText().Foreground(Media::SolidColorBrush(
+                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+            RetryFetchButton().Visibility(Visibility::Visible);
+        }
+    }
+
+    void PopupBlockerPage::RetryFetchButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        CommunityStatusText().Text(L"正在拉取社区规则…");
+        RetryFetchButton().Visibility(Visibility::Collapsed);
+        PopupBlocker::FetchCommunityRulesAsync();
     }
 
     void PopupBlockerPage::AddRule_Click(IInspectable const&, RoutedEventArgs const&)

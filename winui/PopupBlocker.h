@@ -20,6 +20,7 @@ namespace PopupBlocker
 {
     inline std::vector<Rule> Rules;
     inline std::vector<Rule> CommunityRules;
+    inline std::function<void(bool, std::wstring)> CommunityRulesFetchCallback;
     inline std::mutex RulesMutex;
     inline std::atomic<bool> Running{ false };
     inline std::function<void()> EnabledChangedCallback;
@@ -102,30 +103,40 @@ namespace PopupBlocker
     inline winrt::Windows::Foundation::IAsyncAction FetchCommunityRulesAsync()
     {
         using namespace winrt::Windows::Web::Http;
+        bool ok = false;
+        std::wstring msg;
         try {
             HttpClient client;
-
             std::wstring url = L"https://raw.githubusercontent.com/lmg325586/PopKiller/master/community_rules.json?t="
                 + std::to_wstring(::GetTickCount64());
             winrt::Windows::Foundation::Uri uri(url);
 
             HttpResponseMessage response = co_await client.GetAsync(uri);
             if (response.StatusCode() != winrt::Windows::Web::Http::HttpStatusCode::Ok) {
-                co_return;
+                msg = L"HTTP " + std::to_wstring(static_cast<int>(response.StatusCode()));
             }
-
-            std::string body = winrt::to_string(co_await response.Content().ReadAsStringAsync());
-
-            std::vector<Rule> newCommunityRules;
-            ParseRulesFromJsonString(body, newCommunityRules);
-
-            {
-                std::lock_guard lock(RulesMutex);
-                CommunityRules = std::move(newCommunityRules);
+            else {
+                std::string body = winrt::to_string(co_await response.Content().ReadAsStringAsync());
+                std::vector<Rule> newCommunityRules;
+                if (ParseRulesFromJsonString(body, newCommunityRules)) {
+                    size_t count = newCommunityRules.size();
+                    {
+                        std::lock_guard lock(RulesMutex);
+                        CommunityRules = std::move(newCommunityRules);
+                    }
+                    ok = true;
+                    msg = std::to_wstring(count);
+                }
+                else {
+                    msg = L"JSON 解析失败";
+                }
             }
         }
         catch (...) {
+            msg = L"网络错误";
         }
+
+        if (CommunityRulesFetchCallback) CommunityRulesFetchCallback(ok, msg);
     }
 
     namespace detail
