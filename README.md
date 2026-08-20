@@ -7,7 +7,6 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)]()
 [![Language](https://img.shields.io/badge/language-C%2B%2B17-yellow.svg)]()
 [![Release](https://img.shields.io/github/v/release/lmg325586/PopKiller?include_prereleases)]()
-[![Community Rules](https://img.shields.io/badge/community--rules-20%2B-brightgreen)]()
 
 ---
 
