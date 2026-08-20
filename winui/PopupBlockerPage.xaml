@@ -9,6 +9,9 @@
         <ToggleSwitch x:Name="EnableToggle" Header="启用弹窗拦截"
                       OnContent="开" OffContent="关"
                       Toggled="EnableToggle_Toggled"/>
+        
+        <ToggleSwitch x:Name="CommunityRulesToggle" Header="启用社区规则库（联网自动更新）"
+              Toggled="CommunityRulesToggle_Toggled" Margin="0,10,0,0"/>
 
         <StackPanel Orientation="Horizontal" Spacing="8">
             <ComboBox x:Name="ListTypeCombo" SelectedIndex="0" Width="91">

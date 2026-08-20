@@ -11,13 +11,15 @@
 #include "HeuristicScorer.h"
 #include "RuleTypes.h"
 #include "RuleStorage.h"
+#include <winrt/Windows.Web.Http.h>
+#include <winrt/Windows.Foundation.h>
 #include <cstdio>
 #include <cwchar>
 
 namespace PopupBlocker
 {
-
     inline std::vector<Rule> Rules;
+    inline std::vector<Rule> CommunityRules;
     inline std::mutex RulesMutex;
     inline std::atomic<bool> Running{ false };
     inline std::function<void()> EnabledChangedCallback;
@@ -94,6 +96,36 @@ namespace PopupBlocker
         LoadRulesJson(rules);
         std::lock_guard lock(RulesMutex);
         Rules = std::move(rules);
+    }
+
+    // 异步拉取社区规则
+    inline winrt::Windows::Foundation::IAsyncAction FetchCommunityRulesAsync()
+    {
+        using namespace winrt::Windows::Web::Http;
+        try {
+            HttpClient client;
+
+            std::wstring url = L"https://raw.githubusercontent.com/lmg325586/PopKiller/master/community_rules.json?t="
+                + std::to_wstring(::GetTickCount64());
+            winrt::Windows::Foundation::Uri uri(url);
+
+            HttpResponseMessage response = co_await client.GetAsync(uri);
+            if (response.StatusCode() != winrt::Windows::Web::Http::HttpStatusCode::Ok) {
+                co_return;
+            }
+
+            std::string body = winrt::to_string(co_await response.Content().ReadAsStringAsync());
+
+            std::vector<Rule> newCommunityRules;
+            ParseRulesFromJsonString(body, newCommunityRules);
+
+            {
+                std::lock_guard lock(RulesMutex);
+                CommunityRules = std::move(newCommunityRules);
+            }
+        }
+        catch (...) {
+        }
     }
 
     namespace detail
@@ -189,19 +221,36 @@ namespace PopupBlocker
             return false;
         }
 
+        // 0=未命中, 1=白名单, 2=黑名单
         inline int Match(HWND hwnd) {
-            std::vector<Rule> rules;
-            { std::lock_guard lock(RulesMutex); rules = Rules; }
-            if (rules.empty()) return 0;
+            std::vector<Rule> localRules;
+            std::vector<Rule> commRules;
+            bool useCommunity = AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) == 1;
+
+            {
+                std::lock_guard lock(RulesMutex);
+                localRules = Rules;
+                if (useCommunity) {
+                    commRules = CommunityRules;
+                }
+            }
+            if (localRules.empty() && commRules.empty()) return 0;
 
             std::wstring exe, path, title, cls;
             bool matchedW = false, matchedB = false;
-            for (auto const& r : rules) {
-                if (MatchRule(hwnd, r, exe, path, title, cls)) {
-                    if (r.isWhitelist) matchedW = true; else matchedB = true;
+
+            auto checkRules = [&](const std::vector<Rule>& rules) {
+                for (auto const& r : rules) {
+                    if (MatchRule(hwnd, r, exe, path, title, cls)) {
+                        if (r.isWhitelist) matchedW = true; else matchedB = true;
+                    }
                 }
-            }
-            if (matchedW) return 1;
+                };
+
+            checkRules(localRules);
+            checkRules(commRules);
+
+            if (matchedW) return 1; // 白名单优先级最高
             if (matchedB) return 2;
             return 0;
         }

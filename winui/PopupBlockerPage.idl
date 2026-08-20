@@ -9,5 +9,6 @@ namespace winui
         void DeleteRule_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void Pick_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void SearchInput_TextChanged(Object sender, Microsoft.UI.Xaml.Controls.TextChangedEventArgs args);
+        void CommunityRulesToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
     }
 }

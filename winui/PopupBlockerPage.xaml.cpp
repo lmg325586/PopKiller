@@ -2,7 +2,7 @@
 #include "PopupBlockerPage.xaml.h"
 #include "AppSettings.h"
 #include "PopupBlocker.h"
-#include "RuleStorage.h" // 引入以使用 LoadRulesJson
+#include "RuleStorage.h" 
 #include "WindowPicker.h"
 #include "App.xaml.h"
 #include <microsoft.ui.xaml.window.h>
@@ -81,7 +81,7 @@ namespace winrt::winui::implementation
 
         m_initialized = true;
 
-        // 从 JSON 加载规则
+        // 从 JSON 加载本地规则
         std::vector<PopupBlocker::Rule> loadedRules;
         PopupBlocker::LoadRulesJson(loadedRules);
 
@@ -105,6 +105,13 @@ namespace winrt::winui::implementation
 
             m_rules.push_back(item);
         }
+
+        // 初始化社区规则开关并触发首次拉取
+        CommunityRulesToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) == 1);
+        if (CommunityRulesToggle().IsOn()) {
+            PopupBlocker::FetchCommunityRulesAsync();
+        }
+
         RefreshList();
     }
 
@@ -154,7 +161,6 @@ namespace winrt::winui::implementation
             newRules.push_back(rule);
         }
 
-        // 调用引擎封装的保存接口，自动写 JSON 并更新内存缓存
         PopupBlocker::SaveRules(newRules);
     }
 
@@ -170,6 +176,22 @@ namespace winrt::winui::implementation
         else
         {
             PopupBlocker::Stop();
+        }
+    }
+
+    void PopupBlockerPage::CommunityRulesToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_initialized) return;
+        bool on = CommunityRulesToggle().IsOn();
+        AppSettings::WriteInt(L"Blocker", L"CommunityRulesEnabled", on ? 1 : 0);
+
+        if (on) {
+            PopupBlocker::FetchCommunityRulesAsync();
+        }
+        else {
+            // 关闭时清空内存中的社区规则
+            std::lock_guard lock(PopupBlocker::RulesMutex);
+            PopupBlocker::CommunityRules.clear();
         }
     }
 
@@ -200,20 +222,19 @@ namespace winrt::winui::implementation
         m_rules.push_back({ listType, fieldType, matchMode, pattern });
         PatternInput().Text(L"");
         Save();
-        // Save() 内部已经调用了 SaveRules 更新了内存，无需再次 SyncFromSettings
         RefreshList();
 
         if (conflict)
         {
             PickInfo().Text(L"⚠ 注意：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
             PickInfo().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C })); // 橙色警告
+                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
         }
         else
         {
             PickInfo().Text(L"");
             PickInfo().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 })); // 恢复灰
+                winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
         }
     }
 
@@ -225,7 +246,6 @@ namespace winrt::winui::implementation
         size_t real = m_visibleIndex[static_cast<size_t>(idx)];
         m_rules.erase(m_rules.begin() + real);
         Save();
-        // 同理，无需再次 SyncFromSettings
         RefreshList();
     }
 

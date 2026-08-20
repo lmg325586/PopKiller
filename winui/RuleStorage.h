@@ -16,7 +16,7 @@ namespace PopupBlocker
         return p.substr(0, pos + 1) + L"rules.json";
     }
 
-    // --- 编码转换辅助 ---
+
     inline std::string WStringToUtf8(std::wstring const& wstr) {
         if (wstr.empty()) return {};
         int need = ::WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
@@ -35,7 +35,7 @@ namespace PopupBlocker
         return wstr;
     }
 
-    // --- 文件 IO (直接操作 UTF-8 string) ---
+
     inline bool ReadFileToUtf8String(std::wstring const& p, std::string& out) {
         HANDLE hf = ::CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
         if (hf == INVALID_HANDLE_VALUE) return false;
@@ -49,7 +49,7 @@ namespace PopupBlocker
         ::CloseHandle(hf);
         char* data = buffer.data();
         int len = static_cast<int>(rd);
-        // 跳过 UTF-8 BOM
+
         if (len >= 3 && (unsigned char)data[0] == 0xEF && (unsigned char)data[1] == 0xBB && (unsigned char)data[2] == 0xBF) {
             data += 3; len -= 3;
         }
@@ -66,7 +66,6 @@ namespace PopupBlocker
         return ok;
     }
 
-    // --- 规则解析 (兼容旧格式) ---
     inline bool ParseRuleLine(std::wstring const& line, Rule& r)
     {
         size_t p1 = line.find(L':');
@@ -106,11 +105,9 @@ namespace PopupBlocker
         return !r.pattern.empty();
     }
 
-    // --- 核心 JSON 读写 ---
-    inline bool LoadRulesJson(std::vector<Rule>& out)
+    inline bool ParseRulesFromJsonString(std::string const& utf8_text, std::vector<Rule>& out)
     {
-        std::string utf8_text;
-        if (!ReadFileToUtf8String(RulesPath(), utf8_text) || utf8_text.empty()) return false;
+        if (utf8_text.empty()) return false;
         try {
             auto j = nlohmann::json::parse(utf8_text);
             if (!j.contains("rules") || !j["rules"].is_array()) return false;
@@ -137,6 +134,14 @@ namespace PopupBlocker
         catch (...) {
             return false; // 解析失败返回空
         }
+    }
+
+    // 2. 从本地文件加载
+    inline bool LoadRulesJson(std::vector<Rule>& out)
+    {
+        std::string utf8_text;
+        if (!ReadFileToUtf8String(RulesPath(), utf8_text)) return false;
+        return ParseRulesFromJsonString(utf8_text, out);
     }
 
     inline bool SaveRulesJson(std::vector<Rule> const& rules)
@@ -170,7 +175,6 @@ namespace PopupBlocker
             j["rules"].push_back(item);
         }
 
-        // dump(4) 生成带 4 空格缩进的格式化 JSON，方便人类阅读
         return WriteUtf8StringToFile(RulesPath(), j.dump(4));
     }
 
