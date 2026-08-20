@@ -3,72 +3,174 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <StackPanel Padding="32" Spacing="16">
-        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <FontIcon Glyph="&#xE713;" FontSize="20" FontFamily="{ThemeResource SymbolThemeFontFamily}" 
-                      Foreground="{ThemeResource SystemControlHighlightAccentBrush}"/>
-            <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}"/>
+    <ScrollViewer Padding="24,0">
+        <StackPanel Spacing="24" MaxWidth="720" HorizontalAlignment="Left" Padding="0,24">
+
+            <TextBlock Text="设置"
+                       Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="外观"
+                               Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="主题材质"
+                                       Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="选择窗口背景材质，Mica 为半透明云母效果。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ComboBox x:Name="ThemeComboBox" Width="140"
+                                  Grid.Column="1"
+                                  VerticalAlignment="Center"
+                                  SelectionChanged="ThemeComboBox_SelectionChanged">
+                            <ComboBoxItem Content="默认"/>
+                            <ComboBoxItem Content="Mica"/>
+                        </ComboBox>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="拦截设置"
+                               Style="{StaticResource SubtitleTextBlockStyle}"/>
+
+                    <ToggleSwitch x:Name="ForceBlockToggle"
+                                  Header="命中规则一律拦截"
+                                  OffContent="仅拦截弹窗形态"
+                                  OnContent="命中即拦截"
+                                  Toggled="ForceBlockToggle_Toggled"/>
+                    <TextBlock Text="关闭时，黑名单规则仅对具有弹窗特征（工具窗口、无最小化按钮等）的窗口生效；开启后，命中黑名单规则的窗口一律拦截。"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,-8,0,0"/>
+
+
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="启发式拦截"
+                                       Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="根据窗口特征自动识别未知弹窗"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ComboBox x:Name="HeuristicModeCombo" SelectedIndex="0" Width="120"
+                                  Grid.Column="1"
+                                  VerticalAlignment="Center"
+                                  SelectionChanged="HeuristicModeCombo_SelectionChanged">
+                            <ComboBoxItem Content="关闭"/>
+                            <ComboBoxItem Content="启用"/>
+                            <ComboBoxItem Content="仅记录"/>
+                        </ComboBox>
+                    </Grid>
+                    <TextBlock Text="启用：分数超过阈值时自动拦截；仅记录：只写入日志不执行拦截，用于调参和观察。"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,-8,0,0"/>
+
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
+                    <ToggleSwitch x:Name="VerboseLogToggle"
+                                  Header="详细日志"
+                                  OnContent="记录所有窗口"
+                                  OffContent="仅记录拦截与命中"
+                                  Toggled="VerboseLogToggle_Toggled"/>
+                    <TextBlock Text="开启后，所有经过评估的窗口都会写入 blocklog.txt，包括未被拦截的窗口；关闭时仅记录被拦截或命中规则的窗口。"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,-8,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="关于"
+                               Style="{StaticResource SubtitleTextBlockStyle}"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="作者"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="1" Margin="16,0,0,0"
+                                   Style="{StaticResource BodyTextBlockStyle}">
+                            <Hyperlink NavigateUri="https://github.com/lmg325586">
+                                <Run Text="lmg325586"/>
+                            </Hyperlink>
+                        </TextBlock>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="许可证"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <HyperlinkButton Content="MIT License"
+                                         Grid.Column="1"
+                                         Padding="0"
+                                         Margin="12,-4,0,0"
+                                         HorizontalAlignment="Left"
+                                         Click="LicenseLink_Click"/>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="版本"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="Beta 0.3"
+                                   Grid.Column="1"
+                                   Margin="16,0,0,0"
+                                   Style="{StaticResource BodyTextBlockStyle}"/>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4,0,0"/>
+
+                    <TextBlock Text="开发：Qwen-3.8-max、DeepSeek-V4"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
         </StackPanel>
-
-        <StackPanel Orientation="Horizontal" Spacing="16">
-            <TextBlock Text="主题材质" VerticalAlignment="Center"/>
-            <ComboBox x:Name="ThemeComboBox" Width="150"
-                      SelectionChanged="ThemeComboBox_SelectionChanged">
-                <ComboBoxItem Content="默认"/>
-                <ComboBoxItem Content="Mica"/>
-            </ComboBox>
-        </StackPanel>
-
-        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <FontIcon Glyph="&#xE72E;" FontSize="20" FontFamily="{ThemeResource SymbolThemeFontFamily}" 
-              Foreground="{ThemeResource SystemControlHighlightAccentBrush}"/>
-            <TextBlock Text="弹窗拦截设置" Style="{StaticResource TitleTextBlockStyle}"/>
-        </StackPanel>
-
-        <ToggleSwitch x:Name="ForceBlockToggle"
-              Header="规则内是否一律拦截"
-              OffContent="当前:仅拦弹窗形态 (推荐)" OnContent="当前:命中即拦"
-              Toggled="ForceBlockToggle_Toggled"
-              Margin="0,16,0,0"/>
-
-        <StackPanel Orientation="Horizontal" Spacing="12">
-            <TextBlock Text="启发式拦截（实验性）" VerticalAlignment="Center"/>
-            <ComboBox x:Name="HeuristicModeCombo" SelectedIndex="0" Width="120"
-                      SelectionChanged="HeuristicModeCombo_SelectionChanged">
-                <ComboBoxItem Content="关闭"/>
-                <ComboBoxItem Content="启用"/>
-                <ComboBoxItem Content="仅记录"/>
-            </ComboBox>
-        </StackPanel>
-        <TextBlock Text="根据窗口特征自动识别未知弹窗。启用=超阈值自动拦截；仅记录=只写日志不拦截。"
-                   FontSize="12" Foreground="Gray" TextWrapping="Wrap" Margin="0,-8,0,16"/>
-
-        <ToggleSwitch x:Name="VerboseLogToggle" Header="详细日志"
-                      OnContent="当前:记录所有窗口" OffContent="当前:仅记录拦截与命中（推荐）"
-                      Toggled="VerboseLogToggle_Toggled"/>
-
-        <StackPanel Spacing="12">
-            <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}"/>
-
-            <TextBlock FontSize="14">
-                <Run Text="作者：" />
-                <Hyperlink NavigateUri="https://github.com/">
-                    <Run Text="Lmg325586" />
-                </Hyperlink>
-                <Run Text="   开发:Qwen-3.8-max   DeepSeek-V3.1" />
-            </TextBlock>
-
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock FontSize="14" Text="许可证："/>
-                <HyperlinkButton Content="MIT License" FontWeight="SemiBold"
-                     Padding="0" Margin="0,-4,0,0"
-                     Click="LicenseLink_Click"/>
-            </StackPanel>
-
-            <TextBlock FontSize="14">
-                <Run Text="版本：" />
-                <Run Text="Beta 0.3" />
-            </TextBlock>
-        </StackPanel>
-    </StackPanel>
+    </ScrollViewer>
 </Page>
