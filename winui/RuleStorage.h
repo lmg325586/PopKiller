@@ -1,9 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <string>
 #include <vector>
-#include <winrt/Windows.Data.Json.h>
 #include "RuleTypes.h"
+#include "vendor/json.hpp"
 
 namespace PopupBlocker
 {
@@ -16,67 +16,57 @@ namespace PopupBlocker
         return p.substr(0, pos + 1) + L"rules.json";
     }
 
-    inline bool ReadUtf8File(std::wstring const& p, std::wstring& out)
-    {
+    // --- 编码转换辅助 ---
+    inline std::string WStringToUtf8(std::wstring const& wstr) {
+        if (wstr.empty()) return {};
+        int need = ::WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
+        if (need <= 0) return {};
+        std::string str(need, '\0');
+        ::WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), str.data(), need, nullptr, nullptr);
+        return str;
+    }
+
+    inline std::wstring Utf8ToWString(std::string const& str) {
+        if (str.empty()) return {};
+        int need = ::MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), nullptr, 0);
+        if (need <= 0) return {};
+        std::wstring wstr(need, L'\0');
+        ::MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), wstr.data(), need);
+        return wstr;
+    }
+
+    // --- 文件 IO (直接操作 UTF-8 string) ---
+    inline bool ReadFileToUtf8String(std::wstring const& p, std::string& out) {
         HANDLE hf = ::CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
         if (hf == INVALID_HANDLE_VALUE) return false;
-
-        LARGE_INTEGER sz{};
-        ::GetFileSizeEx(hf, &sz);
-        if (sz.QuadPart == 0) {
-            ::CloseHandle(hf);
-            out.clear();
-            return true;
-        }
-
+        LARGE_INTEGER sz{}; ::GetFileSizeEx(hf, &sz);
+        if (sz.QuadPart == 0) { ::CloseHandle(hf); out.clear(); return true; }
         std::vector<char> buffer(static_cast<size_t>(sz.QuadPart));
         DWORD rd{};
         if (!::ReadFile(hf, buffer.data(), static_cast<DWORD>(buffer.size()), &rd, nullptr) || rd == 0) {
-            ::CloseHandle(hf);
-            return false;
+            ::CloseHandle(hf); return false;
         }
         ::CloseHandle(hf);
-
         char* data = buffer.data();
         int len = static_cast<int>(rd);
-        if (len >= 3 &&
-            (unsigned char)data[0] == 0xEF &&
-            (unsigned char)data[1] == 0xBB &&
-            (unsigned char)data[2] == 0xBF) {
-            data += 3;
-            len -= 3;
+        // 跳过 UTF-8 BOM
+        if (len >= 3 && (unsigned char)data[0] == 0xEF && (unsigned char)data[1] == 0xBB && (unsigned char)data[2] == 0xBF) {
+            data += 3; len -= 3;
         }
-
-        int need = ::MultiByteToWideChar(CP_UTF8, 0, data, len, nullptr, 0);
-        if (need <= 0) return false;
-
-        out.assign(static_cast<size_t>(need), L'\0');
-        ::MultiByteToWideChar(CP_UTF8, 0, data, len, out.data(), need);
+        out.assign(data, len);
         return true;
     }
 
-    inline bool WriteUtf8File(std::wstring const& p, std::wstring const& text)
-    {
-        if (text.empty()) {
-            HANDLE hf = ::CreateFileW(p.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-            if (hf != INVALID_HANDLE_VALUE) ::CloseHandle(hf);
-            return true;
-        }
-        int need = ::WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-        if (need <= 0) return false;
-
-        std::vector<char> buffer(need);
-        ::WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), buffer.data(), need, nullptr, nullptr);
-
+    inline bool WriteUtf8StringToFile(std::wstring const& p, std::string const& text) {
         HANDLE hf = ::CreateFileW(p.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
         if (hf == INVALID_HANDLE_VALUE) return false;
-
         DWORD wr{};
-        bool ok = ::WriteFile(hf, buffer.data(), static_cast<DWORD>(buffer.size()), &wr, nullptr);
+        bool ok = ::WriteFile(hf, text.data(), static_cast<DWORD>(text.size()), &wr, nullptr);
         ::CloseHandle(hf);
         return ok;
     }
 
+    // --- 规则解析 (兼容旧格式) ---
     inline bool ParseRuleLine(std::wstring const& line, Rule& r)
     {
         size_t p1 = line.find(L':');
@@ -116,64 +106,72 @@ namespace PopupBlocker
         return !r.pattern.empty();
     }
 
+    // --- 核心 JSON 读写 ---
     inline bool LoadRulesJson(std::vector<Rule>& out)
     {
-        std::wstring text;
-        if (!ReadUtf8File(RulesPath(), text) || text.empty()) return false;
+        std::string utf8_text;
+        if (!ReadFileToUtf8String(RulesPath(), utf8_text) || utf8_text.empty()) return false;
         try {
-            using namespace winrt::Windows::Data::Json;
-            JsonObject root{ nullptr };
-            if (!JsonObject::TryParse(winrt::hstring(text), root) || !root || !root.HasKey(L"rules")) return false;
-            JsonArray arr = root.GetNamedArray(L"rules");
-            for (uint32_t i = 0; i < arr.Size(); ++i) {
-                JsonObject o = arr.GetObjectAt(i);
+            auto j = nlohmann::json::parse(utf8_text);
+            if (!j.contains("rules") || !j["rules"].is_array()) return false;
+
+            for (auto& item : j["rules"]) {
                 Rule r;
-                r.isWhitelist = o.GetNamedString(L"list", L"B") == L"W";
-                std::wstring f(o.GetNamedString(L"field", L"exe"));
-                if (f == L"exe") r.field = RuleField::Exe;
-                else if (f == L"path") r.field = RuleField::Path;
-                else if (f == L"title") r.field = RuleField::Title;
-                else if (f == L"class") r.field = RuleField::Class;
-                std::wstring m(o.GetNamedString(L"mode", L"contains"));
-                if (m == L"exact") r.mode = MatchMode::Exact;
-                else if (m == L"wildcard") r.mode = MatchMode::Wildcard;
-                r.pattern = Lower(std::wstring(o.GetNamedString(L"pattern", L"")));
+                r.isWhitelist = item.value("list", "B") == "W";
+
+                std::string f = item.value("field", "exe");
+                if (f == "exe") r.field = RuleField::Exe;
+                else if (f == "path") r.field = RuleField::Path;
+                else if (f == "title") r.field = RuleField::Title;
+                else if (f == "class") r.field = RuleField::Class;
+
+                std::string m = item.value("mode", "contains");
+                if (m == "exact") r.mode = MatchMode::Exact;
+                else if (m == "wildcard") r.mode = MatchMode::Wildcard;
+
+                r.pattern = Lower(Utf8ToWString(item.value("pattern", "")));
                 if (!r.pattern.empty()) out.push_back(r);
             }
             return true;
         }
-        catch (...) { return false; }
+        catch (...) {
+            return false; // 解析失败返回空
+        }
     }
 
     inline bool SaveRulesJson(std::vector<Rule> const& rules)
     {
-        using namespace winrt::Windows::Data::Json;
-        JsonArray arr;
+        nlohmann::json j;
+        j["version"] = 1;
+        j["rules"] = nlohmann::json::array();
+
         for (auto const& r : rules) {
-            JsonObject o;
-            o.SetNamedValue(L"list", JsonValue::CreateStringValue(r.isWhitelist ? L"W" : L"B"));
-            const wchar_t* f = L"exe";
+            nlohmann::json item;
+            item["list"] = r.isWhitelist ? "W" : "B";
+
+            const char* f = "exe";
             switch (r.field) {
-            case RuleField::Path:  f = L"path";  break;
-            case RuleField::Title: f = L"title"; break;
-            case RuleField::Class: f = L"class"; break;
+            case RuleField::Path:  f = "path";  break;
+            case RuleField::Title: f = "title"; break;
+            case RuleField::Class: f = "class"; break;
             default: break;
             }
-            const wchar_t* m = L"contains";
+            item["field"] = f;
+
+            const char* m = "contains";
             switch (r.mode) {
-            case MatchMode::Exact:    m = L"exact";    break;
-            case MatchMode::Wildcard: m = L"wildcard"; break;
+            case MatchMode::Exact:    m = "exact";    break;
+            case MatchMode::Wildcard: m = "wildcard"; break;
             default: break;
             }
-            o.SetNamedValue(L"field", JsonValue::CreateStringValue(f));
-            o.SetNamedValue(L"mode", JsonValue::CreateStringValue(m));
-            o.SetNamedValue(L"pattern", JsonValue::CreateStringValue(r.pattern));
-            arr.Append(o);
+            item["mode"] = m;
+            item["pattern"] = WStringToUtf8(r.pattern);
+
+            j["rules"].push_back(item);
         }
-        JsonObject root;
-        root.SetNamedValue(L"version", JsonValue::CreateNumberValue(1));
-        root.SetNamedValue(L"rules", arr);
-        return WriteUtf8File(RulesPath(), std::wstring(root.Stringify()));
+
+        // dump(4) 生成带 4 空格缩进的格式化 JSON，方便人类阅读
+        return WriteUtf8StringToFile(RulesPath(), j.dump(4));
     }
 
     inline void EnsureDefaultRules()
@@ -182,7 +180,8 @@ namespace PopupBlocker
 
         std::vector<Rule> rules;
         for (auto d : { L"B:exe:contains:flashcenter.exe", L"B:exe:contains:minipage.exe",
-                        L"B:title:contains:\u70ED\u70B9", L"W:exe:contains:explorer.exe" }) {
+                        L"B:title:contains:\u70ED\u70B9",   // “热点”
+                        L"W:exe:contains:explorer.exe" }) {
             Rule r;
             if (ParseRuleLine(d, r)) rules.push_back(r);
         }
