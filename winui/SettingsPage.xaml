@@ -67,7 +67,7 @@
 
             <TextBlock FontSize="14">
                 <Run Text="版本：" />
-                <Run Text="Beta 0.2" />
+                <Run Text="Beta 0.3" />
             </TextBlock>
         </StackPanel>
     </StackPanel>
