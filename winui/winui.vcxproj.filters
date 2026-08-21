@@ -28,6 +28,7 @@
     <ClInclude Include="HeuristicScorer.h" />
     <ClInclude Include="RuleTypes.h" />
     <ClInclude Include="RuleStorage.h" />
+    <ClInclude Include="AutoStart.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Wide310x150Logo.scale-200.png">

@@ -2,6 +2,7 @@
 #include "SettingsPage.xaml.h"
 #include "App.xaml.h"
 #include "AppTheme.h"
+#include "AutoStart.h"
 #include "AppSettings.h"
 #include "LicensePage.xaml.h"
 #include "PopupBlocker.h"
@@ -43,7 +44,7 @@ namespace winrt::winui::implementation
         VerboseLogToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1);
         int mode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
         HeuristicModeCombo().SelectedIndex(ModeToIndex(mode));
-
+        AutoStartToggle().IsOn(AutoStart::IsEnabled());
         ThemeComboBox().SelectedIndex(AppTheme::Index);
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
 
@@ -110,5 +111,13 @@ namespace winrt::winui::implementation
         AppSettings::WriteInt(L"Blocker", L"VerboseLog", on ? 1 : 0);
 
         PopupBlocker::SyncFromSettings();
+    }
+
+    void SettingsPage::AutoStartToggle_Toggled(IInspectable const& sender, RoutedEventArgs const&)
+    {
+        auto toggle = sender.as<winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch>();
+        bool on = toggle.IsOn();
+        bool ok = on ? AutoStart::EnableAutoStartup() : AutoStart::DisableAutoStartup();
+        if (!ok) toggle.IsOn(!on);
     }
 }

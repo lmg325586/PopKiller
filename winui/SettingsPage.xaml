@@ -112,6 +112,21 @@
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="20,16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="常规"
+                               Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <ToggleSwitch x:Name="AutoStartToggle"
+                                  Header="开机自启"
+                                  OnContent="开" OffContent="关"
+                                  Toggled="AutoStartToggle_Toggled"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16">
                 <StackPanel Spacing="12">
                     <TextBlock Text="关于"
                                Style="{StaticResource SubtitleTextBlockStyle}"/>

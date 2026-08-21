@@ -102,19 +102,26 @@ namespace winrt::winui::implementation
                         if (AppTheme::Index == 1)
                             SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
 
-                        auto item = NavView().SelectedItem().try_as<NavigationViewItem>();
-                        if (!item)
+                        auto currentItem = NavView().SelectedItem();
+
+                        NavView().SelectedItem(nullptr);
+
+                        if (auto item = currentItem.try_as<NavigationViewItem>())
                         {
-                            ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
-                            return;
+                            hstring tag = unbox_value<hstring>(item.Tag());
+                            NavigateToTag(tag);
                         }
-                        hstring tag = unbox_value<hstring>(item.Tag());
-                        if (tag == L"Blocker")
-                            ContentFrame().Navigate(xaml_typename<winrt::winui::PopupBlockerPage>());
-                        else if (tag == L"BlockLog")
-                            ContentFrame().Navigate(xaml_typename<winrt::winui::BlockLogPage>());
+                        else if (currentItem == NavView().SettingsItem())
+                        {
+                            NavView().SelectedItem(NavView().SettingsItem());
+                        }
                         else
-                            ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
+                        {
+                            auto menuItems = NavView().MenuItems();
+                            if (menuItems.Size() > 0) {
+                                NavView().SelectedItem(menuItems.GetAt(0));
+                            }
+                        }
                     };
             }
         }
