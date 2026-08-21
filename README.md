@@ -13,6 +13,7 @@
 ## 目录
 
 - [功能特性](#功能特性)
+- [截图](#截图)
 - [快速开始](#快速开始)
 - [使用说明](#使用说明)
 - [规则格式](#规则格式)
@@ -35,12 +36,21 @@
 | **规则引擎** | 支持 **进程名 / 完整路径 / 窗口标题 / 窗口类名** 四种匹配字段 |
 | **匹配模式** | 包含（子串）/ 精确（全等）/ 通配符（`*` 与 `?`） |
 | **黑白名单** | 黑名单拦截，白名单放行，*白名单优先级最高* |
-| **社区规则库** | 启动时联网拉取仓库 `community_rules.json`，与本地规则合并生效，离线使用缓存 |
+| **社区规则库** | 启动时联网拉取仓库 `community_rules.json`，合并到本地规则，可编辑可删除，删除偏好自动记忆 |
 | **启发式打分** | 对 20 余项特征（窗口样式、进程路径、数字签名、进程年龄等）加权评分 |
 | **窗口拾取** | 点选目标窗口，提取进程 / 路径 / 类名 / 标题，一键生成规则 |
 | **系统托盘** | 最小化到托盘，右键菜单快速切换拦截状态 |
+| **开机自启** | 支持设置开机自动启动（兼容 Windows 10/11 StartupApproved 机制） |
+| **单实例运行** | 重复启动时自动激活已有窗口并前置，不会开多个进程 |
 | **日志系统** | 实时刷新拦截日志，支持详细日志模式记录每个窗口的打分明细 |
 | **主题切换** | 支持普通 / Mica 材质两种界面风格 |
+
+---
+
+## 截图
+
+<!-- 将截图放入 docs/ 目录后替换下面的路径 -->
+![主界面](docs/screenshot_main.png)
 
 ---
 
@@ -58,7 +68,7 @@
 2. 程序会自动从 GitHub 拉取最新社区规则库（首次启动需联网）；
 3. 点击「选取」，点选目标弹窗，自动填充窗口信息；
 4. 选择 **名单类型 / 匹配字段 / 匹配模式**，输入模式后点击「添加」；
-5. 在「设置」页调整启发式模式与详细日志开关。
+5. 在「设置」页可开启开机自启、调整启发式模式与详细日志开关。
 
 ---
 
@@ -81,15 +91,15 @@
 
 - 在规则列表上方的搜索框输入关键词，可实时过滤规则；
 - 选中规则后点击「删除」移除该规则；
-- 所有本地规则自动保存到程序同目录的 `rules.json`。
+- 所有规则（包括社区规则）自动保存到程序同目录的 `rules.json`。
 
 ### 社区规则库
 
 - 程序启动时自动从 GitHub 拉取最新 `community_rules.json`；
-- 社区规则与本地规则合并生效，白名单优先级始终最高；
-- 社区规则为只读，无法在界面中修改或删除；
-- 如需排除某条社区规则，可添加一条相反的白名单规则覆盖；
-- 离线启动时使用上次缓存的社区规则。
+- 拉取的社区规则合并到本地规则列表中，**可编辑、可删除**；
+- 删除社区规则后，该规则的键会被记入 `communityRemoved` 列表，下次拉取时自动跳过；
+- 如需恢复已删除的社区规则，手动清空 `rules.json` 中的 `communityRemoved` 数组即可；
+- 离线启动时使用上次缓存的规则。
 
 ### 启发式模式
 
@@ -100,6 +110,21 @@
 | **关闭** | 仅按黑白名单规则拦截，不进行启发式评估 |
 | **仅记录** | 对所有窗口打分并写入日志，但不自动拦截（用于调参和观察） |
 | **自动拦截** | 分数达到阈值（默认 70）的窗口自动关闭 |
+
+### 开机自启
+
+在「设置」页面的「常规」卡片中开启「开机自启」：
+
+- 开启后程序会在当前用户登录时自动启动；
+- 通过注册表 `HKCU\...\CurrentVersion\Run` 实现，无需管理员权限；
+- 兼容 Windows 10/11 的 StartupApproved 机制，不会被系统静默禁用；
+- 如程序路径发生变化，下次启动时会自动更新注册表中的路径。
+
+### 单实例运行
+
+- 程序仅允许同时运行一个实例；
+- 重复启动时会自动激活已有窗口并前置显示；
+- 如窗口最小化到托盘，会自动恢复并闪烁提示。
 
 ### 系统托盘
 
@@ -129,7 +154,8 @@
             "mode": "contains",
             "pattern": "explorer.exe"
         }
-    ]
+    ],
+    "communityRemoved": []
 }
 ```
 
@@ -139,6 +165,8 @@
 | `field` | `exe` / `path` / `title` / `class` | 进程名 / 完整路径 / 窗口标题 / 窗口类名 |
 | `mode` | `contains` / `exact` / `wildcard` | 包含 / 精确匹配 / 通配符 |
 | `pattern` | 字符串 | 匹配内容（不区分大小写） |
+| `source` | `community`（可选） | 标记该规则来自社区规则库 |
+| `communityRemoved` | 字符串数组 | 用户删除过的社区规则键列表，下次拉取自动跳过 |
 
 **通配符说明：**
 - `*` 匹配任意长度的任意字符（包括空字符）
@@ -154,9 +182,10 @@ PopKiller 内置社区规则共享机制，让所有用户受益于集体维护�
 ### 工作原理
 
 1. 程序启动时，从 GitHub 仓库根目录拉取 `community_rules.json`；
-2. 拉取成功后缓存到本地，后续离线启动时使用缓存版本；
-3. 社区规则与用户本地规则**合并生效**，白名单优先级始终最高；
-4. 社区规则为只读，用户无法在界面中修改或删除；如需排除某条社区规则，可添加一条相反的白名单规则覆盖。
+2. 拉取成功后，社区规则合并到本地 `rules.json` 中，标记 `source: "community"`；
+3. 合并时自动去重，已存在的相同规则不会重复添加；
+4. 用户删除社区规则后，规则键记入 `communityRemoved`，下次拉取时自动跳过该规则；
+5. 离线启动时使用本地已缓存的规则。
 
 ### community_rules.json 格式
 
@@ -173,7 +202,7 @@ PopKiller 内置社区规则共享机制，让所有用户受益于集体维护�
 }
 ```
 
-### 贡献社区规则
+### 贡献
 
 欢迎提交 PR 维护 `community_rules.json`：
 
@@ -182,7 +211,7 @@ PopKiller 内置社区规则共享机制，让所有用户受益于集体维护�
 3. 提交 PR，描述规则对应的弹窗来源和验证情况；
 4. 审核通过后合并，所有用户下次启动即可自动获取新规则。
 
-> 请勿提交针对正常软件的误杀规则。系统进程（explorer.exe、dwm.exe 等）已内置白名单保护，无需重复添加。
+> 注意：请勿提交针对正常软件的误杀规则。系统进程（explorer.exe、dwm.exe 等）已内置白名单保护，无需重复添加。
 
 ---
 
@@ -201,6 +230,8 @@ PopKiller 内置社区规则共享机制，让所有用户受益于集体维护�
 
 本地规则保存在同目录的 `rules.json`，拦截日志保存在 `blocklog.txt`。
 
+> 开机自启配置存储在注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 中，不在 ini 文件里。
+
 ---
 
 ## 日志格式
@@ -210,8 +241,8 @@ PopKiller 内置社区规则共享机制，让所有用户受益于集体维护�
 **示例：**
 
 ```text
-2026-08-20 14:30:15 action=block | reason=heuristic(75) | owner+15 toolwin+12 topmost+20 notresizable+12 nominmax+12 small+28 notitle+20 young+5 unsigned+12 | title= | class=WindowsForms10.Window.8.app.0.1234567 | exe=adpopup.exe
-2026-08-20 14:30:20 action=allow | reason=whitelist | title=文件资源管理器 | class=CabinetWClass | exe=explorer.exe
+2026-08-21 14:30:15 action=block | reason=heuristic(75) | owner+15 toolwin+12 topmost+20 notresizable+12 nominmax+12 small+28 notitle+20 young+5 unsigned+12 | title= | class=WindowsForms10.Window.8.app.0.1234567 | exe=adpopup.exe
+2026-08-21 14:30:20 action=allow | reason=whitelist | title=文件资源管理器 | class=CabinetWClass | exe=explorer.exe
 ```
 
 | 字段 | 说明 |
@@ -235,7 +266,7 @@ PopKiller 内置社区规则共享机制，让所有用户受益于集体维护�
 | 项目 | 要求 |
 | :--- | :--- |
 | IDE | Visual Studio 2026 |
-| 工作负载 | 使用 C++ 的桌面开发，C++ winui开发 |
+| 工作负载 | 使用 C++ 的桌面开发 |
 | SDK | Windows App SDK (WinUI 3) 1.4+ |
 | 语言标准 | C++17 及以上 |
 | 系统 | Windows 10 1809+ / Windows 11 |
@@ -271,17 +302,18 @@ PopKiller/
 ├── LICENSE.txt                # MIT 许可证
 ├── winui.slnx                 # Visual Studio 解决方案
 └── winui/                     # 主项目
-    ├── App.xaml(.cpp/.h)      # 应用入口
+    ├── App.xaml(.cpp/.h)      # 应用入口（含单实例逻辑）
     ├── MainWindow.xaml(.cpp/.h) # 主窗口（导航、托盘、最小尺寸）
     ├── HomePage.xaml(.cpp/.h)   # 首页（系统信息、辉光效果）
     ├── PopupBlockerPage.xaml(.cpp/.h) # 拦截规则页
-    ├── SettingsPage.xaml(.cpp/.h)     # 设置页
+    ├── SettingsPage.xaml(.cpp/.h)     # 设置页（外观、拦截、自启、关于）
     ├── BlockLogPage.xaml(.cpp/.h)     # 拦截日志页
     ├── LicensePage.xaml(.cpp/.h)      # 许可证页
     ├── PopupBlocker.h          # 拦截引擎核心（钩子、匹配、日志、强杀）
     ├── HeuristicScorer.h       # 启发式打分引擎
     ├── RuleTypes.h             # 规则类型定义
     ├── RuleStorage.h           # 规则 JSON 读写存储
+    ├── AutoStart.h             # 开机自启动管理
     ├── WindowPicker.h          # 窗口拾取器
     ├── TrayIcon.h              # 系统托盘
     ├── AppSettings.h           # 配置读写（ini）
@@ -303,8 +335,12 @@ PopKiller/
 - [x] 系统托盘支持
 - [x] 规则存储 JSON 化
 - [x] 社区规则库联网拉取与合并
+- [x] 社区规则可编辑、删除偏好记忆
+- [x] 开机自启
+- [x] 单实例运行
 - [ ] 拦截阈值滑条 UI
 - [ ] 规则导入/导出
+- [ ] 特征 CSV 导出与标注（数据收集）
 
 ---
 
@@ -313,6 +349,7 @@ PopKiller/
 欢迎贡献代码、规则和反馈：
 
 1. **社区规则**：提交 PR 修改 `community_rules.json`，请在描述中说明规则对应的弹窗来源；
+2. **功能建议**：欢迎在 Issue 中讨论新功能想法。
 
 ---
 
