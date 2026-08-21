@@ -10,7 +10,7 @@
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "explorer.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "wechat.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "weixin.exe" },
-        { "list": "W", "field": "exe", "mode": "contains", "pattern": "qq.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "QQ.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "tim.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "dingtalk.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "wxwork.exe" },

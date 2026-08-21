@@ -16,7 +16,6 @@ namespace PopupBlocker
         return p.substr(0, pos + 1) + L"rules.json";
     }
 
-
     inline std::string WStringToUtf8(std::wstring const& wstr) {
         if (wstr.empty()) return {};
         int need = ::WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
@@ -35,7 +34,6 @@ namespace PopupBlocker
         return wstr;
     }
 
-
     inline bool ReadFileToUtf8String(std::wstring const& p, std::string& out) {
         HANDLE hf = ::CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
         if (hf == INVALID_HANDLE_VALUE) return false;
@@ -49,7 +47,6 @@ namespace PopupBlocker
         ::CloseHandle(hf);
         char* data = buffer.data();
         int len = static_cast<int>(rd);
-
         if (len >= 3 && (unsigned char)data[0] == 0xEF && (unsigned char)data[1] == 0xBB && (unsigned char)data[2] == 0xBF) {
             data += 3; len -= 3;
         }
@@ -126,25 +123,33 @@ namespace PopupBlocker
                 if (m == "exact") r.mode = MatchMode::Exact;
                 else if (m == "wildcard") r.mode = MatchMode::Wildcard;
 
+                r.fromCommunity = item.value("source", "") == "community";
                 r.pattern = Lower(Utf8ToWString(item.value("pattern", "")));
                 if (!r.pattern.empty()) out.push_back(r);
             }
             return true;
         }
-        catch (...) {
-            return false; // 解析失败返回空
-        }
+        catch (...) { return false; }
     }
 
-    // 2. 从本地文件加载
-    inline bool LoadRulesJson(std::vector<Rule>& out)
+    inline bool LoadRulesJson(std::vector<Rule>& out, std::vector<std::wstring>& removedOut)
     {
         std::string utf8_text;
         if (!ReadFileToUtf8String(RulesPath(), utf8_text)) return false;
-        return ParseRulesFromJsonString(utf8_text, out);
+        if (utf8_text.empty()) return false;
+        try {
+            auto j = nlohmann::json::parse(utf8_text);
+            if (!ParseRulesFromJsonString(utf8_text, out)) return false;
+            if (j.contains("communityRemoved") && j["communityRemoved"].is_array()) {
+                for (auto& s : j["communityRemoved"])
+                    removedOut.push_back(Utf8ToWString(s.get<std::string>()));
+            }
+            return true;
+        }
+        catch (...) { return false; }
     }
 
-    inline bool SaveRulesJson(std::vector<Rule> const& rules)
+    inline bool SaveRulesJson(std::vector<Rule> const& rules, std::vector<std::wstring> const& removed)
     {
         nlohmann::json j;
         j["version"] = 1;
@@ -171,9 +176,14 @@ namespace PopupBlocker
             }
             item["mode"] = m;
             item["pattern"] = WStringToUtf8(r.pattern);
+            if (r.fromCommunity) item["source"] = "community";
 
             j["rules"].push_back(item);
         }
+
+        j["communityRemoved"] = nlohmann::json::array();
+        for (auto const& k : removed)
+            j["communityRemoved"].push_back(WStringToUtf8(k));
 
         return WriteUtf8StringToFile(RulesPath(), j.dump(4));
     }
@@ -184,11 +194,11 @@ namespace PopupBlocker
 
         std::vector<Rule> rules;
         for (auto d : { L"B:exe:contains:flashcenter.exe", L"B:exe:contains:minipage.exe",
-                        L"B:title:contains:\u70ED\u70B9",   // “热点”
+                        L"B:title:contains:\u70ED\u70B9",
                         L"W:exe:contains:explorer.exe" }) {
             Rule r;
             if (ParseRuleLine(d, r)) rules.push_back(r);
         }
-        SaveRulesJson(rules);
+        SaveRulesJson(rules, {});
     }
 }

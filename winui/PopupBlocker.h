@@ -19,7 +19,7 @@
 namespace PopupBlocker
 {
     inline std::vector<Rule> Rules;
-    inline std::vector<Rule> CommunityRules;
+    inline std::vector<std::wstring> CommunityRemoved;
     inline std::function<void(bool, std::wstring)> CommunityRulesFetchCallback;
     inline std::mutex RulesMutex;
     inline std::atomic<bool> Running{ false };
@@ -80,7 +80,7 @@ namespace PopupBlocker
 
     inline void SaveRules(std::vector<Rule> const& newRules)
     {
-        SaveRulesJson(newRules);
+        SaveRulesJson(newRules, CommunityRemoved);
         std::lock_guard lock(RulesMutex);
         Rules = newRules;
     }
@@ -94,12 +94,14 @@ namespace PopupBlocker
 
         EnsureDefaultRules();
         std::vector<Rule> rules;
-        LoadRulesJson(rules);
+        std::vector<std::wstring> removed;
+        LoadRulesJson(rules, removed);
         std::lock_guard lock(RulesMutex);
         Rules = std::move(rules);
+        CommunityRemoved = std::move(removed);
     }
 
-    // 异步拉取社区规则
+    // 异步拉取社区规则（合并导入逻辑）
     inline winrt::Windows::Foundation::IAsyncAction FetchCommunityRulesAsync()
     {
         using namespace winrt::Windows::Web::Http;
@@ -117,15 +119,30 @@ namespace PopupBlocker
             }
             else {
                 std::string body = winrt::to_string(co_await response.Content().ReadAsStringAsync());
-                std::vector<Rule> newCommunityRules;
-                if (ParseRulesFromJsonString(body, newCommunityRules)) {
-                    size_t count = newCommunityRules.size();
+                std::vector<Rule> fetched;
+                if (ParseRulesFromJsonString(body, fetched)) {
+                    for (auto& r : fetched) r.fromCommunity = true;
+
+                    std::vector<Rule> merged;
+                    std::vector<std::wstring> removed;
                     {
                         std::lock_guard lock(RulesMutex);
-                        CommunityRules = std::move(newCommunityRules);
+                        merged = Rules;
+                        removed = CommunityRemoved;
                     }
+
+                    size_t added = 0;
+                    for (auto& cr : fetched) {
+                        std::wstring k = RuleKey(cr);
+                        bool gone = std::find(removed.begin(), removed.end(), k) != removed.end();
+                        bool exists = std::any_of(merged.begin(), merged.end(),
+                            [&](Rule const& r) { return RuleKey(r) == k; });
+                        if (!gone && !exists) { merged.push_back(cr); ++added; }
+                    }
+
+                    if (added > 0) SaveRules(merged);
                     ok = true;
-                    msg = std::to_wstring(count);
+                    msg = std::to_wstring(added); // 新增条数
                 }
                 else {
                     msg = L"JSON 解析失败";
@@ -234,34 +251,18 @@ namespace PopupBlocker
 
         // 0=未命中, 1=白名单, 2=黑名单
         inline int Match(HWND hwnd) {
-            std::vector<Rule> localRules;
-            std::vector<Rule> commRules;
-            bool useCommunity = AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) == 1;
-
-            {
-                std::lock_guard lock(RulesMutex);
-                localRules = Rules;
-                if (useCommunity) {
-                    commRules = CommunityRules;
-                }
-            }
-            if (localRules.empty() && commRules.empty()) return 0;
+            std::vector<Rule> rules;
+            { std::lock_guard lock(RulesMutex); rules = Rules; }
+            if (rules.empty()) return 0;
 
             std::wstring exe, path, title, cls;
             bool matchedW = false, matchedB = false;
-
-            auto checkRules = [&](const std::vector<Rule>& rules) {
-                for (auto const& r : rules) {
-                    if (MatchRule(hwnd, r, exe, path, title, cls)) {
-                        if (r.isWhitelist) matchedW = true; else matchedB = true;
-                    }
+            for (auto const& r : rules) {
+                if (MatchRule(hwnd, r, exe, path, title, cls)) {
+                    if (r.isWhitelist) matchedW = true; else matchedB = true;
                 }
-                };
-
-            checkRules(localRules);
-            checkRules(commRules);
-
-            if (matchedW) return 1; // 白名单优先级最高
+            }
+            if (matchedW) return 1;
             if (matchedB) return 2;
             return 0;
         }

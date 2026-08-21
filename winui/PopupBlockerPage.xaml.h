@@ -3,6 +3,7 @@
 #include "PopupBlockerPage.g.h"
 #include <string>
 #include <vector>
+#include "PopupBlocker.h"
 
 namespace winrt::winui::implementation
 {
@@ -20,21 +21,31 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void SearchInput_TextChanged(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const& args);
-        void CommunityRulesToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void CommunityRulesToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void RetryFetchButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void EditRule_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
     private:
         void UpdateCommunityStatus(bool ok, std::wstring const& msg);
         void RefreshList();
         void Save();
-        bool m_initialized{ false };
+        void ReloadRulesFromEngine();
+
         struct RuleItem {
             int listType;
             int fieldType;
             int matchMode;
             std::wstring pattern;
+            bool fromCommunity{ false };
         };
+
+        PopupBlocker::Rule ToEngineRule(RuleItem const& it);
+
+        bool m_initialized{ false };
+        int m_editingIndex{ -1 };
         std::vector<RuleItem> m_rules;
         std::wstring m_searchText;
         std::vector<size_t> m_visibleIndex;

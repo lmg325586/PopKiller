@@ -6,7 +6,8 @@
 #include "WindowPicker.h"
 #include "App.xaml.h"
 #include <microsoft.ui.xaml.window.h>
-#include <winrt/Windows.System.h> // 新增：用于 DispatcherQueue
+#include <winrt/Windows.System.h>
+#include <algorithm>
 #include <sstream>
 #if __has_include("PopupBlockerPage.g.cpp")
 #include "PopupBlockerPage.g.cpp"
@@ -76,10 +77,8 @@ namespace winrt::winui::implementation
                 m_initialized = true;
             };
 
-        // 注册社区规则拉取结果回调
         PopupBlocker::CommunityRulesFetchCallback = [this](bool ok, std::wstring msg)
             {
-                // 从后台网络线程切回 UI 线程更新界面
                 DispatcherQueue().TryEnqueue([this, ok, msg]()
                     {
                         UpdateCommunityStatus(ok, msg);
@@ -89,42 +88,59 @@ namespace winrt::winui::implementation
         this->Unloaded([this](auto&&, auto&&)
             {
                 PopupBlocker::EnabledChangedCallback = nullptr;
-                PopupBlocker::CommunityRulesFetchCallback = nullptr; // 清理回调防止悬垂
+                PopupBlocker::CommunityRulesFetchCallback = nullptr;
             });
 
         m_initialized = true;
 
-        // 从 JSON 加载本地规则
-        std::vector<PopupBlocker::Rule> loadedRules;
-        PopupBlocker::LoadRulesJson(loadedRules);
+        PopupBlocker::SyncFromSettings();
+        ReloadRulesFromEngine();
 
-        for (auto const& r : loadedRules)
-        {
-            RuleItem item{ 0, 0, 0, r.pattern };
-            item.listType = r.isWhitelist ? 1 : 0;
-
-            switch (r.field) {
-            case PopupBlocker::RuleField::Exe:   item.fieldType = 0; break;
-            case PopupBlocker::RuleField::Path:  item.fieldType = 1; break;
-            case PopupBlocker::RuleField::Title: item.fieldType = 2; break;
-            case PopupBlocker::RuleField::Class: item.fieldType = 3; break;
-            }
-
-            switch (r.mode) {
-            case PopupBlocker::MatchMode::Contains: item.matchMode = 0; break;
-            case PopupBlocker::MatchMode::Exact:    item.matchMode = 1; break;
-            case PopupBlocker::MatchMode::Wildcard: item.matchMode = 2; break;
-            }
-
-            m_rules.push_back(item);
-        }
-
-        // 初始化社区规则开关并触发首次拉取
         CommunityRulesToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) == 1);
         if (CommunityRulesToggle().IsOn()) {
             CommunityStatusText().Text(L"正在拉取社区规则…");
             PopupBlocker::FetchCommunityRulesAsync();
         }
+    }
+
+    PopupBlocker::Rule PopupBlockerPage::ToEngineRule(RuleItem const& it)
+    {
+        PopupBlocker::Rule r;
+        r.isWhitelist = (it.listType == 1);
+        switch (it.fieldType) {
+        case 0: r.field = PopupBlocker::RuleField::Exe; break;
+        case 1: r.field = PopupBlocker::RuleField::Path; break;
+        case 2: r.field = PopupBlocker::RuleField::Title; break;
+        default: r.field = PopupBlocker::RuleField::Class; break;
+        }
+        switch (it.matchMode) {
+        case 0: r.mode = PopupBlocker::MatchMode::Contains; break;
+        case 1: r.mode = PopupBlocker::MatchMode::Exact; break;
+        default: r.mode = PopupBlocker::MatchMode::Wildcard; break;
+        }
+        r.pattern = PopupBlocker::Lower(it.pattern);
+        r.fromCommunity = it.fromCommunity;
+        return r;
+    }
+
+    void PopupBlockerPage::ReloadRulesFromEngine()
+    {
+        m_rules.clear();
+        std::vector<PopupBlocker::Rule> cur;
+        { std::lock_guard lock(PopupBlocker::RulesMutex); cur = PopupBlocker::Rules; }
+        for (auto const& r : cur)
+        {
+            RuleItem item{};
+            item.listType = r.isWhitelist ? 1 : 0;
+            item.fieldType = static_cast<int>(r.field);
+            item.matchMode = static_cast<int>(r.mode);
+            item.pattern = r.pattern;
+            item.fromCommunity = r.fromCommunity;
+            m_rules.push_back(item);
+        }
+
+        std::stable_partition(m_rules.begin(), m_rules.end(),
+            [](RuleItem const& r) { return !r.fromCommunity; });
 
         RefreshList();
     }
@@ -133,47 +149,35 @@ namespace winrt::winui::implementation
     {
         RulesList().Items().Clear();
         m_visibleIndex.clear();
+
+        auto appendItem = [this](size_t i)
+            {
+                auto const& r = m_rules[i];
+                std::wstring display = (r.fromCommunity ? L"[社区] " : L"") +
+                    std::wstring(ListTypeLabel(r.listType)) + L" | " +
+                    FieldLabel(r.fieldType) + L" | " +
+                    MatchModeLabel(r.matchMode) + L"：" + r.pattern;
+
+                if (!m_searchText.empty() &&
+                    PopupBlocker::Lower(display).find(m_searchText) == std::wstring::npos)
+                    return;
+
+                m_visibleIndex.push_back(i);
+                RulesList().Items().Append(box_value(hstring(display)));
+            };
+
         for (size_t i = 0; i < m_rules.size(); ++i)
-        {
-            auto const& r = m_rules[i];
-            std::wstring display = std::wstring(ListTypeLabel(r.listType)) + L" | " +
-                FieldLabel(r.fieldType) + L" | " +
-                MatchModeLabel(r.matchMode) + L"：" + r.pattern;
-
-            if (!m_searchText.empty() &&
-                PopupBlocker::Lower(display).find(m_searchText) == std::wstring::npos)
-                continue;
-
-            m_visibleIndex.push_back(i);
-            RulesList().Items().Append(box_value(hstring(display)));
-        }
+            if (!m_rules[i].fromCommunity) appendItem(i);
+        for (size_t i = 0; i < m_rules.size(); ++i)
+            if (m_rules[i].fromCommunity) appendItem(i);
     }
 
     void PopupBlockerPage::Save()
     {
         std::vector<PopupBlocker::Rule> newRules;
-        for (auto const& r : m_rules)
-        {
-            PopupBlocker::Rule rule;
-            rule.isWhitelist = (r.listType == 1);
-
-            switch (r.fieldType) {
-            case 0: rule.field = PopupBlocker::RuleField::Exe; break;
-            case 1: rule.field = PopupBlocker::RuleField::Path; break;
-            case 2: rule.field = PopupBlocker::RuleField::Title; break;
-            case 3: rule.field = PopupBlocker::RuleField::Class; break;
-            }
-
-            switch (r.matchMode) {
-            case 0: rule.mode = PopupBlocker::MatchMode::Contains; break;
-            case 1: rule.mode = PopupBlocker::MatchMode::Exact; break;
-            case 2: rule.mode = PopupBlocker::MatchMode::Wildcard; break;
-            }
-
-            rule.pattern = r.pattern;
-            newRules.push_back(rule);
+        for (auto const& r : m_rules) {
+            newRules.push_back(ToEngineRule(r));
         }
-
         PopupBlocker::SaveRules(newRules);
     }
 
@@ -204,8 +208,6 @@ namespace winrt::winui::implementation
             PopupBlocker::FetchCommunityRulesAsync();
         }
         else {
-            std::lock_guard lock(PopupBlocker::RulesMutex);
-            PopupBlocker::CommunityRules.clear();
             CommunityStatusText().Text(L"");
             RetryFetchButton().Visibility(Visibility::Collapsed);
         }
@@ -219,10 +221,11 @@ namespace winrt::winui::implementation
             return;
         }
         if (ok) {
-            CommunityStatusText().Text(L"社区规则已更新，共 " + winrt::hstring(msg) + L" 条");
+            CommunityStatusText().Text(L"社区规则已更新，新增 " + winrt::hstring(msg) + L" 条");
             CommunityStatusText().Foreground(Media::SolidColorBrush(
                 winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
             RetryFetchButton().Visibility(Visibility::Collapsed);
+            ReloadRulesFromEngine();
         }
         else {
             CommunityStatusText().Text(L"社区规则拉取失败：" + winrt::hstring(msg));
@@ -239,6 +242,21 @@ namespace winrt::winui::implementation
         PopupBlocker::FetchCommunityRulesAsync();
     }
 
+    void PopupBlockerPage::EditRule_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        int idx = RulesList().SelectedIndex();
+        if (idx < 0 || idx >= static_cast<int>(m_visibleIndex.size())) return;
+        size_t real = m_visibleIndex[static_cast<size_t>(idx)];
+        auto const& it = m_rules[real];
+
+        ListTypeCombo().SelectedIndex(it.listType);
+        RuleTypeCombo().SelectedIndex(it.fieldType);
+        MatchModeCombo().SelectedIndex(it.matchMode);
+        PatternInput().Text(hstring(it.pattern));
+        m_editingIndex = static_cast<int>(real);
+        AddRuleButton().Content(box_value(hstring(L"保存修改")));
+    }
+
     void PopupBlockerPage::AddRule_Click(IInspectable const&, RoutedEventArgs const&)
     {
         hstring text = PatternInput().Text();
@@ -251,8 +269,10 @@ namespace winrt::winui::implementation
         std::wstring patternLower = PopupBlocker::Lower(pattern);
 
         bool conflict = false;
-        for (auto const& r : m_rules)
+        for (size_t i = 0; i < m_rules.size(); ++i)
         {
+            if (static_cast<int>(i) == m_editingIndex) continue;
+            auto const& r = m_rules[i];
             if (r.listType != listType &&
                 r.fieldType == fieldType &&
                 r.matchMode == matchMode &&
@@ -263,7 +283,21 @@ namespace winrt::winui::implementation
             }
         }
 
-        m_rules.push_back({ listType, fieldType, matchMode, pattern });
+        if (m_editingIndex >= 0 && m_editingIndex < static_cast<int>(m_rules.size()))
+        {
+            auto& old = m_rules[static_cast<size_t>(m_editingIndex)];
+            if (old.fromCommunity) {
+                PopupBlocker::CommunityRemoved.push_back(PopupBlocker::RuleKey(ToEngineRule(old)));
+            }
+            old = { listType, fieldType, matchMode, pattern, false };
+            m_editingIndex = -1;
+            AddRuleButton().Content(box_value(hstring(L"添加")));
+        }
+        else
+        {
+            m_rules.insert(m_rules.begin(), { listType, fieldType, matchMode, pattern, false });
+        }
+
         PatternInput().Text(L"");
         Save();
         RefreshList();
@@ -288,6 +322,9 @@ namespace winrt::winui::implementation
         if (idx < 0 || idx >= static_cast<int>(m_visibleIndex.size())) return;
 
         size_t real = m_visibleIndex[static_cast<size_t>(idx)];
+        if (m_rules[real].fromCommunity) {
+            PopupBlocker::CommunityRemoved.push_back(PopupBlocker::RuleKey(ToEngineRule(m_rules[real])));
+        }
         m_rules.erase(m_rules.begin() + real);
         Save();
         RefreshList();
