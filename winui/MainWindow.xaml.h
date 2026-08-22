@@ -11,6 +11,9 @@ namespace winrt::winui::implementation
         void NavView_SelectionChanged(winrt::Microsoft::UI::Xaml::Controls::NavigationView const& sender,
             winrt::Microsoft::UI::Xaml::Controls::NavigationViewSelectionChangedEventArgs const& args);
         void NavigateToTag(winrt::hstring const& tag);
+
+        void NavigateFrameToTag(winrt::hstring const& tag);
+        winrt::hstring m_currentTag{ L"Home" };
     };
 }
 

@@ -102,25 +102,15 @@ namespace winrt::winui::implementation
                         if (AppTheme::Index == 1)
                             SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
 
-                        auto currentItem = NavView().SelectedItem();
-
-                        NavView().SelectedItem(nullptr);
-
-                        if (auto item = currentItem.try_as<NavigationViewItem>())
-                        {
-                            hstring tag = unbox_value<hstring>(item.Tag());
-                            NavigateToTag(tag);
-                        }
-                        else if (currentItem == NavView().SettingsItem())
+                        if (m_currentTag == L"Settings")
                         {
                             NavView().SelectedItem(NavView().SettingsItem());
+                            ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
                         }
                         else
                         {
-                            auto menuItems = NavView().MenuItems();
-                            if (menuItems.Size() > 0) {
-                                NavView().SelectedItem(menuItems.GetAt(0));
-                            }
+                            NavigateToTag(m_currentTag);
+                            NavigateFrameToTag(m_currentTag);
                         }
                     };
             }
@@ -132,6 +122,7 @@ namespace winrt::winui::implementation
     {
         if (args.IsSettingsSelected())
         {
+            m_currentTag = L"Settings";
             ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
             return;
         }
@@ -143,6 +134,12 @@ namespace winrt::winui::implementation
         }
 
         hstring tag = unbox_value<hstring>(item.Tag());
+        m_currentTag = tag;
+        NavigateFrameToTag(tag);
+    }
+
+    void MainWindow::NavigateFrameToTag(hstring const& tag)
+    {
         if (tag == L"Home")
         {
             ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
