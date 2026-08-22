@@ -27,6 +27,8 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void EditRule_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void OpenIO_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
     private:
         void UpdateCommunityStatus(bool ok, std::wstring const& msg);

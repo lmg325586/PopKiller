@@ -12,5 +12,6 @@ namespace winui
         void CommunityRulesToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void RetryFetchButton_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void EditRule_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void OpenIO_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
     }
 }

@@ -5,6 +5,7 @@
 #include "RuleStorage.h" 
 #include "WindowPicker.h"
 #include "App.xaml.h"
+#include "RuleIOPage.xaml.h"
 #include <microsoft.ui.xaml.window.h>
 #include <winrt/Windows.System.h>
 #include <algorithm>
@@ -365,5 +366,10 @@ namespace winrt::winui::implementation
     {
         m_searchText = PopupBlocker::Lower(std::wstring(SearchInput().Text()));
         RefreshList();
+    }
+
+    void PopupBlockerPage::OpenIO_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        Frame().Navigate(xaml_typename<winui::RuleIOPage>());
     }
 }

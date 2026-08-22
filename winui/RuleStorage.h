@@ -149,7 +149,7 @@ namespace PopupBlocker
         catch (...) { return false; }
     }
 
-    inline bool SaveRulesJson(std::vector<Rule> const& rules, std::vector<std::wstring> const& removed)
+    inline std::string SerializeRules(std::vector<Rule> const& rules, std::vector<std::wstring> const& removed)
     {
         nlohmann::json j;
         j["version"] = 1;
@@ -185,7 +185,12 @@ namespace PopupBlocker
         for (auto const& k : removed)
             j["communityRemoved"].push_back(WStringToUtf8(k));
 
-        return WriteUtf8StringToFile(RulesPath(), j.dump(4));
+        return j.dump(4);
+    }
+
+    inline bool SaveRulesJson(std::vector<Rule> const& rules, std::vector<std::wstring> const& removed)
+    {
+        return WriteUtf8StringToFile(RulesPath(), SerializeRules(rules, removed));
     }
 
     inline void EnsureDefaultRules()

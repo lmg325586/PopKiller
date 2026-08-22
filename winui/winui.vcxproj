@@ -37,8 +37,8 @@
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
-	<WindowsPackageType>None</WindowsPackageType>
-	<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <ItemGroup Label="ProjectConfigurations">
@@ -152,6 +152,10 @@
       <DependentUpon>PopupBlockerPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClInclude>
+    <ClInclude Include="RuleIOPage.xaml.h">
+      <DependentUpon>RuleIOPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClInclude>
     <ClInclude Include="RuleStorage.h" />
     <ClInclude Include="RuleTypes.h" />
     <ClInclude Include="SettingsPage.xaml.h">
@@ -174,6 +178,9 @@
     </Page>
     <Page Include="MainWindow.xaml" />
     <Page Include="PopupBlockerPage.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="RuleIOPage.xaml">
       <SubType>Designer</SubType>
     </Page>
     <Page Include="SettingsPage.xaml">
@@ -207,6 +214,10 @@
       <DependentUpon>PopupBlockerPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClCompile>
+    <ClCompile Include="RuleIOPage.xaml.cpp">
+      <DependentUpon>RuleIOPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClCompile>
     <ClCompile Include="SettingsPage.xaml.cpp">
       <DependentUpon>SettingsPage.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -231,6 +242,10 @@
     </Midl>
     <Midl Include="PopupBlockerPage.idl">
       <DependentUpon>PopupBlockerPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Midl>
+    <Midl Include="RuleIOPage.idl">
+      <DependentUpon>RuleIOPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Midl>
     <Midl Include="SettingsPage.idl">

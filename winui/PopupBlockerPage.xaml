@@ -87,7 +87,7 @@
                                  PlaceholderText="如 *pop* 或完整路径"
                                  HorizontalAlignment="Stretch"
                                  MinWidth="200"/>
-                        <!-- 1. 添加了 x:Name="AddRuleButton" -->
+
                         <Button x:Name="AddRuleButton" Content="添加" Click="AddRule_Click"/>
                         <Button Content="选取窗口" Click="Pick_Click"/>
                     </StackPanel>
@@ -115,11 +115,14 @@
                                    Style="{StaticResource SubtitleTextBlockStyle}"
                                    VerticalAlignment="Center"/>
 
-                        <StackPanel Orientation="Horizontal" Spacing="8" Grid.Column="1">
-                            <Button Content="编辑选中" Click="EditRule_Click" Padding="12,4"/>
-                            <Button Content="删除选中" Click="DeleteRule_Click" Padding="12,4"/>
-                        </StackPanel>
+                        <Button Content="导入导出" Click="OpenIO_Click" Padding="12,4" Grid.Column="1"/>
                     </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="编辑选中" Click="EditRule_Click" Padding="12,4"/>
+                        <Button Content="删除选中" Click="DeleteRule_Click" Padding="12,4"/>
+                    </StackPanel>
+
                     <TextBox x:Name="SearchInput"
                              PlaceholderText="搜索规则"
                              TextChanged="SearchInput_TextChanged"/>

@@ -1,0 +1,11 @@
+namespace winui
+{
+    [default_interface]
+    runtimeclass RuleIOPage : Microsoft.UI.Xaml.Controls.Page
+    {
+        RuleIOPage();
+        void BackButton_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void ExportButton_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void ImportButton_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+    }
+}
