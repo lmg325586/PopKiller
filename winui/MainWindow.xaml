@@ -9,8 +9,9 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid x:Name="AppTitleBar" Background="White">
-            <TextBlock Text="winui" VerticalAlignment="Center" Margin="16,0,0,0" FontSize="14"/>
+        <Grid x:Name="AppTitleBar">
+            <TextBlock Text="winui" VerticalAlignment="Center" Margin="16,0,0,0" FontSize="14"
+                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
         </Grid>
 
         <NavigationView x:Name="NavView" Grid.Row="1"

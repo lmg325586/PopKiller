@@ -62,7 +62,13 @@ namespace winrt::winui::implementation
         ExtendsContentIntoTitleBar(true);
         SetTitleBar(AppTitleBar());
         AppTheme::TitleBarElement = AppTitleBar();
+        AppTheme::TitleBarElement = AppTitleBar();
         AppTheme::ApplyTitleBar(titleBar);
+        AppTheme::ApplyTitleBar(titleBar);
+
+        AppTitleBar().ActualThemeChanged([titleBar](auto&&, auto&&) {
+            AppTheme::ApplyTitleBar(titleBar);
+            });
 
         if (AppTheme::Index == 1)
         {
