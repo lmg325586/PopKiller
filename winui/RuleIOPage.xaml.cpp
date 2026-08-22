@@ -58,6 +58,12 @@ namespace winrt::winui::implementation
         std::wstring path = PickJsonFile(true);
         if (path.empty()) return;
 
+        auto commRef = ExportCommunityRules().IsChecked();
+        bool includeCommunity = commRef ? commRef.GetBoolean() : false;
+
+        auto tombRef = ExportTombstones().IsChecked();
+        bool includeTombstones = tombRef ? tombRef.GetBoolean() : false;
+
         std::vector<PopupBlocker::Rule> rules;
         std::vector<std::wstring> removed;
         {
@@ -66,11 +72,30 @@ namespace winrt::winui::implementation
             removed = PopupBlocker::CommunityRemoved;
         }
 
+        std::vector<PopupBlocker::Rule> filteredRules;
+        for (auto const& r : rules)
+        {
+            if (r.fromCommunity && !includeCommunity) continue;
+            filteredRules.push_back(r);
+        }
+
+        std::vector<std::wstring> filteredRemoved = includeTombstones ? removed : std::vector<std::wstring>{};
+
         bool ok = PopupBlocker::WriteUtf8StringToFile(path,
-            PopupBlocker::SerializeRules(rules, removed));
-        ResultText().Text(ok
-            ? (L"已导出 " + std::to_wstring(rules.size()) + L" 条规则：" + path)
-            : (L"导出失败：" + path));
+            PopupBlocker::SerializeRules(filteredRules, filteredRemoved));
+
+        if (ok)
+        {
+            std::wstring msg = L"已导出 " + std::to_wstring(filteredRules.size()) + L" 条规则";
+            if (includeTombstones)
+                msg += L" 和 " + std::to_wstring(filteredRemoved.size()) + L" 条墓碑记录";
+            msg += L"：" + path;
+            ResultText().Text(msg);
+        }
+        else
+        {
+            ResultText().Text(L"导出失败：" + path);
+        }
     }
 
     void RuleIOPage::ImportButton_Click(winrt::Windows::Foundation::IInspectable const&,

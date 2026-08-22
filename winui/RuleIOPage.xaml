@@ -19,9 +19,13 @@
                     BorderThickness="1" CornerRadius="8" Padding="20,16">
                 <StackPanel Spacing="8">
                     <TextBlock Text="导出规则" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                    <TextBlock Text="把当前全部规则（含社区规则与墓碑记录）导出为 JSON 文件，用于备份或分享给他人。"
+                    <TextBlock Text="选择要导出的内容并保存为 JSON 文件，用于备份或分享给他人。"
                                Style="{StaticResource CaptionTextBlockStyle}"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+
+                    <CheckBox x:Name="ExportCommunityRules" Content="包含社区规则" IsChecked="True"/>
+                    <CheckBox x:Name="ExportTombstones" Content="包含已禁用的社区规则（墓碑记录）" IsChecked="True"/>
+
                     <Button Content="选择保存位置…" Click="ExportButton_Click"/>
                 </StackPanel>
             </Border>
