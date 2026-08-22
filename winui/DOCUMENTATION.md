@@ -80,7 +80,7 @@
 | `detail::GetClass(hwnd)` | 句柄 | `wstring` | 小写窗口类名 |
 | `detail::MatchRule(hwnd, r, exe&, path&, title&, cls&)` | 句柄、规则、4 个缓存串（in/out 惰性填充） | `bool` | 单条规则匹配 |
 | `detail::Match(hwnd)` | 句柄 | `int` | 0=未命中，1=白名单，2=黑名单（白名单优先）；加锁复制 `Rules` 后遍历 |
-| `detail::Log(s)` | 日志行内容 | `void` | 追加 UTF-8 带时间戳行；新文件写 BOM |
+| `detail::Log(s)` | 日志行内容 | `void` | 追加 UTF-8 带时间戳行；新文件或超过 1MB 时截断重写并写 BOM |
 | `detail::WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | WinEvent 参数 | `void` | 过滤→匹配→打分→日志→关闭/隐藏；黑名单起延迟 400ms 强杀线程（排除系统路径与 Program Files 路径） |
 | `detail::ThreadMain(lp)` | 无（`lp` 未用） | `DWORD` | 挂 `EVENT_OBJECT_SHOW` + `EVENT_SYSTEM_FOREGROUND` 双钩子 + 消息循环 |
 
