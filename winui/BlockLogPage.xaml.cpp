@@ -1,6 +1,8 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
+#include "LabelStorage.h"
+#include "FilePicker.h"
 #include <sstream>
 #include <vector>
 #if __has_include("BlockLogPage.g.cpp")
@@ -46,6 +48,13 @@ namespace
         u.HighPart = a.ftLastWriteTime.dwHighDateTime;
         return u.QuadPart;
     }
+
+    std::wstring GetRawLine(std::wstring const& displayText)
+    {
+        if (displayText.find(L"[弹窗] ") == 0) return displayText.substr(5);
+        if (displayText.find(L"[误关] ") == 0) return displayText.substr(5);
+        return displayText;
+    }
 }
 
 namespace winrt::winui::implementation
@@ -69,6 +78,7 @@ namespace winrt::winui::implementation
     void BlockLogPage::Load()
     {
         LogList().Items().Clear();
+        SampleLabels::Load(m_labels);
 
         std::wstringstream ss(ReadLogText());
         std::wstring line;
@@ -79,7 +89,17 @@ namespace winrt::winui::implementation
             if (!line.empty()) lines.push_back(line);
         }
         for (auto it = lines.rbegin(); it != lines.rend(); ++it)
-            LogList().Items().Append(box_value(hstring(*it)));
+        {
+            std::wstring display = *it;
+            if (auto labelIt = m_labels.find(*it); labelIt != m_labels.end())
+            {
+                if (labelIt->second.label == L"popup")
+                    display = L"[弹窗] " + *it;
+                else if (labelIt->second.label == L"notpopup")
+                    display = L"[误关] " + *it;
+            }
+            LogList().Items().Append(box_value(hstring(display)));
+        }
 
         m_lastWrite = LogWriteTime();
     }
@@ -105,5 +125,102 @@ namespace winrt::winui::implementation
         if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"wb") == 0 && f)
             ::fclose(f);
         Load();
+    }
+
+    void BlockLogPage::LogItem_RightTapped(IInspectable const& sender,
+        winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const&)
+    {
+        if (auto tb = sender.try_as<winrt::Microsoft::UI::Xaml::Controls::TextBlock>())
+        {
+            m_selectedDisplayText = tb.Text();
+        }
+    }
+
+    void BlockLogPage::MarkPopup_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (m_selectedDisplayText.empty()) return;
+        std::wstring raw = GetRawLine(m_selectedDisplayText);
+        auto s = SampleLabels::ParseLine(raw);
+        s.label = L"popup";
+        m_labels[raw] = s;
+        SampleLabels::Save(m_labels);
+        Load();
+    }
+
+    void BlockLogPage::MarkNotPopup_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (m_selectedDisplayText.empty()) return;
+        std::wstring raw = GetRawLine(m_selectedDisplayText);
+        auto s = SampleLabels::ParseLine(raw);
+        s.label = L"notpopup";
+        m_labels[raw] = s;
+        SampleLabels::Save(m_labels);
+        Load();
+    }
+
+    void BlockLogPage::ExportSamples_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        std::wstring path = FilePicker::PickJsonFile(true);
+        if (path.empty()) return;
+        std::string json = SampleLabels::ExportJson(m_labels);
+        if (PopupBlocker::WriteUtf8StringToFile(path, json))
+        {
+            MessageBoxW(nullptr, L"训练数据导出成功", L"提示", MB_OK | MB_ICONINFORMATION);
+        }
+        else
+        {
+            MessageBoxW(nullptr, L"导出失败", L"提示", MB_OK | MB_ICONERROR);
+        }
+    }
+
+    void BlockLogPage::AddToBlacklist_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        AddRuleFromSelection(false);
+    }
+
+    void BlockLogPage::AddToWhitelist_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        AddRuleFromSelection(true);
+    }
+
+    void BlockLogPage::AddRuleFromSelection(bool whitelist)
+    {
+        if (m_selectedDisplayText.empty()) return;
+        std::wstring raw = GetRawLine(m_selectedDisplayText);
+        auto s = SampleLabels::ParseLine(raw);
+        if (s.exe.empty())
+        {
+            MessageBoxW(nullptr, L"该日志缺少进程信息，无法生成规则。",
+                L"提示", MB_OK | MB_ICONWARNING);
+            return;
+        }
+
+        PopupBlocker::Rule r;
+        r.isWhitelist = whitelist;
+        r.field = PopupBlocker::RuleField::Exe;
+        r.mode = PopupBlocker::MatchMode::Exact;
+        r.pattern = PopupBlocker::Lower(s.exe);
+        r.fromCommunity = false;
+
+        std::vector<PopupBlocker::Rule> rules;
+        {
+            std::lock_guard lock(PopupBlocker::RulesMutex);
+            rules = PopupBlocker::Rules;
+        }
+
+        std::wstring k = PopupBlocker::RuleKey(r);
+        bool exists = std::any_of(rules.begin(), rules.end(),
+            [&k](PopupBlocker::Rule const& e) { return PopupBlocker::RuleKey(e) == k; });
+        if (exists)
+        {
+            MessageBoxW(nullptr, L"相同规则已存在。", L"提示", MB_OK | MB_ICONINFORMATION);
+            return;
+        }
+
+        rules.push_back(r);
+        PopupBlocker::SaveRules(rules);
+
+        std::wstring msg = (whitelist ? L"已添加白名单规则：进程 " : L"已添加黑名单规则：进程 ") + s.exe;
+        MessageBoxW(nullptr, msg.c_str(), L"提示", MB_OK | MB_ICONINFORMATION);
     }
 }

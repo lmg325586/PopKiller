@@ -1,6 +1,9 @@
 #pragma once
 
 #include "BlockLogPage.g.h"
+#include "LabelStorage.h"
+#include <map>
+#include <string>
 
 namespace winrt::winui::implementation
 {
@@ -12,11 +15,28 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void Clear_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void LogItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args);
+        void MarkPopup_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void MarkNotPopup_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void ExportSamples_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void AddToBlacklist_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void AddToWhitelist_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+
 
     private:
         void Load();
         void Timer_Tick(winrt::Windows::Foundation::IInspectable const&,
             winrt::Windows::Foundation::IInspectable const&);
+        void AddRuleFromSelection(bool whitelist);
+
+        std::map<std::wstring, SampleLabels::Sample> m_labels;
+        std::wstring m_selectedDisplayText;
 
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_timer{ nullptr };
         uint64_t m_lastWrite{ 0 };

@@ -1,0 +1,15 @@
+{
+    "samples": [
+        {
+            "action": "monitor",
+            "class": "hwndwrapper[defaultdomain;;791d24a1-554a-45d3-b21b-5a641fed31f5]",
+            "exe": "devenv.exe",
+            "label": "notpopup",
+            "line": "2026-08-22 19:47:00 action=monitor | reason=heuristic(0) | infra_class_skip | title=winui - labelstorage.h - microsoft visual studio | class=hwndwrapper[defaultdomain;;791d24a1-554a-45d3-b21b-5a641fed31f5] | exe=devenv.exe",
+            "reason": "heuristic(0)",
+            "score": 0,
+            "title": "winui - labelstorage.h - microsoft visual studio"
+        }
+    ],
+    "version": 1
+}

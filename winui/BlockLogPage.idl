@@ -6,5 +6,11 @@ namespace winui
         BlockLogPage();
         void Refresh_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void Clear_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void LogItem_RightTapped(Object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs args);
+        void MarkPopup_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void MarkNotPopup_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void ExportSamples_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void AddToBlacklist_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void AddToWhitelist_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
     }
 }

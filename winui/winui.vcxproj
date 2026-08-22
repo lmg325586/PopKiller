@@ -131,11 +131,13 @@
       <DependentUpon>BlockLogPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClInclude>
+    <ClInclude Include="FilePicker.h" />
     <ClInclude Include="HeuristicScorer.h" />
     <ClInclude Include="HomePage.xaml.h">
       <DependentUpon>HomePage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClInclude>
+    <ClInclude Include="LabelStorage.h" />
     <ClInclude Include="LicensePage.xaml.h">
       <DependentUpon>LicensePage.xaml</DependentUpon>
       <SubType>Code</SubType>
