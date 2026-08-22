@@ -267,20 +267,36 @@ namespace PopupBlocker
             return 0;
         }
 
-        inline void Log(std::wstring const& s) {
+        inline void Log(std::wstring const& s)
+        {
             std::wstring p = LogPath();
-            bool isNew = (::GetFileAttributesW(p.c_str()) == INVALID_FILE_ATTRIBUTES);
-            SYSTEMTIME st{}; ::GetLocalTime(&st);
-            WCHAR ts[32]{}; swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-            std::wstring full = ts + s;
+            constexpr long long Limit = 1024 * 1024;
+
+            WIN32_FILE_ATTRIBUTE_DATA fad{};
+            bool exists = (::GetFileAttributesExW(p.c_str(), GetFileExInfoStandard, &fad) != FALSE);
+            long long size = exists
+                ? (static_cast<long long>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow
+                : 0;
+
+            bool fresh = !exists || size > Limit;
             FILE* f{};
-            if (_wfopen_s(&f, p.c_str(), L"ab") == 0 && f) {
-                if (isNew) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
+            if (_wfopen_s(&f, p.c_str(), fresh ? L"wb" : L"ab") == 0 && f)
+            {
+                if (fresh) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
+
+                SYSTEMTIME st{}; ::GetLocalTime(&st);
+                WCHAR ts[32]{};
+                swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
+                    st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+                std::wstring full = ts + s;
+
                 int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
-                if (need > 0) {
+                if (need > 0)
+                {
                     std::string utf8(static_cast<size_t>(need) - 1, '\0');
                     ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, utf8.data(), need, nullptr, nullptr);
-                    utf8 += "\r\n"; ::fwrite(utf8.data(), 1, utf8.size(), f);
+                    utf8 += "\r\n";
+                    ::fwrite(utf8.data(), 1, utf8.size(), f);
                 }
                 ::fclose(f);
             }
