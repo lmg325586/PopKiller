@@ -89,8 +89,22 @@ namespace winrt::winui::implementation
             Exit();
             return;
         }
+        bool isAutoStart = false;
+        std::wstring cmdLine = ::GetCommandLineW();
+        if (cmdLine.find(L"--autostart") != std::wstring::npos)
+        {
+            isAutoStart = true;
+        }
 
         window = make<MainWindow>();
-        window.Activate();
+
+        if (isAutoStart)
+        {
+            TrayIcon::HideToTray();
+        }
+        else
+        {
+            window.Activate();
+        }
     }
 }

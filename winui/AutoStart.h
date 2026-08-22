@@ -33,7 +33,7 @@ namespace AutoStart
     {
         WCHAR path[MAX_PATH]{};
         ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        return std::wstring(L"\"") + path + L"\"";
+        return std::wstring(L"\"") + path + L"\" --autostart";
     }
 
     inline bool IsEnabled()
