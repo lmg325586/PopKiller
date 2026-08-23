@@ -331,6 +331,27 @@ namespace PopupBlocker
                 if (HeuristicMode > 0) {
                     HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
                     int score = HeuristicScorer::ScoreWindow(f, detail);
+
+                    std::wstring raw_bits;
+                    raw_bits += (f.hasOwner > 0) ? L'T' : L'F';
+                    raw_bits += (f.toolWin > 0) ? L'T' : L'F';
+                    raw_bits += (f.topmost > 0) ? L'T' : L'F';
+                    raw_bits += (f.noActivate > 0) ? L'T' : L'F';
+                    raw_bits += (f.resizable > 0) ? L'T' : L'F';
+                    raw_bits += (f.hasMinMax > 0) ? L'T' : L'F';
+                    raw_bits += (f.captionSysmenu > 0) ? L'T' : L'F';
+                    raw_bits += (f.titleEmpty > 0) ? L'T' : L'F';
+
+                    RECT rc{}; ::GetWindowRect(hwnd, &rc);
+                    float wPx = float(rc.right - rc.left);
+                    float hPx = float(rc.bottom - rc.top);
+                    raw_bits += (wPx < 400 && hPx < 300) ? L'T' : L'F';
+                    raw_bits += (wPx > 800 || hPx > 600) ? L'T' : L'F';
+                    raw_bits += (f.pathTemp > 0) ? L'T' : L'F';
+                    raw_bits += (f.pathRoaming > 0) ? L'T' : L'F';
+
+                    detail += L" raw=" + raw_bits;
+
                     reason = L"heuristic(" + std::to_wstring(score) + L")";
                     if (score >= HeuristicThreshold && HeuristicMode == 2) {
                         shouldBlock = true;

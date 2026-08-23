@@ -15,6 +15,7 @@ namespace SampleLabels
         std::wstring title;
         std::wstring cls;
         std::wstring exe;
+        std::wstring raw;
         int score = 0;
     };
 
@@ -54,6 +55,17 @@ namespace SampleLabels
             if (he != std::wstring::npos)
                 s.score = ::_wtoi(line.substr(hp, he - hp).c_str());
         }
+
+        auto rp = line.find(L"raw=");
+        if (rp != std::wstring::npos) {
+            rp += 4;
+            auto re = line.find(L' ', rp);
+            s.raw = line.substr(rp, re == std::wstring::npos ? std::wstring::npos : re - rp);
+        }
+        else {
+            s.raw = std::wstring(12, L'?');
+        }
+
         return s;
     }
 
@@ -76,6 +88,7 @@ namespace SampleLabels
                 s.cls = PopupBlocker::Utf8ToWString(it.value("class", ""));
                 s.exe = PopupBlocker::Utf8ToWString(it.value("exe", ""));
                 s.score = it.value("score", 0);
+                s.raw = PopupBlocker::Utf8ToWString(it.value("raw", ""));
                 out[s.line] = s;
             }
         }
@@ -97,6 +110,7 @@ namespace SampleLabels
             it["class"] = PopupBlocker::WStringToUtf8(s.cls);
             it["exe"] = PopupBlocker::WStringToUtf8(s.exe);
             it["score"] = s.score;
+            it["raw"] = PopupBlocker::WStringToUtf8(s.raw);
             j["samples"].push_back(it);
         }
         return PopupBlocker::WriteUtf8StringToFile(LabelsPath(), j.dump(4));
@@ -117,6 +131,7 @@ namespace SampleLabels
             it["class"] = PopupBlocker::WStringToUtf8(s.cls);
             it["exe"] = PopupBlocker::WStringToUtf8(s.exe);
             it["score"] = s.score;
+            it["raw"] = PopupBlocker::WStringToUtf8(s.raw);
             j["samples"].push_back(it);
         }
         return j.dump(4);
