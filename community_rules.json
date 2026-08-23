@@ -6,6 +6,7 @@
         { "list": "B", "field": "exe",   "mode": "contains", "pattern": "flashhelperservice.exe" },
         { "list": "B", "field": "title", "mode": "contains", "pattern": "迷你首页" },
         { "list": "B", "field": "title", "mode": "contains", "pattern": "热点" },
+        { "list": "B", "field": "exe",   "mode": "contains", "pattern": "kwallpaper.exe" },
 
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "explorer.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "wechat.exe" },

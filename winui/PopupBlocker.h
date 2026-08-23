@@ -350,6 +350,11 @@ namespace PopupBlocker
                     raw_bits += (f.pathTemp > 0) ? L'T' : L'F';
                     raw_bits += (f.pathRoaming > 0) ? L'T' : L'F';
 
+                    // --- V2 新增 3 位 ---
+                    raw_bits += (f.clsHexRatio > 0.8f) ? L'T' : L'F';
+                    raw_bits += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
+                    raw_bits += (!f.path.empty() && !HeuristicScorer::IsFileSignedCached(f.path)) ? L'T' : L'F';
+
                     detail += L" raw=" + raw_bits;
 
                     reason = L"heuristic(" + std::to_wstring(score) + L")";
