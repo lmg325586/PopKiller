@@ -146,7 +146,7 @@ namespace HeuristicScorer
         wtd.dwStateAction = WTD_STATEACTION_CLOSE;
         ::WinVerifyTrust(nullptr, &kVerifyV2, &wtd);
 
-        return res == TRUST_E_NOSIGNATURE;
+        return res == ERROR_SUCCESS;
     }
 
     inline std::mutex SigMx;
