@@ -86,6 +86,10 @@
                             <ComboBoxItem Content="仅记录"/>
                         </ComboBox>
                     </Grid>
+                    <ToggleSwitch x:Name="MLHeuristicToggle"
+                      Header="静态机器学习启发"
+                      OnContent="开" OffContent="关"
+                      Toggled="MLHeuristicToggle_Toggled" />
                     <TextBlock Text="启用：分数超过阈值时自动拦截；仅记录：只写入日志不执行拦截，用于调参和观察。"
                                Style="{StaticResource CaptionTextBlockStyle}"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <functional>
 #include <algorithm>
+#include "HeuristicML.h"
 #include "AppSettings.h"
 #include "HeuristicScorer.h"
 #include "RuleTypes.h"
@@ -30,6 +31,7 @@ namespace PopupBlocker
     inline int HeuristicMode = 0;
     inline int HeuristicThreshold = 70;
     inline bool VerboseLog = false;
+    inline bool MLHeuristic = false;
 
     inline std::wstring LogPath()
     {
@@ -91,6 +93,7 @@ namespace PopupBlocker
         HeuristicMode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
         HeuristicThreshold = AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70);
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
+        MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
 
         EnsureDefaultRules();
         std::vector<Rule> rules;
@@ -220,7 +223,7 @@ namespace PopupBlocker
                 L"control.exe", L"mmc.exe", L"openwith.exe", L"msiexec.exe",
                 L"sndvol.exe", L"snippingtool.exe", L"screensketch.exe",
                 L"mstsc.exe", L"conhost.exe", L"shellhost.exe", L"snippingtool.exe",
-                L"screensketch.exe", L"mspaint.exe", L"calc.exe",
+                L"screensketch.exe", L"mspaint.exe", L"calc.exe",L"svchost.exe", L"services.exe", L"lsass.exe", L"csrss.exe",
                 // Win11 小组件
                 L"widgets.exe", L"widgetservice.exe",
                 //常见软件
@@ -350,12 +353,18 @@ namespace PopupBlocker
                     raw_bits += (f.pathTemp > 0) ? L'T' : L'F';
                     raw_bits += (f.pathRoaming > 0) ? L'T' : L'F';
 
-                    // --- V2 新增 3 位 ---
                     raw_bits += (f.clsHexRatio > 0.8f) ? L'T' : L'F';
                     raw_bits += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
                     raw_bits += (!f.path.empty() && !HeuristicScorer::IsFileSignedCached(f.path)) ? L'T' : L'F';
 
                     detail += L" raw=" + raw_bits;
+
+
+                    if (MLHeuristic) {
+                        bool mlPopup = HeuristicML::GetInstance().Predict(hwnd);
+                        detail += L" ml=";
+                        detail += mlPopup ? L'Y' : L'N';
+                    }
 
                     reason = L"heuristic(" + std::to_wstring(score) + L")";
                     if (score >= HeuristicThreshold && HeuristicMode == 2) {

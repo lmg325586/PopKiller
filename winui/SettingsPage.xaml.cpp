@@ -47,6 +47,7 @@ namespace winrt::winui::implementation
         AutoStartToggle().IsOn(AutoStart::IsEnabled());
         ThemeComboBox().SelectedIndex(AppTheme::Index);
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
+        MLHeuristicToggle().IsOn(PopupBlocker::MLHeuristic);
 
         m_initialized = true;
     }
@@ -119,5 +120,13 @@ namespace winrt::winui::implementation
         bool on = toggle.IsOn();
         bool ok = on ? AutoStart::EnableAutoStartup() : AutoStart::DisableAutoStartup();
         if (!ok) toggle.IsOn(!on);
+    }
+
+    void SettingsPage::MLHeuristicToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
+    {
+        bool on = MLHeuristicToggle().IsOn();
+        AppSettings::WriteInt(L"Blocker", L"MLHeuristic", on ? 1 : 0);
+        PopupBlocker::MLHeuristic = on;
+        if (on) HeuristicML::GetInstance().Init();
     }
 }

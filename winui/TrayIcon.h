@@ -80,6 +80,7 @@ namespace TrayIcon
         else
         {
             PopupBlocker::SyncFromSettings();
+            HeuristicML::GetInstance().Init();
             PopupBlocker::Start();
             AppSettings::WriteInt(L"Blocker", L"Enabled", 1);
         }

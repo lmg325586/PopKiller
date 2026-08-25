@@ -189,6 +189,7 @@ namespace winrt::winui::implementation
         if (on)
         {
             PopupBlocker::SyncFromSettings();
+            HeuristicML::GetInstance().Init();
             PopupBlocker::Start();
         }
         else

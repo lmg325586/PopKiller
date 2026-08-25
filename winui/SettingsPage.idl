@@ -10,5 +10,6 @@ namespace winui
         void HeuristicModeCombo_SelectionChanged(Object sender, Microsoft.UI.Xaml.Controls.SelectionChangedEventArgs args);
         void VerboseLogToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void AutoStartToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
+        void MLHeuristicToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs e);
     }
 }
