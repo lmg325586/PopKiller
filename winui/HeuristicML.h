@@ -15,12 +15,13 @@ namespace HeuristicML
         L"热点", L"速看", L"推荐", L"清理", L"加速", L"升级", L"弹窗", L"资讯",
     };
     inline const std::vector<std::wstring> GOOD_EXES = {
-    L"devenv.exe", L"code.exe", L"chrome.exe", L"msedge.exe", L"firefox.exe",
-    L"windowsterminal.exe", L"explorer.exe", L"wechat.exe", L"weixin.exe",
-    L"qq.exe", L"dingtalk.exe", L"tim.exe", L"notepad.exe", L"notepad++.exe",
-    L"everything.exe", L"snipaste.exe", L"listary.exe",
-    L"steamwebhelper.exe", L"steam.exe", L"qbittorrent.exe", L"rvrvpngui.exe",
-    L"mixline.exe", L"mixline.ui.exe", L"oopz.exe", L"translucenttb.exe", L"hyp.exe",
+        L"devenv.exe", L"code.exe", L"chrome.exe", L"msedge.exe", L"firefox.exe",
+        L"windowsterminal.exe", L"explorer.exe", L"wechat.exe", L"weixin.exe",
+        L"qq.exe", L"dingtalk.exe", L"tim.exe", L"notepad.exe", L"notepad++.exe",
+        L"everything.exe", L"snipaste.exe", L"listary.exe",
+        L"steamwebhelper.exe", L"steam.exe", L"qbittorrent.exe", L"rvrvpngui.exe",
+        L"mixline.exe", L"mixline.ui.exe", L"oopz.exe", L"translucenttb.exe", L"hyp.exe",
+        L"svchost.exe",
     };
 
     inline std::wstring ToLower(std::wstring s) {
@@ -82,7 +83,7 @@ namespace HeuristicML
             catch (...) { return false; }
         }
 
-        bool RunSession(Ort::Session* session, const std::array<float, 19>& features) {
+        bool RunSession(Ort::Session* session, const std::array<float, 23>& features) {
             try {
                 auto inAlloc = session->GetInputNameAllocated(0, Ort::AllocatorWithDefaultOptions());
                 auto outAlloc = session->GetOutputNameAllocated(0, Ort::AllocatorWithDefaultOptions());
@@ -91,8 +92,8 @@ namespace HeuristicML
 
                 Ort::MemoryInfo info("Cpu", OrtDeviceAllocator, 0, OrtMemTypeDefault);
                 auto inputTensor = Ort::Value::CreateTensor<float>(
-                    info, const_cast<float*>(features.data()), 19,
-                    std::array<int64_t, 2>{1, 19}.data(), 2);
+                    info, const_cast<float*>(features.data()), 23,
+                    std::array<int64_t, 2>{1, 23}.data(), 2);
 
                 auto outputTensors = session->Run(
                     Ort::RunOptions{ nullptr },
@@ -107,7 +108,7 @@ namespace HeuristicML
             }
         }
 
-        bool Predict(HWND hwnd) {
+        bool Predict(HWND hwnd, DWORD evTime) {
             if (!sessionRf || !sessionLr) return false;
 
             HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
@@ -115,7 +116,7 @@ namespace HeuristicML
             std::wstring cls = GetClass(hwnd);
             std::wstring exe = GetProcessName(hwnd);
 
-            std::array<float, 19> features = { 0 };
+            std::array<float, 23> features = { 0 };
 
             features[0] = (f.hasOwner > 0) ? 1.0f : 0.0f;
             features[1] = (f.toolWin > 0) ? 1.0f : 0.0f;
@@ -137,14 +138,32 @@ namespace HeuristicML
             features[13] = (f.procAgeSec >= 0 && f.procAgeSec < 120) ? 1.0f : 0.0f;
             features[14] = (!f.path.empty() && !HeuristicScorer::IsFileSignedCached(f.path)) ? 1.0f : 0.0f;
 
-            features[15] = static_cast<float>(title.size());
+            LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
+            long long idleMs = 0;
+            if (::GetLastInputInfo(&lii)) {
+                idleMs = (long long)evTime - (long long)lii.dwTime;
+                if (idleMs < 0) idleMs = 0;
+            }
+            features[15] = (idleMs > 5000) ? 1.0f : 0.0f;
+
+            POINT cpt{}; ::GetCursorPos(&cpt);
+            int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
+            int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
+            long long d2 = (long long)dx * dx + (long long)dy * dy;
+            features[16] = (d2 > 300LL * 300) ? 1.0f : 0.0f;
+
+            features[17] = static_cast<float>(title.size());
             float kw_hits = 0.0f;
             for (const auto& kw : AD_KEYWORDS) {
                 if (title.find(kw) != std::wstring::npos) kw_hits += 1.0f;
             }
-            features[16] = kw_hits;
-            features[17] = (std::find(GOOD_EXES.begin(), GOOD_EXES.end(), exe) != GOOD_EXES.end()) ? 1.0f : 0.0f;
-            features[18] = (cls.find(L"widgetwin") != std::wstring::npos) ? 1.0f : 0.0f;
+            features[18] = kw_hits;
+            features[19] = (std::find(GOOD_EXES.begin(), GOOD_EXES.end(), exe) != GOOD_EXES.end()) ? 1.0f : 0.0f;
+            features[20] = (cls.find(L"widgetwin") != std::wstring::npos) ? 1.0f : 0.0f;
+            features[21] = (cls == L"#32770") ? 1.0f : 0.0f;
+            int digits = 0;
+            for (wchar_t c : exe) if (c >= L'0' && c <= L'9') digits++;
+            features[22] = float(digits) / float(std::max<size_t>(1, exe.size()));
 
             bool rf_pred = RunSession(sessionRf.get(), features);
             bool lr_pred = RunSession(sessionLr.get(), features);

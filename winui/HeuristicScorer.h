@@ -215,7 +215,12 @@ namespace HeuristicScorer
             f.cls.find(L"pseudoconsole") != std::wstring::npos ||
             f.cls.rfind(L"hwndwrapper", 0) == 0 ||
             f.cls == L"tooltip" || f.cls.rfind(L"tooltip_", 0) == 0 ||
-            f.cls == L"msctfime ui" || f.cls == L"default ime")
+            f.cls == L"msctfime ui" || f.cls == L"default ime" ||
+            f.cls == L"dragvisualwindow" ||
+            f.cls == L"#32768" ||
+            f.cls == L"shell_systemdialog" ||
+            f.cls == L"shell_systemdialogproxy" ||
+            f.cls == L"shell_systemdim")
         {
             detail = L"infra_class_skip";
             return 0;

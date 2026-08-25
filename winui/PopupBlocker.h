@@ -104,7 +104,6 @@ namespace PopupBlocker
         CommunityRemoved = std::move(removed);
     }
 
-    // 异步拉取社区规则（合并导入逻辑）
     inline winrt::Windows::Foundation::IAsyncAction FetchCommunityRulesAsync()
     {
         using namespace winrt::Windows::Web::Http;
@@ -145,7 +144,7 @@ namespace PopupBlocker
 
                     if (added > 0) SaveRules(merged);
                     ok = true;
-                    msg = std::to_wstring(added); // 新增条数
+                    msg = std::to_wstring(added);
                 }
                 else {
                     msg = L"JSON 解析失败";
@@ -305,7 +304,8 @@ namespace PopupBlocker
             }
         }
 
-        inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG idChild, DWORD, DWORD)
+        inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD idEvent, HWND hwnd,
+            LONG idObject, LONG idChild, DWORD, DWORD idEventTime)
         {
             if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF) return;
             if (!::IsWindowVisible(hwnd)) return;
@@ -357,11 +357,25 @@ namespace PopupBlocker
                     raw_bits += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
                     raw_bits += (!f.path.empty() && !HeuristicScorer::IsFileSignedCached(f.path)) ? L'T' : L'F';
 
+                    LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
+                    long long idleMs = 0;
+                    if (::GetLastInputInfo(&lii)) {
+                        idleMs = (long long)idEventTime - (long long)lii.dwTime;
+                        if (idleMs < 0) idleMs = 0;
+                    }
+                    raw_bits += (idleMs > 5000) ? L'T' : L'F';
+
+                    POINT cpt{}; ::GetCursorPos(&cpt);
+                    int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
+                    int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
+                    long long d2 = (long long)dx * dx + (long long)dy * dy;
+                    raw_bits += (d2 > 300LL * 300) ? L'T' : L'F';
+
                     detail += L" raw=" + raw_bits;
 
 
                     if (MLHeuristic) {
-                        bool mlPopup = HeuristicML::GetInstance().Predict(hwnd);
+                        bool mlPopup = HeuristicML::GetInstance().Predict(hwnd, idEventTime);
                         detail += L" ml=";
                         detail += mlPopup ? L'Y' : L'N';
                     }
@@ -385,7 +399,9 @@ namespace PopupBlocker
             }
 
             if (shouldLog) {
-                std::wstring logMsg = L"action=" + action + L" | reason=" + reason;
+                std::wstring logMsg = L"action=" + action +
+                    L" | ev=" + (idEvent == EVENT_OBJECT_SHOW ? L"SHOW" : L"FG") +
+                    L" | reason=" + reason;
                 if (!detail.empty()) {
                     logMsg += L" | " + detail;
                 }
