@@ -1,6 +1,7 @@
 ﻿# 函数输入输出参考
 
 ## AppSettings.h（配置读写）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `IniPath()` | 无 | `std::wstring` | exe 同目录 `winui.ini` 全路径 |
@@ -12,6 +13,7 @@
 | `DeleteKey(section, key)` | 段、键 | `void` | 删除 ini 键并 Flush |
 
 ## RuleTypes.h（规则类型定义）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `Lower(s)` | 原串 | `std::wstring` | 小写化副本（`towlower` 逐字符转换） |
@@ -25,6 +27,7 @@
 - `fromCommunity`（`bool`，默认 `false`）：标记该规则是否来自社区规则库
 
 ## RuleStorage.h（规则 JSON 读写存储）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `RulesPath()` | 无 | `std::wstring` | exe 同目录 `rules.json` 全路径 |
@@ -40,11 +43,12 @@
 | `EnsureDefaultRules()` | 无 | `void` | 首运行（`rules.json` 不存在）写 4 条默认规则并保存 |
 
 ## LabelStorage.h（日志标注与训练样本导出）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `LabelsPath()` | 无 | `std::wstring` | exe 同目录 `labels.json` 全路径 |
 | `ExtractField(s, key)` | 日志行、字段名（如 `action=`） | `std::wstring` | 从日志行提取字段值，以 ` | ` 为分隔符；未找到返回空串 |
-| `ParseLine(line)` | 日志行 | `Sample` | 解析日志行为 Sample 结构体：提取 action/reason/title/class/exe/score（从 `heuristic(N)`）/raw（从 `raw=`，缺失则 12 个 `?`） |
+| `ParseLine(line)` | 日志行 | `Sample` | 解析日志行为 Sample 结构体：提取 action/reason/title/class/exe/score（从 `heuristic(N)`）/raw（从 `raw=`，缺失则 17 个 `?`） |
 | `Load(out)` | 标注 map（out） | `void` | 从 `labels.json` 加载标注数据，以日志原文为 key；解析失败静默返回 |
 | `Save(m)` | 标注 map 常量引用 | `bool` | 保存标注到 `labels.json`（4 空格缩进），写入失败返回 false |
 | `ExportJson(m)` | 标注 map 常量引用 | `std::string` | 导出为 `popkiller_training_samples` 格式 JSON 字符串（含 `version`/`type`/`samples`），用于训练模型 |
@@ -54,6 +58,7 @@
 - `line`：日志原文（作为 map 的 key）
 
 ## FilePicker.h（公共文件选择器）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `GetAppHwnd()` | 无 | `HWND` | 通过 `App::window` 获取主窗口原生句柄，失败返回 nullptr |
@@ -62,6 +67,7 @@
 依赖：`comdlg32.lib`
 
 ## AutoStart.h（开机自启动管理）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `DebugLog(msg)` | 日志消息 | `void` | 写调试日志到 exe 同目录 `autostart_debug.log`，格式 `HH:MM:SS user=xxx msg` |
@@ -79,6 +85,7 @@
 依赖：`advapi32.lib`（注册表 API）
 
 ## PopupBlocker.h（拦截引擎）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `LogPath()` | 无 | `wstring` | `blocklog.txt` 全路径 |
@@ -98,7 +105,7 @@
 | `detail::MatchRule(hwnd, r, exe&, path&, title&, cls&)` | 句柄、规则、4 个缓存串（in/out 惰性填充） | `bool` | 单条规则匹配 |
 | `detail::Match(hwnd)` | 句柄 | `int` | 0=未命中，1=白名单，2=黑名单（白名单优先）；加锁复制 `Rules` 后遍历 |
 | `detail::Log(s)` | 日志行内容 | `void` | 追加 UTF-8 带时间戳行；新文件或超过 1MB 时截断重写并写 BOM |
-| `detail::WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | WinEvent 参数 | `void` | 过滤→匹配→打分→日志→关闭/隐藏；启发式启用时日志追加 `raw=` 15位特征串；`MLHeuristic` 启用时追加 `ml=Y/N` 预测结果；黑名单起延迟 400ms 强杀线程（排除系统路径与 Program Files 路径） |
+| `detail::WinEventProc(hook, idEvent, hwnd, idObject, idChild, idEventThread, idEventTime)` | WinEvent 参数 | `void` | 过滤→匹配→打分→日志→关闭/隐藏；启发式启用时日志追加 `raw=` 17位特征串（含 idle>5s / farFromMouse>300px）；`MLHeuristic` 启用时追加 `ml=Y/N` 预测结果；日志新增 `ev=SHOW/FG` 事件类型；黑名单起延迟 400ms 强杀线程（排除系统路径与 Program Files 路径） |
 | `detail::ThreadMain(lp)` | 无（`lp` 未用） | `DWORD` | 挂 `EVENT_OBJECT_SHOW` + `EVENT_SYSTEM_FOREGROUND` 双钩子 + 消息循环 |
 
 全局状态：`Rules`、`RulesMutex`、`CommunityRemoved`、`CommunityRulesFetchCallback`、`Running`、`ForceBlock`、`SelfExe`、`HeuristicMode`、`HeuristicThreshold`、`VerboseLog`、`MLHeuristic`、`EnabledChangedCallback`。
@@ -106,6 +113,7 @@
 > 注：`Lower()` 与 `EnsureDefaultRules()` 已分别移至 `RuleTypes.h` 和 `RuleStorage.h`；`Rule` 结构体与枚举统一使用 `RuleTypes.h` 中的定义。
 
 ## HeuristicScorer.h（启发式打分）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `detail::Lower(s)` | 原串 | `wstring` | 小写化（独立副本，避免循环依赖） |
@@ -124,7 +132,10 @@
 
 全局状态：`g_w`（权重表单例）、`SigMx`（缓存锁）、`SigCache`（签名结果缓存）。
 
+> 基础设施类名跳过列表：`consolewindowclass`、`pseudoconsolewindow`、`hwndwrapper[...]`、`tooltip`、`tooltip_*`、`msctfime ui`、`default ime`、`dragvisualwindow`、`#32768`、`shell_systemdialog`、`shell_systemdialogproxy`、`shell_systemdim`。
+
 ## HeuristicML.h（静态机器学习识别）
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `ToLower(s)` | 原串 | `wstring` | 小写化（独立副本） |
@@ -134,14 +145,16 @@
 | `GetInstance()` | 无 | `MLEngine&` | 返回机器学习引擎单例引用 |
 
 `MLEngine` 类成员：
+
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `MLEngine()` | 无 | 构造 | 初始化 `Ort::Env`（日志级别 WARNING） |
 | `Init()` | 无 | `bool` | 从 exe 同目录 `StaticML\` 加载 `popup_rf.onnx`（随机森林）与 `popup_lr.onnx`（逻辑回归）；文件不存在或加载异常返回 false；已初始化则直接返回 true |
-| `RunSession(session, features)` | ONNX Session 指针、19维特征数组 | `bool` | 运行单模型推理；输出 label==1 时返回 true；异常时返回 false |
-| `Predict(hwnd)` | 窗口句柄 | `bool` | 主预测：`ExtractFeatures` 提取特征→构建 19 维输入数组→双模型分别推理→**随机森林与逻辑回归同时预测为弹窗**才返回 true（双模型投票降误报）；模型未加载返回 false |
+| `RunSession(session, features)` | ONNX Session 指针、23维特征数组 | `bool` | 运行单模型推理；输出 label==1 时返回 true；异常时返回 false |
+| `Predict(hwnd, evTime)` | 窗口句柄、事件时间戳 | `bool` | 主预测：`ExtractFeatures` 提取特征→构建 23 维输入数组（含 idle>5s / farFromMouse>300px）→双模型分别推理→**随机森林与逻辑回归同时预测为弹窗**才返回 true（双模型投票降误报）；模型未加载返回 false |
 
-19 维输入特征（顺序）：
+23 维输入特征（顺序）：
+
 | 索引 | 特征 | 类型 | 说明 |
 |---|---|---|---|
 | 0 | `hasOwner` | 0/1 | 窗口有所有者 |
@@ -159,17 +172,22 @@
 | 12 | `clsHexRatio` | 0/1 | 类名十六进制占比 > 0.8 |
 | 13 | `youngProcess` | 0/1 | 进程年龄 < 120 秒 |
 | 14 | `unsigned` | 0/1 | 文件未签名 |
-| 15 | `titleLen` | 连续值 | 标题字符长度 |
-| 16 | `adKwHits` | 连续值 | 广告关键词命中数（14 个关键词） |
-| 17 | `isGoodExe` | 0/1 | 进程在白名单列表中（17 个常见正常软件） |
-| 18 | `isWidgetWin` | 0/1 | 类名含 `widgetwin`（Chromium 系正常窗口） |
+| 15 | `idle>5s` | 0/1 | 用户空闲超过 5 秒（`GetLastInputInfo`） |
+| 16 | `farFromMouse` | 0/1 | 窗口出现时离鼠标光标超过 300 像素 |
+| 17 | `titleLen` | 连续值 | 标题字符长度 |
+| 18 | `adKwHits` | 连续值 | 广告关键词命中数（14 个关键词） |
+| 19 | `isGoodExe` | 0/1 | 进程在白名单列表中（27 个常见正常软件） |
+| 20 | `isWidgetWin` | 0/1 | 类名含 `widgetwin`（Chromium 系正常窗口） |
+| 21 | `isDlg32770` | 0/1 | 类名是 `#32770`（标准对话框） |
+| 22 | `exeDigitRatio` | 连续值 | exe 文件名数字字符占比 |
 
 全局常量：
 - `AD_KEYWORDS`：14 个广告关键词（广告、优惠、促销、免费、中奖、礼包、热点、速看、推荐、清理、加速、升级、弹窗、资讯）
-- `GOOD_EXES`：17 个白名单进程（devenv、code、chrome、msedge、firefox、windowsterminal、explorer、wechat、weixin、qq、dingtalk、tim、notepad、notepad++、everything、snipaste、listary）
+- `GOOD_EXES`：27 个白名单进程（devenv、code、chrome、msedge、firefox、windowsterminal、explorer、wechat、weixin、qq、dingtalk、tim、notepad、notepad++、everything、snipaste、listary、steamwebhelper、steam、qbittorrent、rvrvpngui、mixline、mixline.ui、oopz、translucenttb、hyp、svchost）
 
 依赖：`Microsoft.ML.OnnxRuntime` NuGet 包（`onnxruntime_cxx_api.h`）
-模型文件：`StaticML\popup_rf.onnx`（随机森林，~227KB）、`StaticML\popup_lr.onnx`（逻辑回归，~1KB）
+
+模型文件：`StaticML\popup_rf.onnx`（随机森林，~202KB）、`StaticML\popup_lr.onnx`（逻辑回归，~1KB）
 
 > 当前为仅记录模式：预测结果写入日志 `ml=Y/N`，不执行拦截。
 

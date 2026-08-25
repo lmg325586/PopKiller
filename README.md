@@ -1,10 +1,8 @@
 # PopKiller
 > 基于 WinUI 3 (C++/WinRT) 的 Windows 弹窗拦截工具。
-> 通过黑白名单规则、社区共享规则库、启发式特征打分与静态机器学习模型，自动识别并关闭广告及流氓软件弹窗。
+> 通过黑白名单规则、共享规则库、启发式特征打分与静态机器学习模型，自动识别并关闭广告及流氓软件弹窗。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)]()
-[![Language](https://img.shields.io/badge/language-C%2B%2B17-yellow.svg)]()
 [![Release](https://img.shields.io/github/v/release/lmg325586/PopKiller?include_prereleases)]()
 
 ---
@@ -38,7 +36,7 @@
 | **规则导入导出** | 一键导出规则为 JSON 文件备份或分享，导入时自动去重合并；可选择是否包含社区规则与墓碑记录 |
 | **社区规则库** | 启动时联网拉取仓库 `community_rules.json`，合并到本地规则，可编辑可删除，删除偏好自动记忆 |
 | **启发式打分** | 对 20 余项特征（窗口样式、进程路径、数字签名、进程年龄等）加权评分 |
-| **机器学习识别** | 内置随机森林与逻辑回归双 ONNX 模型，基于 19 维特征联合预测弹窗概率，当前为仅记录模式 |
+| **机器学习识别** | 内置随机森林与逻辑回归双 ONNX 模型，基于 23 维特征联合预测弹窗概率，当前为仅记录模式 |
 | **窗口拾取** | 点选目标窗口，提取进程 / 路径 / 类名 / 标题，一键生成规则 |
 | **系统托盘** | 最小化到托盘，右键菜单快速切换拦截状态 |
 | **日志系统** | 实时刷新拦截日志，支持详细日志模式记录每个窗口的打分明细与机器学习预测结果 |
@@ -140,7 +138,7 @@
 **静态机器学习识别：**
 
 - 内置两个 ONNX 模型：**随机森林**（`popup_rf.onnx`）与**逻辑回归**（`popup_lr.onnx`）；
-- 基于 19 维特征联合预测：15 项窗口二值特征 + 标题长度 + 广告关键词命中数 + 白名单进程标记 + Chromium 类名标记；
+- 基于 23 维特征联合预测：17 项窗口二值特征（含用户空闲>5秒 / 窗口离鼠标>300px）+ 标题长度 + 广告关键词命中数 + 白名单进程标记 + Chromium 类名标记 + 对话框类名标记 + exe 数字占比；
 - 两个模型**同时预测为弹窗**时才判定为弹窗（双模型投票，降低误报）；
 - 当前为**仅记录模式**：预测结果以 `ml=Y`（弹窗）/ `ml=N`（非弹窗）写入日志明细，不执行拦截；
 - 启用后首次评估时自动加载模型，模型文件位于程序同目录 `StaticML\` 下。
@@ -158,7 +156,7 @@
 ### 单实例运行
 
 - 程序仅允许同时运行一个实例；
-- 重复启动时会自动激活已有窗口并前置显示；
+- 重复启动时自动激活已有窗口并前置显示；
 - 如窗口最小化到托盘，会自动恢复并闪烁提示。
 
 ### 系统托盘
@@ -245,12 +243,13 @@
 ### 贡献
 
 欢迎提交 PR 维护 `community_rules.json`：
+
 1. Fork 本仓库；
 2. 编辑根目录下的 `community_rules.json`，按格式添加规则；
 3. 提交 PR，描述规则对应的弹窗来源和验证情况；
 4. 审核通过后合并，所有用户下次启动即可自动获取新规则。
 
-> 注意：请勿提交针对正常软件的误杀规则。系统进程（explorer.exe、dwm.exe 等）已内置白名单保护，无需重复添加。
+> 注意：请勿提交针对正常软件的误杀规则。部分系统进程已内置白名单保护
 
 ---
 
@@ -280,17 +279,18 @@
 **示例：**
 
 ```text
-2026-08-21 14:30:15 action=block | reason=heuristic(75) | owner+15 toolwin+12 topmost+20 notresizable+12 nominmax+12 small+28 notitle+20 young+5 unsigned+12 raw=FTTFFFFTFTFFTFF ml=Y | title= | class=WindowsForms10.Window.8.app.0.1234567 | exe=adpopup.exe
-2026-08-21 14:30:20 action=allow | reason=whitelist | title=文件资源管理器 | class=CabinetWClass | exe=explorer.exe
+2026-08-21 14:30:15 action=block | ev=SHOW | reason=heuristic(75) | owner+15 toolwin+12 topmost+20 notresizable+12 nominmax+12 small+28 notitle+20 young+5 unsigned+12 idle+5 nearmouse+8 raw=FTTFFFFTFTFFTFFTFF ml=Y | title= | class=WindowsForms10.Window.8.app.0.1234567 | exe=adpopup.exe
+2026-08-21 14:30:20 action=allow | ev=FG | reason=whitelist | title=文件资源管理器 | class=CabinetWClass | exe=explorer.exe
 ```
 
 | 字段 | 说明 |
 | :--- | :--- |
 | 时间戳 | `YYYY-MM-DD HH:MM:SS` 格式的本地时间 |
 | `action` | `block`（拦截）/ `monitor`（观察）/ `allow`（白名单放行） |
+| `ev` | 触发事件：`SHOW`（窗口显示）/ `FG`（切换到前台） |
 | `reason` | `blacklist` / `whitelist` / `community` / `heuristic(分数)` |
 | 明细 | 启发式各项得分，如 `toolwin+12`、`signed-5`（仅启发式命中时出现） |
-| `raw` | 15 位窗口特征串（T/F），启用启发式时输出 |
+| `raw` | 17 位窗口特征串（T/F），启用启发式时输出 |
 | `ml` | 机器学习预测结果（`Y`=弹窗 / `N`=非弹窗），启用 ML 时输出 |
 | `title` | 窗口标题（小写） |
 | `class` | 窗口类名（小写） |
@@ -347,6 +347,12 @@ PopKiller/
 ├── StaticML/                  # 机器学习模型文件
 │   ├── popup_rf.onnx          # 随机森林模型
 │   └── popup_lr.onnx          # 逻辑回归模型
+├── ML/                        # 模型训练脚本
+│   ├── train.py               # 训练主脚本（5折交叉验证 + 多模型对比 + ONNX导出）
+│   ├── start.bat              # 训练启动脚本
+│   └── cache/                 # 样本缓存与去重
+│       ├── dedup.py           # 样本去重脚本
+│       └── start.bat
 └── winui/                     # 主项目
     ├── App.xaml(.cpp/.h)      # 应用入口（含单实例逻辑）
     ├── MainWindow.xaml(.cpp/.h) # 主窗口（导航、托盘、最小尺寸）
@@ -392,7 +398,7 @@ PopKiller/
 - [x] 规则导入/导出
 - [x] 日志大小限制与轮转
 - [x] 日志标注与训练样本导出
-- [ ] 机器学习模型自动拦截模式；当前（仅记录）
+- [x] 静态机器学习识别（当前:仅记录模式）
 - [ ] 规则分组/标签
 
 ---
