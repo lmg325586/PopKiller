@@ -15,10 +15,12 @@ namespace HeuristicML
         L"热点", L"速看", L"推荐", L"清理", L"加速", L"升级", L"弹窗", L"资讯",
     };
     inline const std::vector<std::wstring> GOOD_EXES = {
-        L"devenv.exe", L"code.exe", L"chrome.exe", L"msedge.exe", L"firefox.exe",
-        L"windowsterminal.exe", L"explorer.exe", L"wechat.exe", L"weixin.exe",
-        L"qq.exe", L"dingtalk.exe", L"tim.exe", L"notepad.exe", L"notepad++.exe",
-        L"everything.exe", L"snipaste.exe", L"listary.exe",
+    L"devenv.exe", L"code.exe", L"chrome.exe", L"msedge.exe", L"firefox.exe",
+    L"windowsterminal.exe", L"explorer.exe", L"wechat.exe", L"weixin.exe",
+    L"qq.exe", L"dingtalk.exe", L"tim.exe", L"notepad.exe", L"notepad++.exe",
+    L"everything.exe", L"snipaste.exe", L"listary.exe",
+    L"steamwebhelper.exe", L"steam.exe", L"qbittorrent.exe", L"rvrvpngui.exe",
+    L"mixline.exe", L"mixline.ui.exe", L"oopz.exe", L"translucenttb.exe", L"hyp.exe",
     };
 
     inline std::wstring ToLower(std::wstring s) {
