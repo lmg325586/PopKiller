@@ -168,7 +168,7 @@ namespace winrt::winui::implementation
             SampleLabels::Clear(m_labels);
             Load();
 
-            MessageBoxW(nullptr, L"训练数据导出成功，本地缓存已清空", L"提示", MB_OK | MB_ICONINFORMATION);
+            MessageBoxW(nullptr, L"训练数据导出成功", L"提示", MB_OK | MB_ICONINFORMATION);
         }
         else
         {

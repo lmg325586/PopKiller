@@ -1,3 +1,4 @@
+# dedup.py —— 样本去重 + 标签碰撞检测
 # 用法：python dedup.py [a.json b.json ...]，默认合并同目录全部 *.json（自动排除输出文件）
 # 产出：cleaned.json（干净训练集） + conflicts.json（碰撞仲裁队列）
 import json
@@ -20,6 +21,7 @@ def main():
 
     groups = {}  # window_key -> {label -> [samples...]}
     total = 0
+    skipped_fg = 0
     for src in paths:
         try:
             data = json.loads(src.read_text(encoding="utf-8"))
@@ -28,6 +30,9 @@ def main():
             continue
         for s in data.get("samples", []):
             if s.get("label") not in ("popup", "notpopup"):
+                continue
+            if (s.get("ev") or "").upper() == "FG":
+                skipped_fg += 1
                 continue
             total += 1
             groups.setdefault(window_key(s), {}).setdefault(s["label"], []).append(s)
