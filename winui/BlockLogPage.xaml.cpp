@@ -165,7 +165,10 @@ namespace winrt::winui::implementation
         std::string json = SampleLabels::ExportJson(m_labels);
         if (PopupBlocker::WriteUtf8StringToFile(path, json))
         {
-            MessageBoxW(nullptr, L"训练数据导出成功", L"提示", MB_OK | MB_ICONINFORMATION);
+            SampleLabels::Clear(m_labels);
+            Load();
+
+            MessageBoxW(nullptr, L"训练数据导出成功，本地缓存已清空", L"提示", MB_OK | MB_ICONINFORMATION);
         }
         else
         {

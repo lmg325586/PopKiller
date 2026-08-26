@@ -136,4 +136,10 @@ namespace SampleLabels
         }
         return j.dump(4);
     }
+
+    inline void Clear(std::map<std::wstring, Sample>& m)
+    {
+        m.clear();
+        ::DeleteFileW(LabelsPath().c_str());
+    }
 }
