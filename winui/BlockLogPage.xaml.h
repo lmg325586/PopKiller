@@ -4,6 +4,7 @@
 #include "LabelStorage.h"
 #include <map>
 #include <string>
+#include <vector>
 
 namespace winrt::winui::implementation
 {
@@ -34,6 +35,9 @@ namespace winrt::winui::implementation
         void Timer_Tick(winrt::Windows::Foundation::IInspectable const&,
             winrt::Windows::Foundation::IInspectable const&);
         void AddRuleFromSelection(bool whitelist);
+
+        std::vector<std::wstring> m_rawLines;
+        std::wstring m_selectedRaw;
 
         std::map<std::wstring, SampleLabels::Sample> m_labels;
         std::wstring m_selectedDisplayText;
