@@ -55,12 +55,22 @@ namespace HeuristicML
         std::unique_ptr<Ort::Env> env;
         std::unique_ptr<Ort::Session> sessionRf;
         std::unique_ptr<Ort::Session> sessionLr;
+        bool m_warned = false;
+
+        void WarnOnce(const wchar_t* msg) {
+            if (m_warned) return;
+            m_warned = true;
+            MessageBoxW(nullptr, msg, L"PopKiller ML", MB_OK | MB_ICONWARNING);
+        }
 
         bool Init() {
             if (sessionRf || sessionLr) return true;
 
             const OrtApiBase* base = OrtGetApiBase();
-            if (!base || !base->GetApi(ORT_API_VERSION)) return false;
+            if (!base || !base->GetApi(ORT_API_VERSION)) {
+                WarnOnce(L"ONNX Runtime 不可用或与编译头文件版本不匹配，\n静态ML启发已禁用");
+                return false;
+            }
 
             if (!env) env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PopKillerML");
 
@@ -72,8 +82,12 @@ namespace HeuristicML
 
             std::wstring rfPath = dir + L"popup_rf.onnx";
             std::wstring lrPath = dir + L"popup_lr.onnx";
-            if (::GetFileAttributesW(rfPath.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-            if (::GetFileAttributesW(lrPath.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+            if (::GetFileAttributesW(rfPath.c_str()) == INVALID_FILE_ATTRIBUTES ||
+                ::GetFileAttributesW(lrPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+                std::wstring msg = L"ML 模型文件缺失，静态ML启发已禁用：\n" + rfPath + L"\n" + lrPath;
+                WarnOnce(msg.c_str());
+                return false;
+            }
 
             Ort::SessionOptions opts;
             opts.SetIntraOpNumThreads(1);
@@ -81,9 +95,15 @@ namespace HeuristicML
             try {
                 sessionRf = std::make_unique<Ort::Session>(*env, rfPath.c_str(), opts);
                 sessionLr = std::make_unique<Ort::Session>(*env, lrPath.c_str(), opts);
+                m_warned = false;
                 return true;
             }
-            catch (...) { return false; }
+            catch (...) {
+                sessionRf.reset();
+                sessionLr.reset();
+                WarnOnce(L"ML 模型加载异常，静态ML启发已禁用。");
+                return false;
+            }
         }
 
         bool RunSession(Ort::Session* session, const std::array<float, 23>& features) {
