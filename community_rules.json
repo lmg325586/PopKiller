@@ -21,6 +21,7 @@
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "powertoys.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "utools.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "quicker.exe" },
-        { "list": "W", "field": "exe", "mode": "contains", "pattern": "ditto.exe" }
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "ditto.exe" },
+        { "list": "W", "field": "exe",   "mode": "contains", "pattern": "dataexchangehost.exe" }
     ]
 }
