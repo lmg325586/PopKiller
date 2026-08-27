@@ -52,14 +52,18 @@ namespace HeuristicML
     }
 
     struct MLEngine {
-        Ort::Env env;
+        std::unique_ptr<Ort::Env> env;
         std::unique_ptr<Ort::Session> sessionRf;
         std::unique_ptr<Ort::Session> sessionLr;
 
-        MLEngine() : env(ORT_LOGGING_LEVEL_WARNING, "PopKillerML") {}
-
         bool Init() {
             if (sessionRf || sessionLr) return true;
+
+            const OrtApiBase* base = OrtGetApiBase();
+            if (!base || !base->GetApi(ORT_API_VERSION)) return false;
+
+            if (!env) env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PopKillerML");
+
             WCHAR path[MAX_PATH]{};
             ::GetModuleFileNameW(nullptr, path, MAX_PATH);
             std::wstring dir(path);
@@ -68,7 +72,6 @@ namespace HeuristicML
 
             std::wstring rfPath = dir + L"popup_rf.onnx";
             std::wstring lrPath = dir + L"popup_lr.onnx";
-
             if (::GetFileAttributesW(rfPath.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
             if (::GetFileAttributesW(lrPath.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
 
@@ -76,8 +79,8 @@ namespace HeuristicML
             opts.SetIntraOpNumThreads(1);
             opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
             try {
-                sessionRf = std::make_unique<Ort::Session>(env, rfPath.c_str(), opts);
-                sessionLr = std::make_unique<Ort::Session>(env, lrPath.c_str(), opts);
+                sessionRf = std::make_unique<Ort::Session>(*env, rfPath.c_str(), opts);
+                sessionLr = std::make_unique<Ort::Session>(*env, lrPath.c_str(), opts);
                 return true;
             }
             catch (...) { return false; }
