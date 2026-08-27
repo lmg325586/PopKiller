@@ -28,14 +28,21 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AddToWhitelist_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-
+        void Filter_Changed(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& e);
+        void Search_Changed(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const& e);
 
     private:
         void Load();
+        void ReloadFromFile();
+        void ApplyFilter();
+
         void Timer_Tick(winrt::Windows::Foundation::IInspectable const&,
             winrt::Windows::Foundation::IInspectable const&);
         void AddRuleFromSelection(bool whitelist);
 
+        std::vector<std::wstring> m_allLines;
         std::vector<std::wstring> m_rawLines;
         std::wstring m_selectedRaw;
 

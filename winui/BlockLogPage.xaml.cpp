@@ -5,6 +5,7 @@
 #include "FilePicker.h"
 #include <sstream>
 #include <vector>
+#include <algorithm>
 #if __has_include("BlockLogPage.g.cpp")
 #include "BlockLogPage.g.cpp"
 #endif
@@ -69,10 +70,10 @@ namespace
         }
     }
 
-    // 显示层翻译：blocklog.txt 存储格式与 ParseLine 契约保持英文不动
     inline std::wstring FormatLogLineChinese(std::wstring s)
     {
         ReplaceAll(s, L"action=monitor", L"动作=监控");
+        ReplaceAll(s, L"action=allow", L"动作=放行");
         ReplaceAll(s, L"action=block", L"动作=拦截");
         ReplaceAll(s, L"action=kill", L"动作=强杀");
         ReplaceAll(s, L"ev=SHOW", L"事件=出现");
@@ -86,7 +87,6 @@ namespace
         ReplaceAll(s, L"title=", L"标题=");
         ReplaceAll(s, L"class=", L"类名=");
         ReplaceAll(s, L"exe=", L"程序=");
-        // 启发式明细 token（长名先翻，防前缀误伤）
         TranslateTokenName(s, L"notresizable", L"不可调");
         TranslateTokenName(s, L"nominmax", L"无最小最大化");
         TranslateTokenName(s, L"unsigned", L"无签名");
@@ -127,35 +127,124 @@ namespace winrt::winui::implementation
             });
     }
 
-    void BlockLogPage::Load()
+    void BlockLogPage::ReloadFromFile()
     {
-        LogList().Items().Clear();
-        m_rawLines.clear();
-        SampleLabels::Load(m_labels);
-
         std::wstringstream ss(ReadLogText());
         std::wstring line;
-        std::vector<std::wstring> lines;
+        m_allLines.clear();
         while (std::getline(ss, line, L'\n'))
         {
             if (!line.empty() && line.back() == L'\r') line.pop_back();
-            if (!line.empty()) lines.push_back(line);
+            if (!line.empty()) m_allLines.push_back(line);
         }
-        for (auto it = lines.rbegin(); it != lines.rend(); ++it)
-        {
-            std::wstring display = FormatLogLineChinese(*it);
-            if (auto labelIt = m_labels.find(*it); labelIt != m_labels.end())
-            {
-                if (labelIt->second.label == L"popup")
-                    display = L"[弹窗] " + display;
-                else if (labelIt->second.label == L"notpopup")
-                    display = L"[误关] " + display;
+    }
+
+    void BlockLogPage::ApplyFilter()
+    {
+        if (!LogList()) return;
+        LogList().Items().Clear();
+        m_rawLines.clear();
+
+        std::wstring filterTag = L"all";
+        if (FilterCombo() && FilterCombo().SelectedItem()) {
+            if (auto item = FilterCombo().SelectedItem().try_as<Controls::ComboBoxItem>()) {
+                if (auto tagObj = item.Tag()) {
+                    filterTag = winrt::unbox_value<winrt::hstring>(tagObj).c_str();
+                }
             }
-            m_rawLines.push_back(*it);   // 与列表项一一对应，供右键操作取原文
-            LogList().Items().Append(box_value(hstring(display)));
         }
 
-        m_lastWrite = LogWriteTime();
+        std::wstring searchText;
+        if (SearchBox()) {
+            searchText = hstring(SearchBox().Text()).c_str();
+            std::transform(searchText.begin(), searchText.end(), searchText.begin(), ::towlower);
+        }
+
+        int threshold = PopupBlocker::HeuristicThreshold;
+        int shownCount = 0;
+        int totalCount = (int)m_allLines.size();
+
+        for (auto it = m_allLines.rbegin(); it != m_allLines.rend(); ++it)
+        {
+            const std::wstring& rawLine = *it;
+
+            // 搜索框过滤（大小写不敏感）
+            if (!searchText.empty()) {
+                std::wstring lowerRaw = rawLine;
+                std::transform(lowerRaw.begin(), lowerRaw.end(), lowerRaw.begin(), ::towlower);
+                if (lowerRaw.find(searchText) == std::wstring::npos) continue;
+            }
+
+            // 类别过滤
+            bool passFilter = false;
+            if (filterTag == L"all") {
+                passFilter = true;
+            }
+            else if (filterTag == L"list") {
+                passFilter = (rawLine.find(L"reason=whitelist") != std::wstring::npos) ||
+                    (rawLine.find(L"reason=blacklist") != std::wstring::npos);
+            }
+            else if (filterTag == L"ml_heur") {
+                bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
+                bool mlN = rawLine.find(L" ml=N") != std::wstring::npos;
+                if (mlY || mlN) {
+                    int score = 0;
+                    auto heurPos = rawLine.find(L"heuristic(");
+                    if (heurPos != std::wstring::npos) {
+                        size_t endPos = rawLine.find(L')', heurPos);
+                        if (endPos != std::wstring::npos) {
+                            try { score = std::stoi(rawLine.substr(heurPos + 10, endPos - heurPos - 10)); }
+                            catch (...) {}
+                        }
+                    }
+                    bool heurSaysPopup = (score >= threshold);
+                    bool mlSaysPopup = mlY;
+                    if (heurSaysPopup != mlSaysPopup) passFilter = true;
+                }
+            }
+            else if (filterTag == L"ml_list") {
+                bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
+                bool isWhitelist = rawLine.find(L"reason=whitelist") != std::wstring::npos;
+                bool isBlacklist = rawLine.find(L"reason=blacklist") != std::wstring::npos;
+                if ((isWhitelist && mlY) || (isBlacklist && !mlY)) passFilter = true;
+            }
+
+            if (!passFilter) continue;
+
+            std::wstring display = FormatLogLineChinese(rawLine);
+            if (auto labelIt = m_labels.find(rawLine); labelIt != m_labels.end()) {
+                if (labelIt->second.label == L"popup") display = L"[弹窗] " + display;
+                else if (labelIt->second.label == L"notpopup") display = L"[误关] " + display;
+            }
+            m_rawLines.push_back(rawLine);
+            LogList().Items().Append(box_value(hstring(display)));
+            shownCount++;
+        }
+
+        if (FilterCountText()) {
+            FilterCountText().Text(hstring(std::to_wstring(shownCount) + L" / " + std::to_wstring(totalCount) + L" 条"));
+        }
+    }
+
+    void BlockLogPage::Load()
+    {
+        uint64_t t = LogWriteTime();
+        if (t != m_lastWrite) {
+            m_lastWrite = t;
+            ReloadFromFile();
+        }
+        SampleLabels::Load(m_labels);
+        ApplyFilter();
+    }
+
+    void BlockLogPage::Filter_Changed(IInspectable const&, Controls::SelectionChangedEventArgs const&)
+    {
+        ApplyFilter();
+    }
+
+    void BlockLogPage::Search_Changed(IInspectable const&, Controls::TextChangedEventArgs const&)
+    {
+        ApplyFilter();
     }
 
     void BlockLogPage::Timer_Tick(IInspectable const&, IInspectable const&)
