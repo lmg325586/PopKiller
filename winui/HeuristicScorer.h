@@ -207,6 +207,45 @@ namespace HeuristicScorer
         return f;
     }
 
+    inline std::wstring BuildRawBits(Features const& f, RECT const& rc, DWORD evTime)
+    {
+        std::wstring b;
+        b += (f.hasOwner > 0) ? L'T' : L'F';
+        b += (f.toolWin > 0) ? L'T' : L'F';
+        b += (f.topmost > 0) ? L'T' : L'F';
+        b += (f.noActivate > 0) ? L'T' : L'F';
+        b += (f.resizable > 0) ? L'T' : L'F';
+        b += (f.hasMinMax > 0) ? L'T' : L'F';
+        b += (f.captionSysmenu > 0) ? L'T' : L'F';
+        b += (f.titleEmpty > 0) ? L'T' : L'F';
+
+        float wPx = float(rc.right - rc.left);
+        float hPx = float(rc.bottom - rc.top);
+        b += (wPx < 400 && hPx < 300) ? L'T' : L'F';
+        b += (wPx > 800 || hPx > 600) ? L'T' : L'F';
+        b += (f.pathTemp > 0) ? L'T' : L'F';
+        b += (f.pathRoaming > 0) ? L'T' : L'F';
+
+        b += (f.clsHexRatio > 0.8f) ? L'T' : L'F';
+        b += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
+        b += (!f.path.empty() && !IsFileSignedCached(f.path)) ? L'T' : L'F';
+
+        LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
+        long long idleMs = 0;
+        if (::GetLastInputInfo(&lii)) {
+            idleMs = (long long)evTime - (long long)lii.dwTime;
+            if (idleMs < 0) idleMs = 0;
+        }
+        b += (idleMs > 5000) ? L'T' : L'F';
+
+        POINT cpt{}; ::GetCursorPos(&cpt);
+        int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
+        int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
+        long long d2 = (long long)dx * dx + (long long)dy * dy;
+        b += (d2 > 300LL * 300) ? L'T' : L'F';
+        return b;
+    }
+
     inline int ScoreWindow(Features const& f, std::wstring& detail)
     {
         if (f.cls == L"consolewindowclass" ||

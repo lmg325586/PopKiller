@@ -3,9 +3,7 @@
 #include "PopupBlocker.h"
 #include "RuleStorage.h"
 #include "App.xaml.h"
-#include <microsoft.ui.xaml.window.h>
-#include <commdlg.h>
-#pragma comment(lib, "comdlg32.lib")
+#include "FilePicker.h"
 #include <algorithm>
 #if __has_include("RuleIOPage.g.cpp")
 #include "RuleIOPage.g.cpp"
@@ -13,36 +11,6 @@
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
-
-namespace
-{
-    HWND GetAppHwnd()
-    {
-        auto window = winrt::winui::implementation::App::window;
-        if (!window) return nullptr;
-        auto native = window.try_as<::IWindowNative>();
-        HWND hwnd{};
-        if (native && SUCCEEDED(native->get_WindowHandle(&hwnd))) return hwnd;
-        return nullptr;
-    }
-
-    std::wstring PickJsonFile(bool save)
-    {
-        wchar_t szFile[MAX_PATH]{};
-        OPENFILENAMEW ofn{};
-        ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = GetAppHwnd();
-        ofn.lpstrFile = szFile;
-        ofn.nMaxFile = MAX_PATH;
-        ofn.lpstrFilter = L"JSON 文件\0*.json\0所有文件\0*.*\0";
-        ofn.lpstrDefExt = L"json";
-        ofn.Flags = save ? (OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR)
-            : (OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR);
-        if (save ? ::GetSaveFileNameW(&ofn) : ::GetOpenFileNameW(&ofn))
-            return szFile;
-        return {};
-    }
-}
 
 namespace winrt::winui::implementation
 {
@@ -55,7 +23,7 @@ namespace winrt::winui::implementation
     void RuleIOPage::ExportButton_Click(winrt::Windows::Foundation::IInspectable const&,
         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
-        std::wstring path = PickJsonFile(true);
+        std::wstring path = FilePicker::PickJsonFile(true);
         if (path.empty()) return;
 
         auto commRef = ExportCommunityRules().IsChecked();
@@ -101,7 +69,7 @@ namespace winrt::winui::implementation
     void RuleIOPage::ImportButton_Click(winrt::Windows::Foundation::IInspectable const&,
         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
-        std::wstring path = PickJsonFile(false);
+        std::wstring path = FilePicker::PickJsonFile(false);
         if (path.empty()) return;
 
         std::string text;

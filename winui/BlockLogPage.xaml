@@ -3,27 +3,30 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <StackPanel Padding="32" Spacing="16">
-        <TextBlock Text="拦截日志" Style="{StaticResource TitleTextBlockStyle}"/>
+    <Grid Padding="32" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="16">
 
-        <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Grid.Row="0" Text="拦截日志" Style="{StaticResource TitleTextBlockStyle}"/>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
             <Button Content="刷新" Click="Refresh_Click"/>
             <Button Content="清空" Click="Clear_Click"/>
             <Button Content="导出训练数据" Click="ExportSamples_Click"/>
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" Spacing="8">
-            <ComboBox x:Name="FilterCombo" SelectionChanged="Filter_Changed" Width="160" SelectedIndex="0">
-                <ComboBoxItem Content="全部日志" Tag="all"/>
-                <ComboBoxItem Content="命中黑/白名单" Tag="list"/>
-                <ComboBoxItem Content="ML与启发冲突" Tag="ml_heur"/>
-                <ComboBoxItem Content="ML与名单冲突" Tag="ml_list"/>
-            </ComboBox>
-            <TextBox x:Name="SearchBox" PlaceholderText="搜索 (exe/标题/类名)" Width="300" TextChanged="Search_Changed"/>
-            <TextBlock x:Name="FilterCountText" VerticalAlignment="Center" Foreground="Gray" FontSize="12" Text="0 / 0 条"/>
-        </StackPanel>
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <ComboBox x:Name="FilterCombo" SelectionChanged="Filter_Changed" Width="160" SelectedIndex="0">
+                    <ComboBoxItem Content="全部日志" Tag="all"/>
+                    <ComboBoxItem Content="命中黑/白名单" Tag="list"/>
+                    <ComboBoxItem Content="ML与启发冲突" Tag="ml_heur"/>
+                    <ComboBoxItem Content="ML与名单冲突" Tag="ml_list"/>
+                </ComboBox>
+                <TextBox x:Name="SearchBox" PlaceholderText="搜索 (exe/标题/类名)" Width="300" TextChanged="Search_Changed"/>
+            </StackPanel>
+            <TextBlock Grid.Column="2" x:Name="FilterCountText" VerticalAlignment="Center" Foreground="Gray" FontSize="12" Text="0 / 0 条"/>
+        </Grid>
 
-        <ListView x:Name="LogList" Height="420" SelectionMode="None">
+        <ListView Grid.Row="3" x:Name="LogList" SelectionMode="None">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="x:String">
                     <TextBlock Text="{x:Bind}" TextWrapping="Wrap"
@@ -43,7 +46,7 @@
             </ListView.ItemTemplate>
         </ListView>
 
-        <TextBlock FontSize="12" Foreground="Gray"
+        <TextBlock Grid.Row="4" FontSize="12" Foreground="Gray"
                    Text="记录每次拦截：时间、命中规则、窗口标题 / 类名 / 进程。最新在上。右键条目可标记用于训练数据导出。"/>
-    </StackPanel>
+    </Grid>
 </Page>

@@ -158,6 +158,8 @@ namespace PopupBlocker
         if (CommunityRulesFetchCallback) CommunityRulesFetchCallback(ok, msg);
     }
 
+    inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);
+
     namespace detail
     {
         inline std::thread Worker;
@@ -304,147 +306,101 @@ namespace PopupBlocker
             }
         }
 
-        inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD idEvent, HWND hwnd,
-            LONG idObject, LONG idChild, DWORD, DWORD idEventTime)
-        {
-            if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF) return;
-            if (!::IsWindowVisible(hwnd)) return;
-            if (::GetAncestor(hwnd, GA_ROOT) != hwnd) return;
-            if (IsProtected(hwnd)) return;
-
-            int matchResult = Match(hwnd);
-            bool isPopup = LooksLikePopup(hwnd);
-            bool shouldBlock = false;
+        struct EventVerdict {
+            std::wstring action = L"monitor";
             std::wstring reason;
             std::wstring detail;
-            std::wstring action = L"monitor";
+            bool shouldBlock = false;
+            bool shouldLog = false;
+            int  matchResult = 0;
+        };
 
-            if (matchResult == 1) {
-                reason = L"whitelist";
-                action = L"allow";
+        inline bool PassEventFilter(HWND hwnd, LONG idObject, LONG idChild)
+        {
+            if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF) return false;
+            if (!::IsWindowVisible(hwnd)) return false;
+            if (::GetAncestor(hwnd, GA_ROOT) != hwnd) return false;
+            if (IsProtected(hwnd)) return false;
+            return true;
+        }
+
+        inline EventVerdict EvaluateWindow(HWND hwnd, DWORD idEventTime)
+        {
+            EventVerdict v;
+            bool isPopup = LooksLikePopup(hwnd);
+            v.matchResult = Match(hwnd);
+
+            if (v.matchResult == 1) {
+                v.reason = L"whitelist";
+                v.action = L"allow";
             }
-            else if (matchResult == 2) {
-                reason = L"blacklist";
-                if (ForceBlock || isPopup) {
-                    shouldBlock = true;
-                    action = L"block";
+            else if (v.matchResult == 2) {
+                v.reason = L"blacklist";
+                if (ForceBlock || isPopup) { v.shouldBlock = true; v.action = L"block"; }
+            }
+            else if (HeuristicMode > 0) {
+                HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
+                int score = HeuristicScorer::ScoreWindow(f, v.detail);
+
+                RECT rc{}; ::GetWindowRect(hwnd, &rc);
+                v.detail += L" raw=" + HeuristicScorer::BuildRawBits(f, rc, idEventTime);
+
+                if (MLHeuristic) {
+                    v.detail += HeuristicML::GetInstance().Predict(hwnd, idEventTime) ? L" ml=Y" : L" ml=N";
                 }
+
+                v.reason = L"heuristic(" + std::to_wstring(score) + L")";
+                if (score >= HeuristicThreshold && HeuristicMode == 2) { v.shouldBlock = true; v.action = L"block"; }
             }
             else {
-                if (HeuristicMode > 0) {
-                    HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
-                    int score = HeuristicScorer::ScoreWindow(f, detail);
-
-                    std::wstring raw_bits;
-                    raw_bits += (f.hasOwner > 0) ? L'T' : L'F';
-                    raw_bits += (f.toolWin > 0) ? L'T' : L'F';
-                    raw_bits += (f.topmost > 0) ? L'T' : L'F';
-                    raw_bits += (f.noActivate > 0) ? L'T' : L'F';
-                    raw_bits += (f.resizable > 0) ? L'T' : L'F';
-                    raw_bits += (f.hasMinMax > 0) ? L'T' : L'F';
-                    raw_bits += (f.captionSysmenu > 0) ? L'T' : L'F';
-                    raw_bits += (f.titleEmpty > 0) ? L'T' : L'F';
-
-                    RECT rc{}; ::GetWindowRect(hwnd, &rc);
-                    float wPx = float(rc.right - rc.left);
-                    float hPx = float(rc.bottom - rc.top);
-                    raw_bits += (wPx < 400 && hPx < 300) ? L'T' : L'F';
-                    raw_bits += (wPx > 800 || hPx > 600) ? L'T' : L'F';
-                    raw_bits += (f.pathTemp > 0) ? L'T' : L'F';
-                    raw_bits += (f.pathRoaming > 0) ? L'T' : L'F';
-
-                    raw_bits += (f.clsHexRatio > 0.8f) ? L'T' : L'F';
-                    raw_bits += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
-                    raw_bits += (!f.path.empty() && !HeuristicScorer::IsFileSignedCached(f.path)) ? L'T' : L'F';
-
-                    LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
-                    long long idleMs = 0;
-                    if (::GetLastInputInfo(&lii)) {
-                        idleMs = (long long)idEventTime - (long long)lii.dwTime;
-                        if (idleMs < 0) idleMs = 0;
-                    }
-                    raw_bits += (idleMs > 5000) ? L'T' : L'F';
-
-                    POINT cpt{}; ::GetCursorPos(&cpt);
-                    int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
-                    int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
-                    long long d2 = (long long)dx * dx + (long long)dy * dy;
-                    raw_bits += (d2 > 300LL * 300) ? L'T' : L'F';
-
-                    detail += L" raw=" + raw_bits;
-
-
-                    if (MLHeuristic) {
-                        bool mlPopup = HeuristicML::GetInstance().Predict(hwnd, idEventTime);
-                        detail += L" ml=";
-                        detail += mlPopup ? L'Y' : L'N';
-                    }
-
-                    reason = L"heuristic(" + std::to_wstring(score) + L")";
-                    if (score >= HeuristicThreshold && HeuristicMode == 2) {
-                        shouldBlock = true;
-                        action = L"block";
-                    }
-                }
-                else {
-                    reason = L"heuristic_off";
-                }
+                v.reason = L"heuristic_off";
             }
 
-            bool shouldLog = VerboseLog;
-            if (!shouldLog) {
-                if (shouldBlock || matchResult == 1 || matchResult == 2) {
-                    shouldLog = true;
+            v.shouldLog = VerboseLog || v.shouldBlock || v.matchResult == 1 || v.matchResult == 2;
+            return v;
+        }
+
+        inline void WriteEventLog(HWND hwnd, DWORD idEvent, EventVerdict const& v)
+        {
+            std::wstring logMsg = L"action=" + v.action +
+                L" | ev=" + (idEvent == EVENT_OBJECT_SHOW ? L"SHOW" : L"FG") +
+                L" | reason=" + v.reason;
+            if (!v.detail.empty()) logMsg += L" | " + v.detail;
+            logMsg += L" | title=" + GetTitle(hwnd) +
+                L" | class=" + GetClass(hwnd) + L" | exe=" + GetProcessName(hwnd);
+            Log(logMsg);
+        }
+
+        inline void ScheduleForceKill(HWND hwnd)
+        {
+            std::thread([hwnd]() {
+                ::Sleep(400);
+                if (!::IsWindow(hwnd)) return;
+                DWORD pid = 0;
+                ::GetWindowThreadProcessId(hwnd, &pid);
+                if (!pid) return;
+                HANDLE hProcess = ::OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pid);
+                if (!hProcess) return;
+                WCHAR path[MAX_PATH] = {};
+                DWORD size = MAX_PATH;
+                if (::QueryFullProcessImageNameW(hProcess, 0, path, &size)) {
+                    std::wstring p = path;
+                    std::transform(p.begin(), p.end(), p.begin(), ::towlower);
+                    bool isSystemPath = (p.find(L"c:\\windows\\") == 0) ||
+                        (p.find(L"c:\\program files\\") == 0) ||
+                        (p.find(L"c:\\program files (x86)\\") == 0);
+                    if (!isSystemPath) ::TerminateProcess(hProcess, 0);
                 }
-            }
+                ::CloseHandle(hProcess);
+                }).detach();
+        }
 
-            if (shouldLog) {
-                std::wstring logMsg = L"action=" + action +
-                    L" | ev=" + (idEvent == EVENT_OBJECT_SHOW ? L"SHOW" : L"FG") +
-                    L" | reason=" + reason;
-                if (!detail.empty()) {
-                    logMsg += L" | " + detail;
-                }
-                logMsg += L" | title=" + GetTitle(hwnd) +
-                    L" | class=" + GetClass(hwnd) + L" | exe=" + GetProcessName(hwnd);
-
-                Log(logMsg);
-            }
-
-            if (shouldBlock) {
-                ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
-                ::ShowWindow(hwnd, SW_HIDE);
-
-                if (matchResult == 2) {
-                    std::thread([hwnd]() {
-                        ::Sleep(400);
-                        if (::IsWindow(hwnd)) {
-                            DWORD pid = 0;
-                            ::GetWindowThreadProcessId(hwnd, &pid);
-                            if (pid) {
-                                HANDLE hProcess = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pid);
-                                if (hProcess) {
-                                    WCHAR path[MAX_PATH] = {};
-                                    DWORD size = MAX_PATH;
-                                    if (::QueryFullProcessImageNameW(hProcess, 0, path, &size)) {
-                                        std::wstring p = path;
-                                        std::transform(p.begin(), p.end(), p.begin(), ::towlower);
-
-                                        bool isSystemPath = (p.find(L"c:\\windows\\") == 0) ||
-                                            (p.find(L"c:\\program files\\") == 0) ||
-                                            (p.find(L"c:\\program files (x86)\\") == 0);
-
-                                        if (!isSystemPath) {
-                                            ::TerminateProcess(hProcess, 0);
-                                        }
-                                    }
-                                    ::CloseHandle(hProcess);
-                                }
-                            }
-                        }
-                        }).detach();
-                }
-            }
+        inline void EnforceBlock(HWND hwnd, int matchResult)
+        {
+            ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            ::ShowWindow(hwnd, SW_HIDE);
+            if (matchResult == 2) ScheduleForceKill(hwnd);
         }
 
         inline DWORD WINAPI ThreadMain(LPVOID) {
@@ -454,6 +410,15 @@ namespace PopupBlocker
             if (HookShow) ::UnhookWinEvent(HookShow); if (HookFg) ::UnhookWinEvent(HookFg);
             HookShow = HookFg = nullptr; return 0;
         }
+    }
+
+    inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD idEvent, HWND hwnd,
+        LONG idObject, LONG idChild, DWORD, DWORD idEventTime)
+    {
+        if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
+        detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime);
+        if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
+        if (v.shouldBlock) detail::EnforceBlock(hwnd, v.matchResult);
     }
 
     inline void Start() { if (Running.exchange(true)) return; InitSelfExe(); detail::Worker = std::thread([] { detail::ThreadMain(nullptr); }); }
