@@ -7,6 +7,7 @@
 #include <memory>
 #include <onnxruntime_cxx_api.h>
 #include "HeuristicScorer.h"
+#include "RuleTypes.h"
 
 namespace HeuristicML
 {
@@ -24,13 +25,13 @@ namespace HeuristicML
         L"svchost.exe",
     };
 
-    inline std::wstring ToLower(std::wstring s) {
+    inline std::wstring Lower(std::wstring s) {
         std::transform(s.begin(), s.end(), s.begin(), ::towlower);
         return s;
     }
 
-    inline std::wstring GetTitle(HWND hwnd) { WCHAR buf[256]{}; ::GetWindowTextW(hwnd, buf, 256); return ToLower(buf); }
-    inline std::wstring GetClass(HWND hwnd) { WCHAR buf[256]{}; ::GetClassNameW(hwnd, buf, 256); return ToLower(buf); }
+    inline std::wstring GetTitle(HWND hwnd) { WCHAR buf[256]{}; ::GetWindowTextW(hwnd, buf, 256); return Lower(buf); }
+    inline std::wstring GetClass(HWND hwnd) { WCHAR buf[256]{}; ::GetClassNameW(hwnd, buf, 256); return Lower(buf); }
     inline std::wstring GetProcessName(HWND hwnd)
     {
         DWORD pid{};
@@ -48,7 +49,7 @@ namespace HeuristicML
             name = (pos == std::wstring::npos) ? p : p.substr(pos + 1);
         }
         ::CloseHandle(h);
-        return ToLower(name);
+        return Lower(name);
     }
 
     struct MLEngine {

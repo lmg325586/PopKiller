@@ -188,18 +188,25 @@ namespace winrt::winui::implementation
                 bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
                 bool mlN = rawLine.find(L" ml=N") != std::wstring::npos;
                 if (mlY || mlN) {
+                    bool hasScore = false;
                     int score = 0;
                     auto heurPos = rawLine.find(L"heuristic(");
                     if (heurPos != std::wstring::npos) {
                         size_t endPos = rawLine.find(L')', heurPos);
                         if (endPos != std::wstring::npos) {
-                            try { score = std::stoi(rawLine.substr(heurPos + 10, endPos - heurPos - 10)); }
+                            try {
+                                score = std::stoi(rawLine.substr(heurPos + 10, endPos - heurPos - 10));
+                                hasScore = true;
+                            }
                             catch (...) {}
                         }
                     }
-                    bool heurSaysPopup = (score >= threshold);
-                    bool mlSaysPopup = mlY;
-                    if (heurSaysPopup != mlSaysPopup) passFilter = true;
+
+                    if (hasScore) {
+                        bool heurSaysPopup = (score >= threshold);
+                        bool mlSaysPopup = mlY;
+                        if (heurSaysPopup != mlSaysPopup) passFilter = true;
+                    }
                 }
             }
             else if (filterTag == L"ml_list") {
