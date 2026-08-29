@@ -154,20 +154,30 @@ namespace winrt::winui::implementation
         }
     }
 
-    void HomePage::NavCard_Tapped(IInspectable const& sender, TappedRoutedEventArgs const&)
+    void HomePage::NavCard_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
+        winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&)
     {
-        if (auto border = sender.try_as<winrt::Microsoft::UI::Xaml::Controls::Border>()) {
+        // 1. 向上遍历视觉树，找到带 Tag 的 Border（防止点到内部文字导致 sender 不是 Border）
+        auto element = sender.try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>();
+        winrt::Microsoft::UI::Xaml::Controls::Border border = nullptr;
+        while (element) {
+            if (border = element.try_as<winrt::Microsoft::UI::Xaml::Controls::Border>()) break;
+            element = element.Parent().try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>();
+        }
+
+        if (border) {
             if (auto tagObj = border.Tag()) {
                 auto tag = winrt::unbox_value<winrt::hstring>(tagObj);
-                
-                // 1. 记录需要聚焦的目标
+
+                // 2. 设置聚焦目标
                 winrt::winui::implementation::App::PendingSettingsFocus = tag.c_str();
-                
-                // 2. 导航到设置页（参照 GoToBlocker_Tapped 的写法，先转型到 MainWindow）
-                auto window = winrt::winui::implementation::App::window;
-                if (auto mainWindow = window.try_as<winrt::winui::MainWindow>())
-                {
-                    mainWindow.NavigateToTag(L"Settings");
+
+                // 3. 导航：投影类型上没有 NavigateToTag，走实现类指针
+                if (auto window = winrt::winui::implementation::App::window) {
+                    if (auto mainWin = window.try_as<winui::MainWindow>()) {
+                        winrt::get_self<winrt::winui::implementation::MainWindow>(mainWin)
+                            ->NavigateToTag(L"Settings");
+                    }
                 }
             }
         }

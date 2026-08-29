@@ -167,6 +167,12 @@ namespace winrt::winui::implementation
 
     void MainWindow::NavigateToTag(hstring const& tag)
     {
+        if (tag == L"Settings")
+        {
+            NavView().SelectedItem(NavView().SettingsItem());
+            return;
+        }
+
         auto items = NavView().MenuItems();
         for (uint32_t i = 0; i < items.Size(); ++i)
         {
