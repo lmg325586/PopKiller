@@ -378,4 +378,9 @@ namespace winrt::winui::implementation
         std::wstring msg = (whitelist ? L"已添加白名单规则：进程 " : L"已添加黑名单规则：进程 ") + s.exe;
         MessageBoxW(nullptr, msg.c_str(), L"提示", MB_OK | MB_ICONINFORMATION);
     }
+
+    BlockLogPage::~BlockLogPage()
+    {
+        if (m_timer) m_timer.Stop();
+    }
 }

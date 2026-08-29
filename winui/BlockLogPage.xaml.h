@@ -11,6 +11,7 @@ namespace winrt::winui::implementation
     struct BlockLogPage : BlockLogPageT<BlockLogPage>
     {
         BlockLogPage();
+        ~BlockLogPage();
 
         void Refresh_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);

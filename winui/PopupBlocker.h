@@ -33,6 +33,8 @@ namespace PopupBlocker
     inline bool VerboseLog = false;
     inline bool MLHeuristic = false;
 
+    inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
+
     inline std::wstring LogPath()
     {
         WCHAR path[MAX_PATH]{};
@@ -85,6 +87,26 @@ namespace PopupBlocker
         SaveRulesJson(newRules, CommunityRemoved);
         std::lock_guard lock(RulesMutex);
         Rules = newRules;
+    }
+
+    inline bool AddWhitelistExe(std::wstring const& exe)
+    {
+        Rule r;
+        r.isWhitelist = true;
+        r.field = RuleField::Exe;
+        r.mode = MatchMode::Exact;
+        r.pattern = Lower(exe);
+
+        std::vector<Rule> rules;
+        { std::lock_guard lock(RulesMutex); rules = Rules; }
+
+        std::wstring k = RuleKey(r);
+        if (std::any_of(rules.begin(), rules.end(),
+            [&](Rule const& e) { return RuleKey(e) == k; })) return false;
+
+        rules.push_back(r);
+        SaveRules(rules);
+        return true;
     }
 
     inline void SyncFromSettings()
@@ -418,7 +440,13 @@ namespace PopupBlocker
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
         detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime);
         if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
-        if (v.shouldBlock) detail::EnforceBlock(hwnd, v.matchResult);
+        if (v.shouldBlock) {
+            detail::EnforceBlock(hwnd, v.matchResult);
+
+            if (BlockOccurredCallback) {
+                BlockOccurredCallback(detail::GetProcessName(hwnd), detail::GetTitle(hwnd), v.matchResult);
+            }
+        }
     }
 
     inline void Start() { if (Running.exchange(true)) return; InitSelfExe(); detail::Worker = std::thread([] { detail::ThreadMain(nullptr); }); }
