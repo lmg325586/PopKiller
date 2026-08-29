@@ -77,6 +77,49 @@
                 </Grid>
             </Border>
 
+            <!-- 3. 常用设置快捷导航 -->
+            <StackPanel Spacing="12" MaxWidth="800" HorizontalAlignment="Left">
+                <TextBlock Text="常用设置" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                
+                <Grid ColumnSpacing="16" ColumnDefinitions="*,*,*">
+                    <Border Grid.Column="0" Padding="20" CornerRadius="8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            Tag="MLHeuristic" Tapped="NavCard_Tapped">
+                        <StackPanel Spacing="8">
+                            <FontIcon Glyph="&#xE9F5;" FontSize="24" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="静态 ML 启发" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock Text="启用双模型影子打分与记录"
+                                       FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Padding="20" CornerRadius="8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            Tag="ForceBlock" Tapped="NavCard_Tapped">
+                        <StackPanel Spacing="8">
+                            <FontIcon Glyph="&#xE72E;" FontSize="24" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="启发式强杀" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock Text="无视分数阈值，强制拦截命中项"
+                                       FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2" Padding="20" CornerRadius="8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            Tag="AutoStart" Tapped="NavCard_Tapped">
+                        <StackPanel Spacing="8">
+                            <FontIcon Glyph="&#xE7E8;" FontSize="24" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="开机自启动" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock Text="随系统启动并在后台静默运行"
+                                       FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+
         </StackPanel>
     </ScrollViewer>
 </Page>

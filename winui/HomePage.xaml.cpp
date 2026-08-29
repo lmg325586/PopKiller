@@ -153,4 +153,21 @@ namespace winrt::winui::implementation
             mainWindow.NavigateToTag(L"Blocker");
         }
     }
+
+    void HomePage::NavCard_Tapped(IInspectable const& sender, TappedRoutedEventArgs const&)
+    {
+        if (auto border = sender.try_as<winrt::Microsoft::UI::Xaml::Controls::Border>()) {
+            if (auto tagObj = border.Tag()) {
+                auto tag = winrt::unbox_value<winrt::hstring>(tagObj);
+                
+                // 1. 记录需要聚焦的目标
+                winrt::winui::implementation::App::PendingSettingsFocus = tag.c_str();
+                
+                // 2. 导航到设置页
+                if (auto window = winrt::winui::implementation::App::window) {
+                    window.NavigateToTag(L"Settings");
+                }
+            }
+        }
+    }
 }
