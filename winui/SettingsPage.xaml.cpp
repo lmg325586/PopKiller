@@ -48,6 +48,7 @@ namespace winrt::winui::implementation
         ThemeComboBox().SelectedIndex(AppTheme::Index);
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
         MLHeuristicToggle().IsOn(PopupBlocker::MLHeuristic);
+        ToastNotifyToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1);
 
         m_initialized = true;
 
@@ -149,5 +150,13 @@ namespace winrt::winui::implementation
         AppSettings::WriteInt(L"Blocker", L"MLHeuristic", on ? 1 : 0);
         PopupBlocker::MLHeuristic = on;
         if (on) HeuristicML::GetInstance().Init();
+    }
+
+    void SettingsPage::ToastNotifyToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_initialized) return;
+        bool on = ToastNotifyToggle().IsOn();
+        AppSettings::WriteInt(L"Blocker", L"ToastNotify", on ? 1 : 0);
+        PopupBlocker::ToastNotify = on;
     }
 }

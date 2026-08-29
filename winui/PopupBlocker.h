@@ -27,6 +27,7 @@ namespace PopupBlocker
     inline std::function<void()> EnabledChangedCallback;
     inline bool ForceBlock = false;
     inline std::wstring SelfExe;
+    inline bool ToastNotify = true;
 
     inline int HeuristicMode = 0;
     inline int HeuristicThreshold = 70;
@@ -116,6 +117,7 @@ namespace PopupBlocker
         HeuristicThreshold = AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70);
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
         MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
+        ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
 
         EnsureDefaultRules();
         std::vector<Rule> rules;

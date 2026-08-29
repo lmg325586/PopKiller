@@ -191,6 +191,7 @@ namespace winrt::winui::implementation
         }
 
         PopupBlocker::BlockOccurredCallback = [](std::wstring const& exe, std::wstring const& title, int matchResult) {
+            if (!PopupBlocker::ToastNotify) return;
             try {
                 std::wstring toastTitle = (matchResult == 2) ? L"已拦截黑名单弹窗" : L"拦截弹窗";
                 std::wstring actionsXml;

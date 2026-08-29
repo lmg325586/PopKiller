@@ -27,6 +27,8 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void MLHeuristicToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
+        void ToastNotifyToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
     };
 }
 

@@ -11,5 +11,6 @@ namespace winui
         void VerboseLogToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void AutoStartToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void MLHeuristicToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs e);
+        void ToastNotifyToggle_Toggled(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
     }
 }

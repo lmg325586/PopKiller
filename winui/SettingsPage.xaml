@@ -6,33 +6,22 @@
     <ScrollViewer Padding="24,0">
         <StackPanel Spacing="24" MaxWidth="720" HorizontalAlignment="Left" Padding="0,24">
 
-            <TextBlock Text="设置"
-                       Style="{StaticResource TitleTextBlockStyle}"/>
+            <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}"/>
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="20,16">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="外观"
-                               Style="{StaticResource SubtitleTextBlockStyle}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="主题材质"
-                                       Style="{StaticResource BodyTextBlockStyle}"/>
+                    BorderThickness="1" CornerRadius="8" Padding="20,16">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="外观" Style="{StaticResource SubtitleTextBlockStyle}"/>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="主题材质" Style="{StaticResource BodyTextBlockStyle}"/>
                             <TextBlock Text="选择窗口背景材质，Mica 为半透明云母效果。"
                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap"/>
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
                         </StackPanel>
-                        <ComboBox x:Name="ThemeComboBox" Width="140"
-                                  Grid.Column="1"
-                                  VerticalAlignment="Center"
+                        <ComboBox x:Name="ThemeComboBox" Width="140" Grid.Column="1" VerticalAlignment="Center"
                                   SelectionChanged="ThemeComboBox_SelectionChanged">
                             <ComboBoxItem Content="默认"/>
                             <ComboBoxItem Content="Mica"/>
@@ -43,141 +32,124 @@
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="20,16">
+                    BorderThickness="1" CornerRadius="8" Padding="20,16">
                 <StackPanel Spacing="16">
-                    <TextBlock Text="拦截设置"
-                               Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="拦截设置" Style="{StaticResource SubtitleTextBlockStyle}"/>
 
-                    <ToggleSwitch x:Name="ForceBlockToggle"
-                                  Header="命中规则一律拦截"
-                                  OffContent="仅拦截弹窗形态"
-                                  OnContent="命中即拦截"
-                                  Toggled="ForceBlockToggle_Toggled"/>
-                    <TextBlock Text="关闭时，黑名单规则仅对具有弹窗特征（工具窗口、无最小化按钮等）的窗口生效；开启后，命中黑名单规则的窗口一律拦截。"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               Margin="0,-8,0,0"/>
-
-
-                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="启发式拦截"
-                                       Style="{StaticResource BodyTextBlockStyle}"/>
-                            <TextBlock Text="根据窗口特征自动识别未知弹窗"
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="拦截通知" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="拦截到弹窗时，在系统右下角弹出通知提示。"
                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap"/>
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="ToastNotifyToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="开" OffContent="关" Toggled="ToastNotifyToggle_Toggled"/>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="命中规则一律拦截" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="关闭时仅拦截弹窗形态；开启后命中黑名单即拦截。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="ForceBlockToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="开" OffContent="关" Toggled="ForceBlockToggle_Toggled"/>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="启发式拦截" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="根据窗口特征自动识别未知弹窗。启用：超阈值拦截；仅记录：只写日志。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
                         </StackPanel>
                         <ComboBox x:Name="HeuristicModeCombo" SelectedIndex="0" Width="120"
-                                  Grid.Column="1"
-                                  VerticalAlignment="Center"
+                                  Grid.Column="1" VerticalAlignment="Center"
                                   SelectionChanged="HeuristicModeCombo_SelectionChanged">
                             <ComboBoxItem Content="关闭"/>
                             <ComboBoxItem Content="启用"/>
                             <ComboBoxItem Content="仅记录"/>
                         </ComboBox>
                     </Grid>
-                    <ToggleSwitch x:Name="MLHeuristicToggle"
-                      Header="静态机器学习启发"
-                      OnContent="开" OffContent="关"
-                      Toggled="MLHeuristicToggle_Toggled" />
-                    <TextBlock Text="启用：分数超过阈值时自动拦截；仅记录：只写入日志不执行拦截，用于调参和观察。"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               Margin="0,-8,0,0"/>
 
-                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="静态机器学习" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="启用双模型影子打分，辅助启发式识别。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="MLHeuristicToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="开" OffContent="关" Toggled="MLHeuristicToggle_Toggled"/>
+                    </Grid>
 
-                    <ToggleSwitch x:Name="VerboseLogToggle"
-                                  Header="详细日志"
-                                  OnContent="记录所有窗口"
-                                  OffContent="仅记录拦截与命中"
-                                  Toggled="VerboseLogToggle_Toggled"/>
-                    <TextBlock Text="开启后，所有经过评估的窗口都会写入 blocklog.txt，包括未被拦截的窗口；关闭时仅记录被拦截或命中规则的窗口。"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="Wrap"
-                               Margin="0,-8,0,0"/>
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="详细日志" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="开启后记录所有经过评估的窗口，关闭时仅记录命中或拦截的窗口。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="VerboseLogToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="开" OffContent="关" Toggled="VerboseLogToggle_Toggled"/>
+                    </Grid>
                 </StackPanel>
             </Border>
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="20,16">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="常规"
-                               Style="{StaticResource SubtitleTextBlockStyle}"/>
-                    <ToggleSwitch x:Name="AutoStartToggle"
-                                  Header="开机自启"
-                                  OnContent="开" OffContent="关"
-                                  Toggled="AutoStartToggle_Toggled"/>
+                    BorderThickness="1" CornerRadius="8" Padding="20,16">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="常规" Style="{StaticResource SubtitleTextBlockStyle}"/>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="开机自启" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="随系统启动并在后台静默运行。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="开" OffContent="关" Toggled="AutoStartToggle_Toggled"/>
+                    </Grid>
                 </StackPanel>
             </Border>
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="20,16">
+                    BorderThickness="1" CornerRadius="8" Padding="20,16">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="关于"
-                               Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="关于" Style="{StaticResource SubtitleTextBlockStyle}"/>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="作者"
-                                   Style="{StaticResource BodyTextBlockStyle}"
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Text="作者" Style="{StaticResource BodyTextBlockStyle}" 
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Grid.Column="1" Margin="16,0,0,0"
-                                   Style="{StaticResource BodyTextBlockStyle}">
+                        <TextBlock Grid.Column="1" Margin="16,0,0,0" Style="{StaticResource BodyTextBlockStyle}">
                             <Hyperlink NavigateUri="https://github.com/lmg325586">
                                 <Run Text="lmg325586"/>
                             </Hyperlink>
                         </TextBlock>
                     </Grid>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="许可证"
-                                   Style="{StaticResource BodyTextBlockStyle}"
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Text="许可证" Style="{StaticResource BodyTextBlockStyle}" 
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <HyperlinkButton Content="MIT License"
-                                         Grid.Column="1"
-                                         Padding="0"
-                                         Margin="12,-4,0,0"
-                                         HorizontalAlignment="Left"
-                                         Click="LicenseLink_Click"/>
+                        <HyperlinkButton Content="MIT License" Grid.Column="1" Padding="0" Margin="12,-4,0,0"
+                                         HorizontalAlignment="Left" Click="LicenseLink_Click"/>
                     </Grid>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="版本"
-                                   Style="{StaticResource BodyTextBlockStyle}"
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Text="版本" Style="{StaticResource BodyTextBlockStyle}" 
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="Beta 0.5"
-                                   Grid.Column="1"
-                                   Margin="16,0,0,0"
+                        <TextBlock Text="Beta 0.5" Grid.Column="1" Margin="16,0,0,0" 
                                    Style="{StaticResource BodyTextBlockStyle}"/>
                     </Grid>
 
@@ -185,8 +157,7 @@
 
                     <TextBlock Text="开发：Qwen-3.8-max、DeepSeek-V4"
                                Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="Wrap"/>
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 
