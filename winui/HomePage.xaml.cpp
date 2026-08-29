@@ -101,6 +101,11 @@ namespace winrt::winui::implementation
                 ClipToSelf(GlowCanvas2());
             });
 
+        GlowCard3().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
+            {
+                ClipToSelf(GlowCanvas3());
+            });
+
         uint64_t v = std::stoull(winrt::to_string(
             winrt::Windows::System::Profile::AnalyticsInfo::VersionInfo().DeviceFamilyVersion()));
         uint16_t build = static_cast<uint16_t>((v & 0x00000000FFFF0000) >> 16);
@@ -137,12 +142,15 @@ namespace winrt::winui::implementation
             { GlowLayer5(), GlowLayer4(), GlowLayer3(), GlowLayer2(), GlowLayer1() }, e);
         UpdateGlow(GlowCard2(), GlowCanvas2(),
             { Glow2Layer5(), Glow2Layer4(), Glow2Layer3(), Glow2Layer2(), Glow2Layer1() }, e);
+        UpdateGlow(GlowCard3(), GlowCanvas3(),
+            { Glow3Layer5(), Glow3Layer4(), Glow3Layer3(), Glow3Layer2(), Glow3Layer1() }, e);
     }
 
     void HomePage::RootPointerExited(IInspectable const&, PointerRoutedEventArgs const&)
     {
         GlowCanvas().Opacity(0.0);
         GlowCanvas2().Opacity(0.0);
+        GlowCanvas3().Opacity(0.0);
     }
 
     void HomePage::GoToBlocker_Tapped(IInspectable const&, TappedRoutedEventArgs const&)
@@ -154,10 +162,22 @@ namespace winrt::winui::implementation
         }
     }
 
+    void HomePage::GoToSettings_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
+        winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&)
+    {
+        auto window = winrt::winui::implementation::App::window;
+        if (window)
+        {
+            if (auto mainWindow = window.try_as<winrt::winui::MainWindow>())
+            {
+                mainWindow.NavigateToTag(L"Settings");
+            }
+        }
+    }
+
     void HomePage::NavCard_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
         winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&)
     {
-        // 1. 向上遍历视觉树，找到带 Tag 的 Border（防止点到内部文字导致 sender 不是 Border）
         auto element = sender.try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>();
         winrt::Microsoft::UI::Xaml::Controls::Border border = nullptr;
         while (element) {
@@ -169,10 +189,8 @@ namespace winrt::winui::implementation
             if (auto tagObj = border.Tag()) {
                 auto tag = winrt::unbox_value<winrt::hstring>(tagObj);
 
-                // 2. 设置聚焦目标
                 winrt::winui::implementation::App::PendingSettingsFocus = tag.c_str();
 
-                // 3. 导航：投影类型上没有 NavigateToTag，走实现类指针
                 if (auto window = winrt::winui::implementation::App::window) {
                     if (auto mainWin = window.try_as<winui::MainWindow>()) {
                         winrt::get_self<winrt::winui::implementation::MainWindow>(mainWin)

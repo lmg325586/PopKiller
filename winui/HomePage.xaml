@@ -5,121 +5,102 @@
 
     <ScrollViewer>
         <StackPanel x:Name="RootPanel" Background="Transparent"
-                    Padding="32,24" Spacing="16"
+                    Padding="24,16"
                     PointerMoved="RootPointerMoved"
                     PointerExited="RootPointerExited">
 
-            <TextBlock Text="Home" Style="{StaticResource TitleTextBlockStyle}"/>
+            <TextBlock Text="Home" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,12"/>
 
-            <Border x:Name="GlowCard"
-                    Background="Transparent"
-                    HorizontalAlignment="Left"
-                    MaxWidth="800">
-                <Grid>
+            <!-- 统一宽度容器：三张卡同宽、左对齐、上限 800 -->
+            <StackPanel HorizontalAlignment="Left" MaxWidth="800" Spacing="12">
 
-                    <Canvas x:Name="GlowCanvas" Opacity="0" IsHitTestVisible="False">
+                <Border x:Name="GlowCard" Background="Transparent">
+                    <Grid>
+                        <Canvas x:Name="GlowCanvas" Opacity="0" IsHitTestVisible="False">
+                            <Ellipse x:Name="GlowLayer5" Width="240" Height="240" Fill="#19D9D9D9"/>
+                            <Ellipse x:Name="GlowLayer4" Width="200" Height="200" Fill="#26D9D9D9"/>
+                            <Ellipse x:Name="GlowLayer3" Width="160" Height="160" Fill="#40D9D9D9"/>
+                            <Ellipse x:Name="GlowLayer2" Width="120" Height="120" Fill="#59D9D9D9"/>
+                            <Ellipse x:Name="GlowLayer1" Width="80"  Height="80"  Fill="#73D9D9D9"/>
+                        </Canvas>
 
-                        <Ellipse x:Name="GlowLayer5" Width="240" Height="240" Fill="#19D9D9D9"/>
-                        <Ellipse x:Name="GlowLayer4" Width="200" Height="200" Fill="#26D9D9D9"/>
-                        <Ellipse x:Name="GlowLayer3" Width="160" Height="160" Fill="#40D9D9D9"/>
-                        <Ellipse x:Name="GlowLayer2" Width="120" Height="120" Fill="#59D9D9D9"/>
-                        <Ellipse x:Name="GlowLayer1" Width="80"  Height="80"  Fill="#73D9D9D9"/>
-                    </Canvas>
-
-
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            Margin="2">
-                        <StackPanel Spacing="0" Padding="24">
-                            <TextBlock Text="Microsoft Windows" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
-                            <TextBlock x:Name="VersionLineText" FontSize="13" Margin="0,0,0,6"/>
-                            <TextBlock x:Name="EditionText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,28"/>
-                            <TextBlock x:Name="OwnerText" FontSize="13" Margin="24,0,0,4"/>
-                            <TextBlock x:Name="OrgText" FontSize="13" Margin="24,0,0,0"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </Border>
-
-            <Border x:Name="GlowCard2"
-                    Background="Transparent"
-                    HorizontalAlignment="Left"
-                    MaxWidth="800"
-                    Tapped="GoToBlocker_Tapped">
-                <Grid>
-                    <Canvas x:Name="GlowCanvas2" Opacity="0" IsHitTestVisible="False">
-                        <Ellipse x:Name="Glow2Layer5" Width="240" Height="240" Fill="#19D9D9D9"/>
-                        <Ellipse x:Name="Glow2Layer4" Width="200" Height="200" Fill="#26D9D9D9"/>
-                        <Ellipse x:Name="Glow2Layer3" Width="160" Height="160" Fill="#40D9D9D9"/>
-                        <Ellipse x:Name="Glow2Layer2" Width="120" Height="120" Fill="#59D9D9D9"/>
-                        <Ellipse x:Name="Glow2Layer1" Width="80"  Height="80"  Fill="#73D9D9D9"/>
-                    </Canvas>
-
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1" Margin="2" Padding="24">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <FontIcon Glyph="&#xEA18;" FontSize="32" Margin="0,0,24,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                                <TextBlock Text="弹窗拦截" FontSize="16" FontWeight="SemiBold"/>
-                                <TextBlock Text="配置拦截规则 自动关闭广告与干扰弹窗"
-                                           FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" Margin="2">
+                            <StackPanel Spacing="0" Padding="24">
+                                <TextBlock Text="Microsoft Windows" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                                <TextBlock x:Name="VersionLineText" FontSize="13" Margin="0,0,0,6"/>
+                                <TextBlock x:Name="EditionText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,28"/>
+                                <TextBlock x:Name="OwnerText" FontSize="13" Margin="24,0,0,4"/>
+                                <TextBlock x:Name="OrgText" FontSize="13" Margin="24,0,0,0"/>
                             </StackPanel>
-                        </Grid>
-                    </Border>
-                </Grid>
-            </Border>
+                        </Border>
+                    </Grid>
+                </Border>
 
-            <!-- 3. 常用设置快捷导航 -->
-            <StackPanel Spacing="12" MaxWidth="800" HorizontalAlignment="Left">
-                <TextBlock Text="常用设置" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0"/>
-                
-                <Grid ColumnSpacing="16" ColumnDefinitions="*,*,*">
-                    <Border Grid.Column="0" Padding="20" CornerRadius="8"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            Tag="MLHeuristic" Tapped="NavCard_Tapped">
-                        <StackPanel Spacing="8">
-                            <FontIcon Glyph="&#xE9F5;" FontSize="24" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-                            <TextBlock Text="静态 ML 启发" FontSize="14" FontWeight="SemiBold"/>
-                            <TextBlock Text="启用双模型影子打分与记录"
-                                       FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        </StackPanel>
-                    </Border>
+                <Border x:Name="GlowCard2" Background="Transparent" Tapped="GoToBlocker_Tapped">
+                    <Grid>
+                        <Canvas x:Name="GlowCanvas2" Opacity="0" IsHitTestVisible="False">
+                            <Ellipse x:Name="Glow2Layer5" Width="240" Height="240" Fill="#19D9D9D9"/>
+                            <Ellipse x:Name="Glow2Layer4" Width="200" Height="200" Fill="#26D9D9D9"/>
+                            <Ellipse x:Name="Glow2Layer3" Width="160" Height="160" Fill="#40D9D9D9"/>
+                            <Ellipse x:Name="Glow2Layer2" Width="120" Height="120" Fill="#59D9D9D9"/>
+                            <Ellipse x:Name="Glow2Layer1" Width="80"  Height="80"  Fill="#73D9D9D9"/>
+                        </Canvas>
 
-                    <Border Grid.Column="1" Padding="20" CornerRadius="8"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            Tag="ForceBlock" Tapped="NavCard_Tapped">
-                        <StackPanel Spacing="8">
-                            <FontIcon Glyph="&#xE72E;" FontSize="24" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-                            <TextBlock Text="启发式强杀" FontSize="14" FontWeight="SemiBold"/>
-                            <TextBlock Text="无视分数阈值，强制拦截命中项"
-                                       FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        </StackPanel>
-                    </Border>
+                        <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" Margin="2" Padding="24">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="2" Padding="20" CornerRadius="8"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            Tag="AutoStart" Tapped="NavCard_Tapped">
-                        <StackPanel Spacing="8">
-                            <FontIcon Glyph="&#xE7E8;" FontSize="24" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-                            <TextBlock Text="开机自启动" FontSize="14" FontWeight="SemiBold"/>
-                            <TextBlock Text="随系统启动并在后台静默运行"
-                                       FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
+                                <FontIcon Glyph="&#xEA18;" FontSize="32" Margin="0,0,24,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                    <TextBlock Text="弹窗拦截" FontSize="16" FontWeight="SemiBold"/>
+                                    <TextBlock Text="配置拦截规则 自动关闭广告与干扰弹窗"
+                                               FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="GlowCard3" Background="Transparent" Tapped="GoToSettings_Tapped">
+                    <Grid>
+                        <Canvas x:Name="GlowCanvas3" Opacity="0" IsHitTestVisible="False">
+                            <Ellipse x:Name="Glow3Layer5" Width="240" Height="240" Fill="#19D9D9D9"/>
+                            <Ellipse x:Name="Glow3Layer4" Width="200" Height="200" Fill="#26D9D9D9"/>
+                            <Ellipse x:Name="Glow3Layer3" Width="160" Height="160" Fill="#40D9D9D9"/>
+                            <Ellipse x:Name="Glow3Layer2" Width="120" Height="120" Fill="#59D9D9D9"/>
+                            <Ellipse x:Name="Glow3Layer1" Width="80"  Height="80"  Fill="#73D9D9D9"/>
+                        </Canvas>
+
+                        <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" Margin="2" Padding="24">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <FontIcon Glyph="&#xE713;" FontSize="32" Margin="0,0,24,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                    <TextBlock Text="应用设置" FontSize="16" FontWeight="SemiBold"/>
+                                    <TextBlock Text="管理静态 ML 启发、拦截阈值、开机自启与外观主题"
+                                               FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
             </StackPanel>
-
         </StackPanel>
     </ScrollViewer>
 </Page>

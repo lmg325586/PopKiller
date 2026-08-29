@@ -12,6 +12,8 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
         void RootPointerExited(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
+        void GoToSettings_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& e);
 
         void GoToBlocker_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& args);
