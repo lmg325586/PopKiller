@@ -8,5 +8,6 @@ namespace winui
         void RootPointerMoved(Object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args);
         void RootPointerExited(Object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args);
         void GoToBlocker_Tapped(Object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs args);
+        void NavCard_Tapped(Object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs args);
     }
 }

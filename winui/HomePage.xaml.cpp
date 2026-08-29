@@ -163,9 +163,11 @@ namespace winrt::winui::implementation
                 // 1. 记录需要聚焦的目标
                 winrt::winui::implementation::App::PendingSettingsFocus = tag.c_str();
                 
-                // 2. 导航到设置页
-                if (auto window = winrt::winui::implementation::App::window) {
-                    window.NavigateToTag(L"Settings");
+                // 2. 导航到设置页（参照 GoToBlocker_Tapped 的写法，先转型到 MainWindow）
+                auto window = winrt::winui::implementation::App::window;
+                if (auto mainWindow = window.try_as<winrt::winui::MainWindow>())
+                {
+                    mainWindow.NavigateToTag(L"Settings");
                 }
             }
         }
