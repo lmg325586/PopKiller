@@ -15,6 +15,8 @@ namespace winrt::winui::implementation
 
         void GoToBlocker_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& args);
+        void NavCard_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& args);
     };
 }
 
