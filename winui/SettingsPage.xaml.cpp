@@ -58,27 +58,6 @@ namespace winrt::winui::implementation
         VersionTextBlock().Text(APP_VERSION_STRING);
 
         m_initialized = true;
-
-        // 页面加载完成后处理快捷导航的聚焦
-        this->Loaded([this](auto&&, auto&&) {
-            if (!winrt::winui::implementation::App::PendingSettingsFocus.empty()) {
-                std::wstring target = winrt::winui::implementation::App::PendingSettingsFocus;
-                // 读取后立即清空，防止下次正常进入页面时误触发
-                winrt::winui::implementation::App::PendingSettingsFocus.clear(); 
-                
-                winrt::Microsoft::UI::Xaml::Controls::Control ctrl = nullptr;
-                if (target == L"MLHeuristic") ctrl = MLHeuristicToggle();
-                else if (target == L"ForceBlock") ctrl = ForceBlockToggle();
-                else if (target == L"AutoStart") ctrl = AutoStartToggle();
-                
-                if (ctrl) {
-                    // 丢进 UI 队列延迟执行，确保页面完全渲染后再聚焦
-                    DispatcherQueue().TryEnqueue([ctrl]() {
-                        ctrl.Focus(winrt::Microsoft::UI::Xaml::FocusState::Programmatic);
-                    });
-                }
-            }
-        });
     }
 
     void SettingsPage::LicenseLink_Click(IInspectable const&, RoutedEventArgs const&)

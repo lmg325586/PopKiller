@@ -15,7 +15,5 @@ namespace winrt::winui::implementation
         winrt::Microsoft::Windows::AppLifecycle::AppInstance m_keyInstance{ nullptr };
 
         inline static Microsoft::UI::Xaml::Window window{ nullptr };
-
-        inline static std::wstring PendingSettingsFocus;
     };
 }

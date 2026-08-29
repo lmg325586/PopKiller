@@ -174,30 +174,4 @@ namespace winrt::winui::implementation
             }
         }
     }
-
-    void HomePage::NavCard_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
-        winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&)
-    {
-        auto element = sender.try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>();
-        winrt::Microsoft::UI::Xaml::Controls::Border border = nullptr;
-        while (element) {
-            if (border = element.try_as<winrt::Microsoft::UI::Xaml::Controls::Border>()) break;
-            element = element.Parent().try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>();
-        }
-
-        if (border) {
-            if (auto tagObj = border.Tag()) {
-                auto tag = winrt::unbox_value<winrt::hstring>(tagObj);
-
-                winrt::winui::implementation::App::PendingSettingsFocus = tag.c_str();
-
-                if (auto window = winrt::winui::implementation::App::window) {
-                    if (auto mainWin = window.try_as<winui::MainWindow>()) {
-                        winrt::get_self<winrt::winui::implementation::MainWindow>(mainWin)
-                            ->NavigateToTag(L"Settings");
-                    }
-                }
-            }
-        }
-    }
 }
