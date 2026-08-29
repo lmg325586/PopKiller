@@ -228,7 +228,112 @@
 
 全局状态：`Index`（0=普通 / 1=Mica）、`TitleBarElement`（自定义标题栏元素引用）。
 
-## RuleIOPage.xaml.cpp（规则导入导出页）
+## BlockLogPage.xaml.h（拦截日志页）
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `BlockLogPage()` | 无 | 无（构造） | 加载标注数据 + 创建 1s 定时器 + 初始加载日志 |
+| `Refresh_Click(sender, e)` | 点击事件 | `void` | 手动重新加载日志文件 |
+| `Clear_Click(sender, e)` | 点击事件 | `void` | 截断清空日志文件并刷新显示 |
+| `LogItem_RightTapped(sender, e)` | 右键事件 | `void` | 记录选中项原始日志行，供右键菜单使用 |
+| `MarkPopup_Click(sender, e)` | 点击事件 | `void` | 将选中日志标注为「弹窗」并保存 |
+| `MarkNotPopup_Click(sender, e)` | 点击事件 | `void` | 将选中日志标注为「误关」并保存 |
+| `ExportSamples_Click(sender, e)` | 点击事件 | `void` | 导出标注数据为训练样本 JSON 文件 |
+| `AddToBlacklist_Click(sender, e)` | 点击事件 | `void` | 从选中日志提取特征生成黑名单规则 |
+| `AddToWhitelist_Click(sender, e)` | 点击事件 | `void` | 从选中日志提取特征生成白名单规则 |
+| `Filter_Changed(sender, e)` | 选择事件 | `void` | 根据筛选条件过滤日志显示 |
+| `Search_Changed(sender, e)` | 文本变更事件 | `void` | 根据搜索关键词过滤日志显示 |
+| `Load()` | 无 | `void` | 私有函数：读取日志文件并按标注前缀格式化显示 |
+| `ReloadFromFile()` | 无 | `void` | 私有函数：重新从文件加载日志内容 |
+| `ApplyFilter()` | 无 | `void` | 私有函数：应用当前筛选和搜索条件 |
+| `Timer_Tick(sender, e)` | 定时器事件 | `void` | 私有函数：每秒检测日志文件变化并自动刷新 |
+| `AddRuleFromSelection(whitelist)` | `bool`（true=白名单） | `void` | 私有函数：从选中日志生成精确匹配规则并保存 |
+
+成员变量：
+- `m_allLines`（`vector<wstring>`）：所有日志显示行
+- `m_rawLines`（`vector<wstring>`）：所有原始日志行
+- `m_selectedRaw`（`wstring`）：选中的原始日志行
+- `m_labels`（`map<wstring, Sample>`）：标注数据缓存
+- `m_selectedDisplayText`（`wstring`）：选中的显示文本
+- `m_timer`（`DispatcherTimer`）：1 秒轮询定时器
+- `m_lastWrite`（`uint64_t`）：上次检测的文件写时间
+
+## HomePage.xaml.h（首页）
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `HomePage()` | 无 | 无（构造） | 初始化组件，注册指针事件处理器 |
+| `RootPointerMoved(sender, e)` | 指针移动事件 | `void` | 更新卡片辉光效果位置 |
+| `RootPointerExited(sender, e)` | 指针离开事件 | `void` | 隐藏卡片辉光效果 |
+| `GoToBlocker_Tapped(sender, e)` | 点击事件 | `void` | 导航到拦截规则页面 |
+
+## LicensePage.xaml.h（许可页）
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `LicensePage()` | 无 | 无（构造） | 初始化组件，设置 MIT 许可证全文 |
+| `BackButton_Click(sender, e)` | 点击事件 | `void` | 返回上一页 |
+
+## MainWindow.xaml.h（主窗口）
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `MainWindow()` | 无 | 无（构造） | 初始化窗口、标题栏、托盘图标、导航视图 |
+| `NavView_SelectionChanged(sender, args)` | 导航选择事件 | `void` | 根据选中项 Tag 导航到对应页面 |
+| `NavigateToTag(tag)` | Tag 字符串 | `void` | 根据 Tag 选中对应导航项并切换页面 |
+| `NavigateFrameToTag(tag)` | Tag 字符串 | `void` | 在 Frame 中导航到对应 Tag 的页面 |
+
+成员变量：
+- `m_currentTag`（`hstring`）：当前选中的导航 Tag，默认 `L"Home"`
+
+## PopupBlockerPage.xaml.h（拦截规则页）
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `PopupBlockerPage()` | 无 | 无（构造） | 初始化规则列表、注册回调、加载社区规则 |
+| `EnableToggle_Toggled(sender, e)` | 开关事件 | `void` | 切换拦截引擎启停状态 |
+| `AddRule_Click(sender, e)` | 点击事件 | `void` | 新增或修改规则（编辑模式/新增模式） |
+| `DeleteRule_Click(sender, e)` | 点击事件 | `void` | 删除选中规则（社区规则记入墓碑） |
+| `Pick_Click(sender, e)` | 点击事件 | `void` | 启动窗口拾取器选择目标窗口填充规则字段 |
+| `SearchInput_TextChanged(sender, e)` | 文本变更事件 | `void` | 更新搜索关键词并刷新列表 |
+| `CommunityRulesToggle_Toggled(sender, e)` | 开关事件 | `void` | 切换社区规则启用状态并触发拉取 |
+| `RetryFetchButton_Click(sender, e)` | 点击事件 | `void` | 重试拉取社区规则 |
+| `EditRule_Click(sender, e)` | 点击事件 | `void` | 进入编辑模式，回填规则到输入框 |
+| `OpenIO_Click(sender, e)` | 点击事件 | `void` | 导航到规则导入导出页面 |
+| `UpdateCommunityStatus(ok, msg)` | 成功标志、消息串 | `void` | 私有函数：更新社区规则状态文本和重试按钮可见性 |
+| `RefreshList()` | 无 | `void` | 私有函数：根据搜索关键词过滤并重建规则列表 |
+| `Save()` | 无 | `void` | 私有函数：将 UI 规则保存到引擎和磁盘 |
+| `ReloadRulesFromEngine()` | 无 | `void` | 私有函数：从引擎重新加载规则到 UI 缓存 |
+| `ToEngineRule(it)` | `RuleItem` 引用 | `Rule` | 私有函数：将 UI 层 RuleItem 转换为引擎 Rule |
+
+结构体：`RuleItem { listType, fieldType, matchMode, pattern, fromCommunity }`
+
+成员变量：
+- `m_initialized`（`bool`）：初始化守卫，防止构造期间事件触发
+- `m_editingIndex`（`int`）：当前编辑的规则下标，-1 表示新增模式
+- `m_rules`（`vector<RuleItem>`）：UI 层规则缓存
+- `m_searchText`（`wstring`）：搜索关键词（小写）
+- `m_visibleIndex`（`vector<size_t>`）：列表显示下标到规则缓存下标的映射
+
+## RuleIOPage.xaml.h（规则导入导出页）
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `RuleIOPage()` | 无 | 无（默认构造） | 默认构造函数 |
+| `BackButton_Click(sender, e)` | 点击事件 | `void` | 返回拦截规则页 |
+| `ExportButton_Click(sender, e)` | 点击事件 | `void` | 导出规则到 JSON 文件（可选过滤社区规则和墓碑） |
+| `ImportButton_Click(sender, e)` | 点击事件 | `void` | 从 JSON 文件导入规则（去重合并） |
+
+## SettingsPage.xaml.h（设置页）
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `SettingsPage()` | 无 | 无（构造） | 从 ini 加载各项设置初始化 UI 控件 |
+| `ThemeComboBox_SelectionChanged(sender, e)` | 选择事件 | `void` | 切换主题（普通/Mica）并应用标题栏样式 |
+| `LicenseLink_Click(sender, e)` | 点击事件 | `void` | 导航到许可页 |
+| `ForceBlockToggle_Toggled(sender, e)` | 开关事件 | `void` | 切换强制拦截模式并同步到引擎 |
+| `HeuristicModeCombo_SelectionChanged(sender, e)` | 选择事件 | `void` | 切换启发式模式（自动拦截/仅记录）并同步 |
+| `VerboseLogToggle_Toggled(sender, e)` | 开关事件 | `void` | 切换详细日志模式并同步到引擎 |
+| `AutoStartToggle_Toggled(sender, e)` | 开关事件 | `void` | 切换开机自启（注册表操作），失败时回滚 |
+| `MLHeuristicToggle_Toggled(sender, e)` | 开关事件 | `void` | 切换 ML 启发式并尝试加载模型 |
+
+成员变量：
+- `m_initialized`（`bool`）：初始化守卫，防止构造期间事件触发
+
+## App.xaml.cpp（应用入口 & 单实例）
 匿名命名空间：
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
