@@ -11,6 +11,12 @@
 #include "SettingsPage.g.cpp"
 #endif
 
+#if __has_include("VersionInfo.h")
+#include "VersionInfo.h"
+#else
+#define APP_VERSION_STRING L"Beta 0.5"
+#endif
+
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 
@@ -49,6 +55,7 @@ namespace winrt::winui::implementation
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
         MLHeuristicToggle().IsOn(PopupBlocker::MLHeuristic);
         ToastNotifyToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1);
+        VersionTextBlock().Text(APP_VERSION_STRING);
 
         m_initialized = true;
 

@@ -362,3 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /winui/labels.json
+
+# 预生成脚本产生的头
+winui/VersionInfo.h 
