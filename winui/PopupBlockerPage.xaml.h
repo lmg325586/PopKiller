@@ -35,6 +35,10 @@ namespace winrt::winui::implementation
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_statusTimer{ nullptr };
         void StatusTimer_Tick(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Windows::Foundation::IInspectable const& e);
+        winrt::Microsoft::UI::Xaml::Controls::Button m_resumeButton{ nullptr };
+        void RefreshStatus();
+        void ResumeButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
 
     private:
         void UpdateCommunityStatus(bool ok, std::wstring const& msg);

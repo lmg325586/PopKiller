@@ -77,6 +77,9 @@ namespace winrt::winui::implementation
         m_statusTimer.Interval(std::chrono::milliseconds{ 500 });
         m_statusTimer.Tick({ this, &PopupBlockerPage::StatusTimer_Tick });
         m_statusTimer.Start();
+        m_resumeButton = winrt::Microsoft::UI::Xaml::Controls::Button();
+        m_resumeButton.Content(winrt::box_value(L"立即恢复"));
+        m_resumeButton.Click({ this, &PopupBlockerPage::ResumeButton_Click });
 
         PopupBlocker::EnsureDefaultRules();
 
@@ -202,10 +205,12 @@ namespace winrt::winui::implementation
             PopupBlocker::SyncFromSettings();
             HeuristicML::GetInstance().Init();
             PopupBlocker::Start();
+            RefreshStatus();
         }
         else
         {
             PopupBlocker::Stop();
+            RefreshStatus();
         }
     }
 
@@ -387,6 +392,11 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::StatusTimer_Tick(IInspectable const&, IInspectable const&)
     {
+        RefreshStatus();
+    }
+
+    void PopupBlockerPage::RefreshStatus()
+    {
         bool enabled = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
         bool paused = PopupBlocker::Paused.load();
 
@@ -396,6 +406,7 @@ namespace winrt::winui::implementation
             StatusInfoBar().Severity(InfoBarSeverity::Informational);
             StatusInfoBar().Title(L"拦截已关闭");
             StatusInfoBar().Message(L"当前不会拦截任何弹窗。");
+            StatusInfoBar().ActionButton(nullptr);
         }
         else if (paused) {
             StatusInfoBar().Severity(InfoBarSeverity::Warning);
@@ -410,13 +421,22 @@ namespace winrt::winui::implementation
             int minutes = totalSeconds / 60;
             int seconds = totalSeconds % 60;
 
-            std::wstring msg = L"将在 " + std::to_wstring(minutes) + L" 分 " + std::to_wstring(seconds) + L" 秒后自动恢复拦截。";
+            std::wstring msg = L"将在 " + std::to_wstring(minutes) + L" 分 "
+                + std::to_wstring(seconds) + L" 秒后自动恢复拦截。";
             StatusInfoBar().Message(winrt::hstring(msg));
+            StatusInfoBar().ActionButton(m_resumeButton);
         }
         else {
             StatusInfoBar().Severity(InfoBarSeverity::Success);
             StatusInfoBar().Title(L"拦截运行中");
             StatusInfoBar().Message(L"正在实时监控并拦截弹窗。");
+            StatusInfoBar().ActionButton(nullptr);
         }
+    }
+
+    void PopupBlockerPage::ResumeButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        PopupBlocker::ResumeNow();
+        RefreshStatus();
     }
 }
