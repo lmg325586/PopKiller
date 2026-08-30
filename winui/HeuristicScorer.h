@@ -150,18 +150,37 @@ namespace HeuristicScorer
     }
 
     inline std::mutex SigMx;
-    inline std::unordered_map<std::wstring, bool> SigCache;
+    inline std::unordered_map<std::wstring, std::pair<bool, uint64_t>> SigCache;
+    inline uint64_t SigSeq = 0;
+    constexpr size_t kSigCacheLimit = 128;
 
     inline bool IsFileSignedCached(std::wstring const& path)
     {
         {
-            std::lock_guard l(SigMx);
+            std::lock_guard<std::mutex> l(SigMx);
             auto it = SigCache.find(path);
-            if (it != SigCache.end()) return it->second;
+            if (it != SigCache.end()) {
+                it->second.second = ++SigSeq;
+                return it->second.first;
+            }
         }
         bool s = IsFileSigned(path);
-        std::lock_guard l(SigMx);
-        SigCache[path] = s;
+
+        {
+            std::lock_guard<std::mutex> l(SigMx);
+            if (SigCache.size() >= kSigCacheLimit) {
+                auto oldest = SigCache.begin();
+                for (auto it = SigCache.begin(); it != SigCache.end(); ++it) {
+                    if (it->second.second < oldest->second.second) {
+                        oldest = it;
+                    }
+                }
+                if (oldest != SigCache.end()) {
+                    SigCache.erase(oldest);
+                }
+            }
+            SigCache[path] = { s, ++SigSeq };
+        }
         return s;
     }
 
