@@ -14,14 +14,25 @@
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="20,16">
-                <StackPanel Spacing="8">
+                <StackPanel Spacing="16">
 
-                    <TextBlock Text="拦截状态"
-                               Style="{StaticResource SubtitleTextBlockStyle}"/>
-                    <ToggleSwitch x:Name="EnableToggle"
-                                  Header="启用弹窗拦截"
-                                  OnContent="开" OffContent="关"
-                                  Toggled="EnableToggle_Toggled"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="拦截状态" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="控制弹窗拦截引擎的启停与暂停。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="EnableToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="开" OffContent="关" Toggled="EnableToggle_Toggled"/>
+                    </Grid>
+
+                    <InfoBar x:Name="StatusInfoBar"
+                             IsOpen="True"
+                             IsClosable="False"
+                             Severity="Informational"
+                             Title="拦截引擎状态"
+                             Message="正在检测状态..." />
                 </StackPanel>
             </Border>
 

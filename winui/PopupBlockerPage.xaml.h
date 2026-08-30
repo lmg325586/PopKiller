@@ -3,6 +3,7 @@
 #include "PopupBlockerPage.g.h"
 #include <string>
 #include <vector>
+#include <chrono>
 #include "PopupBlocker.h"
 
 namespace winrt::winui::implementation
@@ -10,6 +11,7 @@ namespace winrt::winui::implementation
     struct PopupBlockerPage : PopupBlockerPageT<PopupBlockerPage>
     {
         PopupBlockerPage();
+        ~PopupBlockerPage();
 
         void EnableToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
@@ -29,6 +31,10 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void OpenIO_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+
+        winrt::Microsoft::UI::Xaml::DispatcherTimer m_statusTimer{ nullptr };
+        void StatusTimer_Tick(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Windows::Foundation::IInspectable const& e);
 
     private:
         void UpdateCommunityStatus(bool ok, std::wstring const& msg);
