@@ -122,6 +122,9 @@ namespace
         ReplaceAll(s, L"ev=SHOW", L"事件=出现");
         ReplaceAll(s, L"ev=FG", L"事件=焦点");
         ReplaceAll(s, L"reason=heuristic(", L"原因=启发式(");
+        ReplaceAll(s, L"reason=whitelist", L"原因=白名单");
+        ReplaceAll(s, L"reason=blacklist", L"原因=黑名单");
+        ReplaceAll(s, L"reason=heuristic_off", L"原因=启发式关闭");
         ReplaceAll(s, L"infra_class_skip", L"基础设施类名跳过");
         ReplaceAll(s, L"zero_size_skip", L"零尺寸跳过");
         ReplaceAll(s, L"raw=", L"特征=");
