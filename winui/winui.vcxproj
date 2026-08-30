@@ -355,4 +355,8 @@
     <Error Condition="!Exists('..\packages\Microsoft.WindowsAppSDK.2.4.0\build\native\Microsoft.WindowsAppSDK.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.WindowsAppSDK.2.4.0\build\native\Microsoft.WindowsAppSDK.props'))" />
     <Error Condition="!Exists('..\packages\Microsoft.WindowsAppSDK.2.4.0\build\native\Microsoft.WindowsAppSDK.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.WindowsAppSDK.2.4.0\build\native\Microsoft.WindowsAppSDK.targets'))" />
   </Target>
+    <Target Name="GenerateVersionScript" BeforeTargets="PrepareForBuild">
+		<Exec Command="echo [Version] running GenerateVersion.ps1" />
+		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\scripts\GenerateVersion.ps1&quot;" />
+	</Target>
 </Project>
