@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <functional>
+#include <vector>
 #include "PopupBlocker.h"
 #include "AppSettings.h"
 #pragma comment(lib, "shell32.lib")
@@ -30,45 +31,126 @@ namespace TrayIcon
     {
         WCHAR path[MAX_PATH]{};
         ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        HICON ic = ::ExtractIconW(::GetModuleHandleW(nullptr), path, 0);
+        HMODULE hm = ::GetModuleHandleW(nullptr);
+        HICON ic = hm ? ::ExtractIconW(hm, path, 0) : nullptr;
         if (!ic) ic = ::LoadIconW(nullptr, IDI_APPLICATION);
         return ic;
     }
 
-    // 动态更新 Tooltip
-    inline void UpdateTooltip()
+    inline HICON MakeGrayIcon(HICON src)
+    {
+        ICONINFO ii{};
+        if (!::GetIconInfo(src, &ii)) return nullptr;
+
+        BITMAP bm{};
+        int w = ::GetSystemMetrics(SM_CXSMICON), h = ::GetSystemMetrics(SM_CYSMICON);
+        if (::GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth > 0) { w = (int)bm.bmWidth; h = (int)bm.bmHeight; }
+
+        HDC hdcScreen = ::GetDC(nullptr);
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -h;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+
+        void* bits = nullptr;
+        HBITMAP hColor = ::CreateDIBSection(hdcScreen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        HICON result = nullptr;
+        if (hColor && bits) {
+            HDC hdc = ::CreateCompatibleDC(hdcScreen);
+            HBITMAP old = (HBITMAP)::SelectObject(hdc, hColor);
+            ::DrawIconEx(hdc, 0, 0, src, w, h, 0, nullptr, DI_NORMAL);
+            ::SelectObject(hdc, old);
+            ::DeleteDC(hdc);
+
+            BYTE* px = (BYTE*)bits;
+            int n = w * h;
+            bool anyAlpha = false;
+            for (int i = 0; i < n; ++i) {
+                BYTE b = px[i * 4 + 0], g = px[i * 4 + 1], r = px[i * 4 + 2];
+                BYTE y = (BYTE)((r * 77 + g * 150 + b * 29) >> 8);
+                px[i * 4 + 0] = y; px[i * 4 + 1] = y; px[i * 4 + 2] = y;
+                if (px[i * 4 + 3]) anyAlpha = true;
+            }
+
+            if (!anyAlpha && ii.hbmMask) {
+                int stride = ((w + 31) / 32) * 4;
+                std::vector<BYTE> mb((size_t)stride * h);
+                if (::GetBitmapBits(ii.hbmMask, (LONG)mb.size(), mb.data()) == (LONG)mb.size()) {
+                    for (int yy = 0; yy < h; ++yy)
+                        for (int xx = 0; xx < w; ++xx)
+                            if (!((mb[yy * stride + xx / 8] >> (7 - xx % 8)) & 1))
+                                px[(yy * w + xx) * 4 + 3] = 255;
+                }
+            }
+
+            ICONINFO ni{};
+            ni.fIcon = TRUE;
+            ni.hbmMask = ii.hbmMask;
+            ni.hbmColor = hColor;
+            result = ::CreateIconIndirect(&ni);
+        }
+
+        if (hColor) ::DeleteObject(hColor);
+        if (ii.hbmColor) ::DeleteObject(ii.hbmColor);
+        if (ii.hbmMask) ::DeleteObject(ii.hbmMask);
+        ::ReleaseDC(nullptr, hdcScreen);
+        return result;
+    }
+
+    inline HICON IconNormal{};
+    inline HICON IconGray{};
+
+    inline void EnsureIcons()
+    {
+        if (!IconNormal) IconNormal = GetIcon();
+        if (!IconGray && IconNormal) IconGray = MakeGrayIcon(IconNormal);
+    }
+
+    inline void UpdateTrayState()
     {
         if (!Visible) return;
+        EnsureIcons();
+
+        bool paused = PopupBlocker::Paused.load();
+        bool enabled = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
+        bool active = enabled && !paused;
+
         NOTIFYICONDATAW nid{};
         nid.cbSize = sizeof(nid);
         nid.hWnd = Hwnd;
         nid.uID = 1;
-        nid.uFlags = NIF_TIP;
+        nid.uFlags = NIF_TIP | NIF_ICON;
+        nid.hIcon = active ? IconNormal : IconGray;
 
-        if (PopupBlocker::Paused.load()) {
+        if (paused) {
             wcscpy_s(nid.szTip, L"PopKiller (暂停拦截中...)");
         }
         else {
-            bool on = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
-            wcscpy_s(nid.szTip, on ? L"PopKiller (运行中)" : L"PopKiller (已关闭)");
+            wcscpy_s(nid.szTip, enabled ? L"PopKiller (运行中)" : L"PopKiller (已关闭)");
         }
+
         ::Shell_NotifyIconW(NIM_MODIFY, &nid);
     }
 
     inline void Add()
     {
         if (Visible) return;
+        EnsureIcons();
+
         NOTIFYICONDATAW nid{};
         nid.cbSize = sizeof(nid);
         nid.hWnd = Hwnd;
         nid.uID = 1;
         nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         nid.uCallbackMessage = WM_TRAYICON;
-        nid.hIcon = GetIcon();
 
-        // 初始 Tooltip
-        bool on = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
-        wcscpy_s(nid.szTip, on ? L"PopKiller (运行中)" : L"PopKiller (已关闭)");
+        bool enabled = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
+        bool active = enabled && !PopupBlocker::Paused.load();
+        nid.hIcon = active ? IconNormal : IconGray;
+        wcscpy_s(nid.szTip, active ? L"PopKiller (运行中)" : L"PopKiller (已关闭)");
 
         ::Shell_NotifyIconW(NIM_ADD, &nid);
         Visible = true;
@@ -106,7 +188,6 @@ namespace TrayIcon
         bool on = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
         if (on)
         {
-            // 关闭主开关时，如果有暂停状态，打断定时器线程
             if (PopupBlocker::Paused.load()) {
                 PopupBlocker::Paused.store(false);
                 ++PopupBlocker::PauseGen;
@@ -125,7 +206,7 @@ namespace TrayIcon
         if (PopupBlocker::EnabledChangedCallback)
             PopupBlocker::EnabledChangedCallback();
 
-        UpdateTooltip();
+        UpdateTrayState();
     }
 
     inline bool Handle(UINT msg, WPARAM wp, LPARAM lp)
@@ -155,7 +236,6 @@ namespace TrayIcon
                 ::AppendMenuW(menu, MF_STRING | (on ? MF_CHECKED : MF_UNCHECKED),
                     IDM_TOGGLE, L"弹窗拦截");
 
-                // 子菜单：暂停拦截 (仅主开关开启时显示)
                 HMENU pauseMenu = nullptr;
                 if (on) {
                     pauseMenu = ::CreatePopupMenu();
@@ -179,7 +259,6 @@ namespace TrayIcon
                 int cmd = ::TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTALIGN,
                     pt.x, pt.y, 0, Hwnd, nullptr);
 
-                // DestroyMenu 会级联销毁附加在上面的子菜单
                 ::DestroyMenu(menu);
 
                 if (cmd == IDM_TOGGLE) ToggleBlocker();
@@ -194,11 +273,11 @@ namespace TrayIcon
                     else if (cmd == IDM_PAUSE_60) minutes = 60;
 
                     PopupBlocker::PauseForMinutes(minutes);
-                    UpdateTooltip();
+                    UpdateTrayState();
                 }
                 else if (cmd == IDM_RESUME) {
                     PopupBlocker::ResumeNow();
-                    UpdateTooltip();
+                    UpdateTrayState();
                 }
             }
             return true;
