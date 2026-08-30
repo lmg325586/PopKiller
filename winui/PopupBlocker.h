@@ -399,7 +399,6 @@ namespace PopupBlocker
                         v.detail += L" ml=-";
                     }
                 }
-                an'jie'
                 v.reason = L"heuristic(" + std::to_wstring(score) + L")";
                 if (HeuristicMode == 2) {
                     bool block;
