@@ -435,7 +435,7 @@ namespace PopupBlocker
         inline void EnforceBlock(HWND hwnd, int matchResult)
         {
             ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
-            ::ShowWindow(hwnd, SW_HIDE);
+            ::ShowWindowAsync(hwnd, SW_HIDE);
             if (matchResult == 2) ScheduleForceKill(hwnd);
         }
 
