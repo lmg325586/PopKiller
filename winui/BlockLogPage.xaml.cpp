@@ -1,4 +1,5 @@
-﻿#include "pch.h"
+﻿#pragma once
+#include "pch.h"
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include "LabelStorage.h"
@@ -6,6 +7,8 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#include <ctime>
+#include <string>
 #if __has_include("BlockLogPage.g.cpp")
 #include "BlockLogPage.g.cpp"
 #endif
@@ -15,6 +18,46 @@ using namespace Microsoft::UI::Xaml;
 
 namespace
 {
+    inline std::wstring GetRelativeTime(std::wstring const& timeStr)
+    {
+        // 期望格式: "2026-08-29 15:30:12" (19 chars)
+        if (timeStr.length() < 19) return L"";
+
+        int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0;
+        if (::swscanf_s(timeStr.c_str(), L"%d-%d-%d %d:%d:%d", &y, &mo, &d, &h, &mi, &s) != 6)
+            return L"";
+
+        SYSTEMTIME stLog{};
+        stLog.wYear = (WORD)y; stLog.wMonth = (WORD)mo; stLog.wDay = (WORD)d;
+        stLog.wHour = (WORD)h; stLog.wMinute = (WORD)mi; stLog.wSecond = (WORD)s;
+
+        SYSTEMTIME stNow{};
+        ::GetLocalTime(&stNow);
+
+        FILETIME ftLog{}, ftNow{};
+        ::SystemTimeToFileTime(&stLog, &ftLog);
+        ::SystemTimeToFileTime(&stNow, &ftNow);
+
+        ULARGE_INTEGER t1, t2;
+        t1.LowPart = ftLog.dwLowDateTime; t1.HighPart = ftLog.dwHighDateTime;
+        t2.LowPart = ftNow.dwLowDateTime; t2.HighPart = ftNow.dwHighDateTime;
+
+        // FILETIME 单位是 100纳秒，除以 10000 得到毫秒
+        long long diffMs = (t2.QuadPart - t1.QuadPart) / 10000;
+        if (diffMs < 0) diffMs = 0;
+
+        long long sec = diffMs / 1000;
+        long long min = sec / 60;
+        long long hr = min / 60;
+        long long day = hr / 24;
+
+        if (sec < 60) return L" · 刚刚";
+        if (min < 60) return L" · " + std::to_wstring(min) + L" 分钟前";
+        if (hr < 24) return L" · " + std::to_wstring(hr) + L" 小时前";
+        if (day < 30) return L" · " + std::to_wstring(day) + L" 天前";
+        return L"";
+    }
+
     std::wstring ReadLogText()
     {
         FILE* f{};
@@ -219,6 +262,12 @@ namespace winrt::winui::implementation
             if (!passFilter) continue;
 
             std::wstring display = FormatLogLineChinese(rawLine);
+            if (display.length() >= 19) {
+                std::wstring relTime = GetRelativeTime(display.substr(0, 19));
+                if (!relTime.empty()) {
+                    display.insert(19, relTime);
+                }
+            }
             if (auto labelIt = m_labels.find(rawLine); labelIt != m_labels.end()) {
                 if (labelIt->second.label == L"popup") display = L"[弹窗] " + display;
                 else if (labelIt->second.label == L"notpopup") display = L"[误关] " + display;
