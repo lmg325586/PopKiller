@@ -112,6 +112,7 @@ namespace winrt::winui::implementation
         this->Closed([](auto&&, auto&&)
             {
                 WindowPicker::Cancel();
+                PopupBlocker::ShuttingDown = true;
                 PopupBlocker::Stop();
 
                 FILE* f{};

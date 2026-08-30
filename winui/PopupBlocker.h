@@ -5,6 +5,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <algorithm>
 #include "HeuristicML.h"
@@ -29,12 +30,23 @@ namespace PopupBlocker
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;
 
+    inline std::atomic<bool> Paused{ false };
+    inline std::atomic<bool> ShuttingDown{ false };
+    inline std::atomic<long long> PauseDeadlineMs{ 0 };
+    inline std::atomic<int> PauseGen{ 0 };
+
     inline int HeuristicMode = 0;
     inline int HeuristicThreshold = 70;
     inline bool VerboseLog = false;
     inline bool MLHeuristic = false;
 
     inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
+
+    inline long long NowMs()
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
 
     inline std::wstring LogPath()
     {
@@ -453,4 +465,38 @@ namespace PopupBlocker
 
     inline void Start() { if (Running.exchange(true)) return; InitSelfExe(); detail::Worker = std::thread([] { detail::ThreadMain(nullptr); }); }
     inline void Stop() { if (!Running.exchange(false)) return; ::PostThreadMessageW(::GetThreadId(detail::Worker.native_handle()), WM_QUIT, 0, 0); if (detail::Worker.joinable()) detail::Worker.join(); }
+
+    inline void PauseForMinutes(int minutes)
+    {
+        bool wasPaused = Paused.exchange(true);
+        if (!wasPaused && Running.load()) Stop();
+
+        PauseDeadlineMs.store(NowMs() + static_cast<long long>(minutes) * 60000);
+        int gen = ++PauseGen;
+
+        std::thread([gen]() {
+            while (Paused.load() && PauseGen.load() == gen && !ShuttingDown.load()) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                if (NowMs() >= PauseDeadlineMs.load()) {
+                    bool expected = true;
+                    if (Paused.compare_exchange_strong(expected, false)) {
+                        if (!ShuttingDown.load() && AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1) {
+                            Start();
+                        }
+                    }
+                    return;
+                }
+            }
+            }).detach();
+    }
+
+    inline void ResumeNow()
+    {
+        if (Paused.exchange(false)) {
+            ++PauseGen;
+            if (!ShuttingDown.load() && AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1) {
+                Start();
+            }
+        }
+    }
 }
