@@ -130,6 +130,7 @@ namespace
         ReplaceAll(s, L"raw=", L"特征=");
         ReplaceAll(s, L"ml=Y", L"ML=是");
         ReplaceAll(s, L"ml=N", L"ML=否");
+        ReplaceAll(s, L"ml=-", L"ML=跳过");
         ReplaceAll(s, L"title=", L"标题=");
         ReplaceAll(s, L"class=", L"类名=");
         ReplaceAll(s, L"exe=", L"程序=");

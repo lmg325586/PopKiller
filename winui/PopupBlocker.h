@@ -32,6 +32,9 @@ namespace PopupBlocker
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;
 
+    inline constexpr int kMLArbLow = 35;
+    inline constexpr int kMLArbHigh = 90;
+
     inline std::atomic<bool> Paused{ false };
     inline std::atomic<bool> ShuttingDown{ false };
     inline std::atomic<long long> PauseDeadlineMs{ 0 };
@@ -385,12 +388,26 @@ namespace PopupBlocker
                 RECT rc{}; ::GetWindowRect(hwnd, &rc);
                 v.detail += L" raw=" + HeuristicScorer::BuildRawBits(f, rc, idEventTime);
 
+                // ML 灰区仲裁：35~90 才跑模型；区间外跳过推理
+                bool mlYes = false;
                 if (MLHeuristic) {
-                    v.detail += HeuristicML::GetInstance().Predict(hwnd, idEventTime) ? L" ml=Y" : L" ml=N";
+                    if (score >= kMLArbLow && score <= kMLArbHigh) {
+                        mlYes = HeuristicML::GetInstance().Predict(hwnd, idEventTime);
+                        v.detail += mlYes ? L" ml=Y" : L" ml=N";
+                    }
+                    else {
+                        v.detail += L" ml=-";
+                    }
                 }
-
+                an'jie'
                 v.reason = L"heuristic(" + std::to_wstring(score) + L")";
-                if (score >= HeuristicThreshold && HeuristicMode == 2) { v.shouldBlock = true; v.action = L"block"; }
+                if (HeuristicMode == 2) {
+                    bool block;
+                    if (score > kMLArbHigh) block = true;
+                    else if (score < kMLArbLow) block = false;
+                    else block = MLHeuristic ? mlYes : (score >= HeuristicThreshold);
+                    if (block) { v.shouldBlock = true; v.action = L"block"; }
+                }
             }
             else {
                 v.reason = L"heuristic_off";
