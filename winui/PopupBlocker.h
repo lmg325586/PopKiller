@@ -24,6 +24,8 @@ namespace PopupBlocker
     inline std::vector<std::wstring> CommunityRemoved;
     inline std::function<void(bool, std::wstring)> CommunityRulesFetchCallback;
     inline std::mutex RulesMutex;
+    inline std::shared_ptr<const std::vector<Rule>> RulesView =
+        std::make_shared<const std::vector<Rule>>();
     inline std::atomic<bool> Running{ false };
     inline std::function<void()> EnabledChangedCallback;
     inline bool ForceBlock = false;
@@ -100,6 +102,7 @@ namespace PopupBlocker
         SaveRulesJson(newRules, CommunityRemoved);
         std::lock_guard lock(RulesMutex);
         Rules = newRules;
+        RulesView = std::make_shared<const std::vector<Rule>>(newRules);
     }
 
     inline bool AddWhitelistExe(std::wstring const& exe)
@@ -138,6 +141,7 @@ namespace PopupBlocker
         std::lock_guard lock(RulesMutex);
         Rules = std::move(rules);
         CommunityRemoved = std::move(removed);
+        RulesView = std::make_shared<const std::vector<Rule>>(Rules);
     }
 
     inline winrt::Windows::Foundation::IAsyncAction FetchCommunityRulesAsync()
@@ -291,13 +295,13 @@ namespace PopupBlocker
 
         // 0=未命中, 1=白名单, 2=黑名单
         inline int Match(HWND hwnd) {
-            std::vector<Rule> rules;
-            { std::lock_guard lock(RulesMutex); rules = Rules; }
-            if (rules.empty()) return 0;
+            std::shared_ptr<const std::vector<Rule>> rules;
+            { std::lock_guard lock(RulesMutex); rules = RulesView; }
+            if (rules->empty()) return 0;
 
             std::wstring exe, path, title, cls;
             bool matchedW = false, matchedB = false;
-            for (auto const& r : rules) {
+            for (auto const& r : *rules) {
                 if (MatchRule(hwnd, r, exe, path, title, cls)) {
                     if (r.isWhitelist) matchedW = true; else matchedB = true;
                 }
