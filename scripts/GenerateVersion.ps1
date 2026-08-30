@@ -5,7 +5,7 @@ try { $gitHash = (git rev-parse --short HEAD) 2>$null } catch {}
 if (-not $gitHash) { $gitHash = "unknown" }
 $date = Get-Date -Format "yyyyMMdd"
 
-$baseVersion = "0.5"
+$baseVersion = "0.6"
 $displayString = "Beta $baseVersion ($date.$gitHash)"
 $headerPath = Join-Path $root "winui\VersionInfo.h"
 $content = "#pragma once`r`n#define APP_VERSION_STRING L`"$displayString`"`r`n"

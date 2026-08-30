@@ -117,13 +117,16 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
     <PreBuildEvent>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">powershell -ExecutionPolicy Bypass -File "$(ProjectDir)..\scripts\GenerateVersion.ps1"</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+      </Message>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">powershell -ExecutionPolicy Bypass -File "$(ProjectDir)..\scripts\GenerateVersion.ps1"</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </Message>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">powershell -ExecutionPolicy Bypass -File "$(ProjectDir)..\scripts\GenerateVersion.ps1"</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </Message>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup Condition="'$(WindowsPackageType)'!='None' and Exists('Package.appxmanifest')">
