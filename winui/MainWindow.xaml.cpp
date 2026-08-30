@@ -193,6 +193,20 @@ namespace winrt::winui::implementation
 
         PopupBlocker::BlockOccurredCallback = [](std::wstring const& exe, std::wstring const& title, int matchResult) {
             if (!PopupBlocker::ToastNotify) return;
+
+            {
+                static std::mutex s_mtx;
+                static std::map<std::wstring, std::chrono::steady_clock::time_point> s_lastPerExe;
+                static std::chrono::steady_clock::time_point s_lastGlobal{};
+                auto now = std::chrono::steady_clock::now();
+                std::lock_guard<std::mutex> lock(s_mtx);
+                if (now - s_lastGlobal < std::chrono::seconds(3)) return;
+                auto it = s_lastPerExe.find(exe);
+                if (it != s_lastPerExe.end() && now - it->second < std::chrono::seconds(60)) return;
+                s_lastGlobal = now;
+                s_lastPerExe[exe] = now;
+            }
+
             try {
                 std::wstring toastTitle = (matchResult == 2) ? L"已拦截黑名单弹窗" : L"拦截弹窗";
                 std::wstring actionsXml;
