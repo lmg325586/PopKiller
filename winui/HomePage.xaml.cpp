@@ -57,32 +57,6 @@ namespace
             static_cast<float>(el.ActualHeight()) });
         el.Clip(clip);
     }
-
-    void UpdateGlow(FrameworkElement const& card, UIElement const& canvas,
-        std::initializer_list<Shapes::Ellipse> layers,
-        winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& e)
-    {
-        auto pos = e.GetCurrentPoint(card).Position();
-        double w = card.ActualWidth();
-        double h = card.ActualHeight();
-        const double R = 100.0;
-
-        double dx = pos.X < 0 ? -pos.X : (pos.X > w ? pos.X - w : 0.0);
-        double dy = pos.Y < 0 ? -pos.Y : (pos.Y > h ? pos.Y - h : 0.0);
-        double dist = std::sqrt(dx * dx + dy * dy);
-
-        if (dist >= R)
-        {
-            canvas.Opacity(0.0);
-            return;
-        }
-
-        canvas.Opacity(1.0 - dist / R);
-
-        double cx = std::clamp(static_cast<double>(pos.X), 0.0, w);
-        double cy = std::clamp(static_cast<double>(pos.Y), 0.0, h);
-        for (auto const& el : layers) PlaceEllipse(el, cx, cy);
-    }
 }
 
 namespace winrt::winui::implementation
@@ -92,19 +66,11 @@ namespace winrt::winui::implementation
         InitializeComponent();
 
         GlowCard().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
-            {
-                ClipToSelf(GlowCanvas());
-            });
-
+            { ClipToSelf(GlowCanvas()); });
         GlowCard2().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
-            {
-                ClipToSelf(GlowCanvas2());
-            });
-
+            { ClipToSelf(GlowCanvas2()); });
         GlowCard3().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
-            {
-                ClipToSelf(GlowCanvas3());
-            });
+            { ClipToSelf(GlowCanvas3()); });
 
         uint64_t v = std::stoull(winrt::to_string(
             winrt::Windows::System::Profile::AnalyticsInfo::VersionInfo().DeviceFamilyVersion()));
@@ -136,14 +102,37 @@ namespace winrt::winui::implementation
         OrgText().Text(hstring(org));
     }
 
+    void HomePage::UpdateGlow(Controls::Border const& card, Controls::Canvas const& canvas,
+        Shapes::Ellipse const& glow, PointerRoutedEventArgs const& e)
+    {
+        if (!card || !canvas || !glow) return;
+        auto pos = e.GetCurrentPoint(card).Position();
+        double w = card.ActualWidth();
+        double h = card.ActualHeight();
+        const double R = 100.0;
+
+        double dx = pos.X < 0 ? -pos.X : (pos.X > w ? pos.X - w : 0.0);
+        double dy = pos.Y < 0 ? -pos.Y : (pos.Y > h ? pos.Y - h : 0.0);
+        double dist = std::sqrt(dx * dx + dy * dy);
+
+        if (dist >= R)
+        {
+            canvas.Opacity(0.0);
+            return;
+        }
+
+        canvas.Opacity(1.0 - dist / R);
+
+        double cx = std::clamp(static_cast<double>(pos.X), 0.0, w);
+        double cy = std::clamp(static_cast<double>(pos.Y), 0.0, h);
+        PlaceEllipse(glow, cx, cy);
+    }
+
     void HomePage::RootPointerMoved(IInspectable const&, PointerRoutedEventArgs const& e)
     {
-        UpdateGlow(GlowCard(), GlowCanvas(),
-            { GlowLayer5(), GlowLayer4(), GlowLayer3(), GlowLayer2(), GlowLayer1() }, e);
-        UpdateGlow(GlowCard2(), GlowCanvas2(),
-            { Glow2Layer5(), Glow2Layer4(), Glow2Layer3(), Glow2Layer2(), Glow2Layer1() }, e);
-        UpdateGlow(GlowCard3(), GlowCanvas3(),
-            { Glow3Layer5(), Glow3Layer4(), Glow3Layer3(), Glow3Layer2(), Glow3Layer1() }, e);
+        UpdateGlow(GlowCard(), GlowCanvas(), GlowLayer(), e);
+        UpdateGlow(GlowCard2(), GlowCanvas2(), Glow2Layer(), e);
+        UpdateGlow(GlowCard3(), GlowCanvas3(), Glow3Layer(), e);
     }
 
     void HomePage::RootPointerExited(IInspectable const&, PointerRoutedEventArgs const&)
