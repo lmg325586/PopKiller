@@ -290,7 +290,6 @@ namespace winrt::winui::implementation
     {
         uint64_t t = LogWriteTime();
         if (t != m_lastWrite) {
-            m_lastWrite = t;
             ReloadFromFile();
         }
         SampleLabels::Load(m_labels);
