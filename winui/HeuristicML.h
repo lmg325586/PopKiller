@@ -69,7 +69,7 @@ namespace HeuristicML
 
             const OrtApiBase* base = OrtGetApiBase();
             if (!base || !base->GetApi(ORT_API_VERSION)) {
-                WarnOnce(L"ONNX Runtime 不可用或与编译头文件版本不匹配，\n静态ML启发已禁用");
+                WarnOnce(L"ONNX Runtime 不可用或与编译头文件版本不匹配，\n静态ML启发已禁用请重新下载");
                 return false;
             }
 
