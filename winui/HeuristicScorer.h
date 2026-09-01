@@ -67,7 +67,6 @@ namespace HeuristicScorer
             long long d2 = (long long)dx * dx + (long long)dy * dy;
             return (d2 > 300LL * 300) ? 1.f : 0.f;
         }
-        // ==============================================
     }
 
     // ===== 权重表 =====
@@ -95,7 +94,7 @@ namespace HeuristicScorer
         float signedExe = -5;
         float userIdle = 15;
         float farFromMouse = 10;
-        float mouseClose = -30;
+        float mouseClose = -25;
     };
     inline Weights g_w{};
 
