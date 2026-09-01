@@ -47,9 +47,9 @@ namespace winrt::winui::implementation
         void ReloadRulesFromEngine();
 
         struct RuleItem {
-            int listType;
-            int fieldType;
-            int matchMode;
+            int listType{ 0 };
+            int fieldType{ 0 };
+            int matchMode{ 0 };
             std::wstring pattern;
             bool fromCommunity{ false };
         };
