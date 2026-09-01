@@ -46,6 +46,28 @@ namespace HeuristicScorer
             ::GetClassNameW(hwnd, buf, 256);
             return Lower(buf);
         }
+
+        inline float CalcUserIdle(DWORD evTime)
+        {
+            LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
+            if (!::GetLastInputInfo(&lii)) return 0.f;
+
+            LONG diff = static_cast<LONG>(evTime) - static_cast<LONG>(lii.dwTime);
+            long long idleMs = diff;
+            if (idleMs < 0) idleMs = 0;
+
+            return (idleMs > 5000) ? 1.f : 0.f;
+        }
+
+        inline float CalcFarFromMouse(RECT const& rc)
+        {
+            POINT cpt{}; ::GetCursorPos(&cpt);
+            int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
+            int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
+            long long d2 = (long long)dx * dx + (long long)dy * dy;
+            return (d2 > 300LL * 300) ? 1.f : 0.f;
+        }
+        // ==============================================
     }
 
     // ===== 权重表 =====
@@ -71,6 +93,8 @@ namespace HeuristicScorer
         float unsignedExe = 12;
         float unsignedUserDir = 25;
         float signedExe = -5;
+        float userIdle = 15;
+        float farFromMouse = 10;
     };
     inline Weights g_w{};
 
@@ -83,6 +107,8 @@ namespace HeuristicScorer
         float clsLen, clsHexRatio;
         float pathTemp, pathRoaming, pathDepth, exeDigitRatio;
         float procAgeSec;
+        float userIdle;
+        float farFromMouse;
         std::wstring path;
         std::wstring cls;
     };
@@ -184,8 +210,10 @@ namespace HeuristicScorer
         return s;
     }
 
-    inline Features ExtractFeatures(HWND hwnd)
+    inline Features ExtractFeatures(HWND hwnd, DWORD evTime = 0)
     {
+        if (evTime == 0) evTime = static_cast<DWORD>(::GetTickCount64());
+
         Features f{};
         LONG st = ::GetWindowLongW(hwnd, GWL_STYLE);
         LONG ex = ::GetWindowLongW(hwnd, GWL_EXSTYLE);
@@ -223,6 +251,9 @@ namespace HeuristicScorer
         std::wstring exe = (pos == std::wstring::npos) ? f.path : f.path.substr(pos + 1);
         f.exeDigitRatio = DigitRatio(exe);
         f.procAgeSec = ProcessAgeSeconds(hwnd);
+
+        f.userIdle = detail::CalcUserIdle(evTime);
+        f.farFromMouse = detail::CalcFarFromMouse(rc);
         return f;
     }
 
@@ -249,19 +280,8 @@ namespace HeuristicScorer
         b += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
         b += (!f.path.empty() && !IsFileSignedCached(f.path)) ? L'T' : L'F';
 
-        LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
-        long long idleMs = 0;
-        if (::GetLastInputInfo(&lii)) {
-            idleMs = (long long)evTime - (long long)lii.dwTime;
-            if (idleMs < 0) idleMs = 0;
-        }
-        b += (idleMs > 5000) ? L'T' : L'F';
-
-        POINT cpt{}; ::GetCursorPos(&cpt);
-        int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
-        int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
-        long long d2 = (long long)dx * dx + (long long)dy * dy;
-        b += (d2 > 300LL * 300) ? L'T' : L'F';
+        b += (f.userIdle > 0) ? L'T' : L'F';
+        b += (f.farFromMouse > 0) ? L'T' : L'F';
         return b;
     }
 
@@ -325,6 +345,10 @@ namespace HeuristicScorer
         if (f.pathTemp > 0) add(g_w.pathTemp, L"temp");
         if (f.pathRoaming > 0) add(g_w.pathRoaming, L"roaming");
         if (f.procAgeSec >= 0 && f.procAgeSec < 120) add(g_w.youngProcess, L"young");
+
+        if (f.userIdle > 0) add(g_w.userIdle, L"idle");
+        if (f.farFromMouse > 0) add(g_w.farFromMouse, L"far_mouse");
+
         if (!f.path.empty()) {
             bool signed_ = IsFileSignedCached(f.path);
             if (signed_) {

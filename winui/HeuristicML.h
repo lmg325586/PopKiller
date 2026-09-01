@@ -135,7 +135,7 @@ namespace HeuristicML
         bool Predict(HWND hwnd, DWORD evTime) {
             if (!sessionRf || !sessionLr) return false;
 
-            HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
+            HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd, evTime);
             std::wstring title = GetTitle(hwnd);
             std::wstring cls = GetClass(hwnd);
             std::wstring exe = GetProcessName(hwnd);
@@ -162,19 +162,8 @@ namespace HeuristicML
             features[13] = (f.procAgeSec >= 0 && f.procAgeSec < 120) ? 1.0f : 0.0f;
             features[14] = (!f.path.empty() && !HeuristicScorer::IsFileSignedCached(f.path)) ? 1.0f : 0.0f;
 
-            LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
-            long long idleMs = 0;
-            if (::GetLastInputInfo(&lii)) {
-                idleMs = (long long)evTime - (long long)lii.dwTime;
-                if (idleMs < 0) idleMs = 0;
-            }
-            features[15] = (idleMs > 5000) ? 1.0f : 0.0f;
-
-            POINT cpt{}; ::GetCursorPos(&cpt);
-            int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
-            int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
-            long long d2 = (long long)dx * dx + (long long)dy * dy;
-            features[16] = (d2 > 300LL * 300) ? 1.0f : 0.0f;
+            features[15] = f.userIdle;
+            features[16] = f.farFromMouse;
 
             features[17] = static_cast<float>(title.size());
             float kw_hits = 0.0f;
