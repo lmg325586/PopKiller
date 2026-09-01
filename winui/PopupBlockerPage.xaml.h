@@ -40,6 +40,8 @@ namespace winrt::winui::implementation
         void ResumeButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
 
+        void OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
+
     private:
         void UpdateCommunityStatus(bool ok, std::wstring const& msg);
         void RefreshList();

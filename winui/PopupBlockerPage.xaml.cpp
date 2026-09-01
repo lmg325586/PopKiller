@@ -343,6 +343,14 @@ namespace winrt::winui::implementation
         if (m_rules[real].fromCommunity) {
             PopupBlocker::CommunityRemoved.push_back(PopupBlocker::RuleKey(ToEngineRule(m_rules[real])));
         }
+
+        if (m_editingIndex == static_cast<int>(real)) {
+            m_editingIndex = -1;
+        }
+        else if (m_editingIndex > static_cast<int>(real)) {
+            m_editingIndex--;
+        }
+
         m_rules.erase(m_rules.begin() + real);
         Save();
         RefreshList();
@@ -438,5 +446,11 @@ namespace winrt::winui::implementation
     {
         PopupBlocker::ResumeNow();
         RefreshStatus();
+    }
+
+    void PopupBlockerPage::OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e)
+    {
+        ReloadRulesFromEngine();
+        RefreshList();
     }
 }
