@@ -293,10 +293,11 @@ namespace winrt::winui::implementation
     {
         uint64_t t = LogWriteTime();
         if (t != m_lastWrite) {
+            m_lastWrite = t;
             ReloadFromFile();
+            SampleLabels::Load(m_labels);
+            ApplyFilter();
         }
-        SampleLabels::Load(m_labels);
-        ApplyFilter();
     }
 
     void BlockLogPage::Filter_Changed(IInspectable const&, Controls::SelectionChangedEventArgs const&)
@@ -311,16 +312,12 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::Timer_Tick(IInspectable const&, IInspectable const&)
     {
-        uint64_t t = LogWriteTime();
-        if (t != m_lastWrite)
-        {
-            m_lastWrite = t;
-            Load();
-        }
+        Load();
     }
 
     void BlockLogPage::Refresh_Click(IInspectable const&, RoutedEventArgs const&)
     {
+        m_lastWrite = 0;
         Load();
     }
 
@@ -329,6 +326,7 @@ namespace winrt::winui::implementation
         FILE* f{};
         if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"wb") == 0 && f)
             ::fclose(f);
+        m_lastWrite = 0;
         Load();
     }
 
