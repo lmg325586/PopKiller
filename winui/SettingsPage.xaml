@@ -148,7 +148,7 @@
 
                     <Grid ColumnDefinitions="Auto,*">
                         <TextBlock x:Name="VersionTextBlock" Text="Beta 0.5" Grid.Column="1" Margin="16,0,0,0" Style="{StaticResource BodyTextBlockStyle}"/>
-                        <TextBlock Text="Beta 0.6" Grid.Column="1" Margin="16,0,0,0" 
+                        <TextBlock Text="Beta 0.7" Grid.Column="1" Margin="16,0,0,0" 
                                    Style="{StaticResource BodyTextBlockStyle}"/>
                     </Grid>
 
