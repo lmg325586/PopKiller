@@ -134,6 +134,7 @@ namespace
         ReplaceAll(s, L"title=", L"标题=");
         ReplaceAll(s, L"class=", L"类名=");
         ReplaceAll(s, L"exe=", L"程序=");
+        TranslateTokenName(s, L"mouse_close", L"靠近鼠标");
         TranslateTokenName(s, L"idle", L"用户空闲");
         TranslateTokenName(s, L"far_mouse", L"远离鼠标");
         TranslateTokenName(s, L"notresizable", L"不可调");

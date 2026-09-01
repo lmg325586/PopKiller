@@ -95,6 +95,7 @@ namespace HeuristicScorer
         float signedExe = -5;
         float userIdle = 15;
         float farFromMouse = 10;
+        float mouseClose = -30;
     };
     inline Weights g_w{};
 
@@ -348,6 +349,7 @@ namespace HeuristicScorer
 
         if (f.userIdle > 0) add(g_w.userIdle, L"idle");
         if (f.farFromMouse > 0) add(g_w.farFromMouse, L"far_mouse");
+        if (f.farFromMouse == 0.f) add(g_w.mouseClose, L"mouse_close");
 
         if (!f.path.empty()) {
             bool signed_ = IsFileSignedCached(f.path);
