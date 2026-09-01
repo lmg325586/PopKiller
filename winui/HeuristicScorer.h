@@ -257,7 +257,7 @@ namespace HeuristicScorer
         return f;
     }
 
-    inline std::wstring BuildRawBits(Features const& f, RECT const& rc, DWORD evTime)
+    inline std::wstring BuildRawBits(Features const& f)
     {
         std::wstring b;
         b += (f.hasOwner > 0) ? L'T' : L'F';
@@ -269,8 +269,8 @@ namespace HeuristicScorer
         b += (f.captionSysmenu > 0) ? L'T' : L'F';
         b += (f.titleEmpty > 0) ? L'T' : L'F';
 
-        float wPx = float(rc.right - rc.left);
-        float hPx = float(rc.bottom - rc.top);
+        float wPx = f.wNorm * ::GetSystemMetrics(SM_CXSCREEN);
+        float hPx = f.hNorm * ::GetSystemMetrics(SM_CYSCREEN);
         b += (wPx < 400 && hPx < 300) ? L'T' : L'F';
         b += (wPx > 800 || hPx > 600) ? L'T' : L'F';
         b += (f.pathTemp > 0) ? L'T' : L'F';
@@ -279,7 +279,6 @@ namespace HeuristicScorer
         b += (f.clsHexRatio > 0.8f) ? L'T' : L'F';
         b += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
         b += (!f.path.empty() && !IsFileSignedCached(f.path)) ? L'T' : L'F';
-
         b += (f.userIdle > 0) ? L'T' : L'F';
         b += (f.farFromMouse > 0) ? L'T' : L'F';
         return b;

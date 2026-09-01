@@ -448,7 +448,7 @@ namespace winrt::winui::implementation
         RefreshStatus();
     }
 
-    void PopupBlockerPage::OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e)
+    void PopupBlockerPage::OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&)
     {
         ReloadRulesFromEngine();
         RefreshList();

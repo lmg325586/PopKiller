@@ -382,13 +382,12 @@ namespace PopupBlocker
                 if (ForceBlock || isPopup) { v.shouldBlock = true; v.action = L"block"; }
             }
             else if (HeuristicMode > 0) {
-                HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd);
+
+                HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd, idEventTime);
                 int score = HeuristicScorer::ScoreWindow(f, v.detail);
 
-                RECT rc{}; ::GetWindowRect(hwnd, &rc);
-                v.detail += L" raw=" + HeuristicScorer::BuildRawBits(f, rc, idEventTime);
+                v.detail += L" raw=" + HeuristicScorer::BuildRawBits(f);
 
-                // ML 灰区仲裁：35~90 才跑模型；区间外跳过推理
                 bool mlYes = false;
                 if (MLHeuristic) {
                     if (score >= kMLArbLow && score <= kMLArbHigh) {
