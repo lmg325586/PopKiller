@@ -8,9 +8,7 @@
 #include <chrono>
 #include <functional>
 #include <algorithm>
-#include "HeuristicML.h"
 #include "AppSettings.h"
-#include "HeuristicScorer.h"
 #include "RuleTypes.h"
 #include "RuleStorage.h"
 #include <winrt/Windows.Web.Http.h>
@@ -32,18 +30,12 @@ namespace PopupBlocker
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;
 
-    inline constexpr int kMLArbLow = 35;
-    inline constexpr int kMLArbHigh = 90;
-
     inline std::atomic<bool> Paused{ false };
     inline std::atomic<bool> ShuttingDown{ false };
     inline std::atomic<long long> PauseDeadlineMs{ 0 };
     inline std::atomic<int> PauseGen{ 0 };
 
-    inline int HeuristicMode = 0;
-    inline int HeuristicThreshold = 70;
     inline bool VerboseLog = false;
-    inline bool MLHeuristic = false;
 
     inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
 
@@ -131,10 +123,7 @@ namespace PopupBlocker
     inline void SyncFromSettings()
     {
         ForceBlock = AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1;
-        HeuristicMode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
-        HeuristicThreshold = AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70);
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
-        MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
         ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
 
         EnsureDefaultRules();
@@ -381,34 +370,8 @@ namespace PopupBlocker
                 v.reason = L"blacklist";
                 if (ForceBlock || isPopup) { v.shouldBlock = true; v.action = L"block"; }
             }
-            else if (HeuristicMode > 0) {
-
-                HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd, idEventTime);
-                int score = HeuristicScorer::ScoreWindow(f, v.detail);
-
-                v.detail += L" raw=" + HeuristicScorer::BuildRawBits(f);
-
-                bool mlYes = false;
-                if (MLHeuristic) {
-                    if (score >= kMLArbLow && score <= kMLArbHigh) {
-                        mlYes = HeuristicML::GetInstance().Predict(hwnd, idEventTime);
-                        v.detail += mlYes ? L" ml=Y" : L" ml=N";
-                    }
-                    else {
-                        v.detail += L" ml=-";
-                    }
-                }
-                v.reason = L"heuristic(" + std::to_wstring(score) + L")";
-                if (HeuristicMode == 2) {
-                    bool block;
-                    if (score > kMLArbHigh) block = true;
-                    else if (score < kMLArbLow) block = false;
-                    else block = MLHeuristic ? mlYes : (score >= HeuristicThreshold);
-                    if (block) { v.shouldBlock = true; v.action = L"block"; }
-                }
-            }
             else {
-                v.reason = L"heuristic_off";
+                v.reason = L"no_match";
             }
 
             v.shouldLog = VerboseLog || v.shouldBlock || v.matchResult == 1 || v.matchResult == 2;

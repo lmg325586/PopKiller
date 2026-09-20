@@ -100,7 +100,7 @@
 
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="应用设置" FontSize="15" FontWeight="SemiBold"/>
-                                <TextBlock Text="管理静态 ML 启发、拦截阈值、开机自启与外观主题"
+                                <TextBlock Text="管理拦截阈值、开机自启与外观主题"
                                            FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Grid>

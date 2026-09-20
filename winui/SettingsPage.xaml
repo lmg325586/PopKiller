@@ -62,33 +62,6 @@
 
                     <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
 
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel VerticalAlignment="Center" Spacing="2">
-                            <TextBlock Text="启发式拦截" Style="{StaticResource BodyTextBlockStyle}"/>
-                            <TextBlock Text="根据窗口特征自动识别未知弹窗。启用：超阈值拦截；仅记录：只写日志。"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <ComboBox x:Name="HeuristicModeCombo" SelectedIndex="0" Width="120"
-                                  Grid.Column="1" VerticalAlignment="Center"
-                                  SelectionChanged="HeuristicModeCombo_SelectionChanged">
-                            <ComboBoxItem Content="关闭"/>
-                            <ComboBoxItem Content="启用"/>
-                            <ComboBoxItem Content="仅记录"/>
-                        </ComboBox>
-                    </Grid>
-
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel VerticalAlignment="Center" Spacing="2">
-                            <TextBlock Text="静态机器学习" Style="{StaticResource BodyTextBlockStyle}"/>
-                            <TextBlock Text="启用双模型影子打分，辅助启发式识别。"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <ToggleSwitch x:Name="MLHeuristicToggle" Grid.Column="1" VerticalAlignment="Center"
-                                      OnContent="开" OffContent="关" Toggled="MLHeuristicToggle_Toggled"/>
-                    </Grid>
-
                     <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
 
                     <Grid ColumnDefinitions="*,Auto">

@@ -2,7 +2,6 @@
 #include "pch.h"
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
-#include "LabelStorage.h"
 #include "FilePicker.h"
 #include <sstream>
 #include <vector>
@@ -121,16 +120,12 @@ namespace
         ReplaceAll(s, L"action=kill", L"动作=强杀");
         ReplaceAll(s, L"ev=SHOW", L"事件=出现");
         ReplaceAll(s, L"ev=FG", L"事件=焦点");
-        ReplaceAll(s, L"reason=heuristic(", L"原因=启发式(");
         ReplaceAll(s, L"reason=whitelist", L"原因=白名单");
         ReplaceAll(s, L"reason=blacklist", L"原因=黑名单");
-        ReplaceAll(s, L"reason=heuristic_off", L"原因=启发式关闭");
+        ReplaceAll(s, L"reason=no_match", L"原因=未匹配");
         ReplaceAll(s, L"infra_class_skip", L"基础设施类名跳过");
         ReplaceAll(s, L"zero_size_skip", L"零尺寸跳过");
         ReplaceAll(s, L"raw=", L"特征=");
-        ReplaceAll(s, L"ml=Y", L"ML=是");
-        ReplaceAll(s, L"ml=N", L"ML=否");
-        ReplaceAll(s, L"ml=-", L"ML=跳过");
         ReplaceAll(s, L"title=", L"标题=");
         ReplaceAll(s, L"class=", L"类名=");
         ReplaceAll(s, L"exe=", L"程序=");
@@ -147,7 +142,6 @@ namespace
         TranslateTokenName(s, L"toolwin", L"工具窗");
         TranslateTokenName(s, L"topmost", L"置顶");
         TranslateTokenName(s, L"noact", L"不激活");
-        TranslateTokenName(s, L"hexclass", L"十六进制类名");
         TranslateTokenName(s, L"signed", L"有签名");
         TranslateTokenName(s, L"young", L"新进程");
         TranslateTokenName(s, L"roaming", L"漫游目录");
@@ -210,7 +204,6 @@ namespace winrt::winui::implementation
             std::transform(searchText.begin(), searchText.end(), searchText.begin(), ::towlower);
         }
 
-        int threshold = PopupBlocker::HeuristicThreshold;
         int shownCount = 0;
         int totalCount = (int)m_allLines.size();
 
@@ -234,37 +227,6 @@ namespace winrt::winui::implementation
                 passFilter = (rawLine.find(L"reason=whitelist") != std::wstring::npos) ||
                     (rawLine.find(L"reason=blacklist") != std::wstring::npos);
             }
-            else if (filterTag == L"ml_heur") {
-                bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
-                bool mlN = rawLine.find(L" ml=N") != std::wstring::npos;
-                if (mlY || mlN) {
-                    bool hasScore = false;
-                    int score = 0;
-                    auto heurPos = rawLine.find(L"heuristic(");
-                    if (heurPos != std::wstring::npos) {
-                        size_t endPos = rawLine.find(L')', heurPos);
-                        if (endPos != std::wstring::npos) {
-                            try {
-                                score = std::stoi(rawLine.substr(heurPos + 10, endPos - heurPos - 10));
-                                hasScore = true;
-                            }
-                            catch (...) {}
-                        }
-                    }
-
-                    if (hasScore) {
-                        bool heurSaysPopup = (score >= threshold);
-                        bool mlSaysPopup = mlY;
-                        if (heurSaysPopup != mlSaysPopup) passFilter = true;
-                    }
-                }
-            }
-            else if (filterTag == L"ml_list") {
-                bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
-                bool isWhitelist = rawLine.find(L"reason=whitelist") != std::wstring::npos;
-                bool isBlacklist = rawLine.find(L"reason=blacklist") != std::wstring::npos;
-                if ((isWhitelist && mlY) || (isBlacklist && !mlY)) passFilter = true;
-            }
 
             if (!passFilter) continue;
 
@@ -274,10 +236,6 @@ namespace winrt::winui::implementation
                 if (!relTime.empty()) {
                     display.insert(19, relTime);
                 }
-            }
-            if (auto labelIt = m_labels.find(rawLine); labelIt != m_labels.end()) {
-                if (labelIt->second.label == L"popup") display = L"[弹窗] " + display;
-                else if (labelIt->second.label == L"notpopup") display = L"[误关] " + display;
             }
             m_rawLines.push_back(rawLine);
             LogList().Items().Append(box_value(hstring(display)));
@@ -295,7 +253,6 @@ namespace winrt::winui::implementation
         if (t != m_lastWrite) {
             m_lastWrite = t;
             ReloadFromFile();
-            SampleLabels::Load(m_labels);
             ApplyFilter();
         }
     }
@@ -344,44 +301,6 @@ namespace winrt::winui::implementation
         }
     }
 
-    void BlockLogPage::MarkPopup_Click(IInspectable const&, RoutedEventArgs const&)
-    {
-        if (m_selectedRaw.empty()) return;
-        auto s = SampleLabels::ParseLine(m_selectedRaw);
-        s.label = L"popup";
-        m_labels[m_selectedRaw] = s;
-        SampleLabels::Save(m_labels);
-        Load();
-    }
-
-    void BlockLogPage::MarkNotPopup_Click(IInspectable const&, RoutedEventArgs const&)
-    {
-        if (m_selectedRaw.empty()) return;
-        auto s = SampleLabels::ParseLine(m_selectedRaw);
-        s.label = L"notpopup";
-        m_labels[m_selectedRaw] = s;
-        SampleLabels::Save(m_labels);
-        Load();
-    }
-
-    void BlockLogPage::ExportSamples_Click(IInspectable const&, RoutedEventArgs const&)
-    {
-        std::wstring path = FilePicker::PickJsonFile(true);
-        if (path.empty()) return;
-        std::string json = SampleLabels::ExportJson(m_labels);
-        if (PopupBlocker::WriteUtf8StringToFile(path, json))
-        {
-            SampleLabels::Clear(m_labels);
-            Load();
-
-            MessageBoxW(nullptr, L"训练数据导出成功，本地缓存已清空", L"提示", MB_OK | MB_ICONINFORMATION);
-        }
-        else
-        {
-            MessageBoxW(nullptr, L"导出失败", L"提示", MB_OK | MB_ICONERROR);
-        }
-    }
-
     void BlockLogPage::AddToBlacklist_Click(IInspectable const&, RoutedEventArgs const&)
     {
         AddRuleFromSelection(false);
@@ -395,8 +314,20 @@ namespace winrt::winui::implementation
     void BlockLogPage::AddRuleFromSelection(bool whitelist)
     {
         if (m_selectedRaw.empty()) return;
-        auto s = SampleLabels::ParseLine(m_selectedRaw);
-        if (s.exe.empty())
+        // 解析日志行以获取进程信息
+        auto actionPos = m_selectedRaw.find(L"action=");
+        auto titlePos = m_selectedRaw.find(L"title=");
+        auto classPos = m_selectedRaw.find(L"class=");
+        auto exePos = m_selectedRaw.find(L"exe=");
+        
+        std::wstring exe;
+        if (exePos != std::wstring::npos) {
+            exePos += 4;
+            auto end = m_selectedRaw.find(L' ', exePos);
+            exe = m_selectedRaw.substr(exePos, end == std::wstring::npos ? std::wstring::npos : end - exePos);
+        }
+        
+        if (exe.empty())
         {
             MessageBoxW(nullptr, L"该日志缺少进程信息，无法生成规则。",
                 L"提示", MB_OK | MB_ICONWARNING);
@@ -407,7 +338,7 @@ namespace winrt::winui::implementation
         r.isWhitelist = whitelist;
         r.field = PopupBlocker::RuleField::Exe;
         r.mode = PopupBlocker::MatchMode::Exact;
-        r.pattern = PopupBlocker::Lower(s.exe);
+        r.pattern = PopupBlocker::Lower(exe);
         r.fromCommunity = false;
 
         std::vector<PopupBlocker::Rule> rules;
@@ -428,7 +359,7 @@ namespace winrt::winui::implementation
         rules.push_back(r);
         PopupBlocker::SaveRules(rules);
 
-        std::wstring msg = (whitelist ? L"已添加白名单规则：进程 " : L"已添加黑名单规则：进程 ") + s.exe;
+        std::wstring msg = (whitelist ? L"已添加白名单规则：进程 " : L"已添加黑名单规则：进程 ") + exe;
         MessageBoxW(nullptr, msg.c_str(), L"提示", MB_OK | MB_ICONINFORMATION);
     }
 

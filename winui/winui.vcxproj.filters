@@ -26,13 +26,10 @@
     <ClInclude Include="PopupBlocker.h" />
     <ClInclude Include="WindowPicker.h" />
     <ClInclude Include="TrayIcon.h" />
-    <ClInclude Include="HeuristicScorer.h" />
     <ClInclude Include="RuleTypes.h" />
     <ClInclude Include="RuleStorage.h" />
     <ClInclude Include="AutoStart.h" />
     <ClInclude Include="FilePicker.h" />
-    <ClInclude Include="LabelStorage.h" />
-    <ClInclude Include="HeuristicML.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="readme.txt" />

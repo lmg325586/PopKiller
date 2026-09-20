@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BlockLogPage.g.h"
-#include "LabelStorage.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -19,12 +18,6 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void LogItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args);
-        void MarkPopup_Click(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-        void MarkNotPopup_Click(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-        void ExportSamples_Click(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AddToBlacklist_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AddToWhitelist_Click(winrt::Windows::Foundation::IInspectable const& sender,
@@ -47,7 +40,6 @@ namespace winrt::winui::implementation
         std::vector<std::wstring> m_rawLines;
         std::wstring m_selectedRaw;
 
-        std::map<std::wstring, SampleLabels::Sample> m_labels;
         std::wstring m_selectedDisplayText;
 
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_timer{ nullptr };

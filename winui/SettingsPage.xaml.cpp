@@ -20,40 +20,15 @@
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 
-namespace
-{
-
-    int IndexToMode(int idx)
-    {
-        switch (idx) {
-        case 1:  return 2;
-        case 2:  return 1;
-        default: return 0;
-        }
-    }
-
-    int ModeToIndex(int mode)
-    {
-        switch (mode) {
-        case 2:  return 1;
-        case 1:  return 2;
-        default: return 0;
-        }
-    }
-}
-
 namespace winrt::winui::implementation
 {
     SettingsPage::SettingsPage()
     {
         InitializeComponent();
         VerboseLogToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1);
-        int mode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
-        HeuristicModeCombo().SelectedIndex(ModeToIndex(mode));
         AutoStartToggle().IsOn(AutoStart::IsEnabled());
         ThemeComboBox().SelectedIndex(AppTheme::Index);
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
-        MLHeuristicToggle().IsOn(PopupBlocker::MLHeuristic);
         ToastNotifyToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1);
         VersionTextBlock().Text(APP_VERSION_STRING);
 
@@ -101,17 +76,6 @@ namespace winrt::winui::implementation
         PopupBlocker::ForceBlock = on;
     }
 
-    void SettingsPage::HeuristicModeCombo_SelectionChanged(IInspectable const&,
-        Controls::SelectionChangedEventArgs const&)
-    {
-        if (!m_initialized) return;
-
-        int mode = IndexToMode(HeuristicModeCombo().SelectedIndex());
-        AppSettings::WriteInt(L"Blocker", L"HeuristicMode", mode);
-
-        PopupBlocker::SyncFromSettings();
-    }
-
     void SettingsPage::VerboseLogToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
     {
         if (!m_initialized) return;
@@ -128,14 +92,6 @@ namespace winrt::winui::implementation
         bool on = toggle.IsOn();
         bool ok = on ? AutoStart::EnableAutoStartup() : AutoStart::DisableAutoStartup();
         if (!ok) toggle.IsOn(!on);
-    }
-
-    void SettingsPage::MLHeuristicToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
-    {
-        bool on = MLHeuristicToggle().IsOn();
-        AppSettings::WriteInt(L"Blocker", L"MLHeuristic", on ? 1 : 0);
-        PopupBlocker::MLHeuristic = on;
-        if (on) HeuristicML::GetInstance().Init();
     }
 
     void SettingsPage::ToastNotifyToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
