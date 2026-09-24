@@ -8,6 +8,9 @@
 #include <chrono>
 #include <functional>
 #include <algorithm>
+#include <queue>
+#include <map>
+#include <unordered_map>
 #include "HeuristicML.h"
 #include "AppSettings.h"
 #include "HeuristicScorer.h"
@@ -40,6 +43,99 @@ namespace PopupBlocker
 
     inline std::shared_ptr<const std::vector<Rule>> RulesView =
         std::make_shared<const std::vector<Rule>>();
+
+    struct AcAutomaton
+    {
+        struct Node { std::map<wchar_t, int> next; int fail = 0; int out = 0; };
+        std::vector<Node> nodes{ Node{} };
+
+        void Add(std::wstring const& p, int flags)   // flags: 1=白 2=黑
+        {
+            int cur = 0;
+            for (wchar_t c : p) {
+                auto it = nodes[cur].next.find(c);
+                if (it == nodes[cur].next.end()) {
+                    it = nodes[cur].next.emplace(c, static_cast<int>(nodes.size())).first;
+                    nodes.emplace_back();
+                }
+                cur = it->second;
+            }
+            nodes[cur].out |= flags;
+        }
+
+        void Build()
+        {
+            std::queue<int> q;
+            for (auto& kv : nodes[0].next) { nodes[kv.second].fail = 0; q.push(kv.second); }
+            while (!q.empty()) {
+                int u = q.front(); q.pop();
+                nodes[u].out |= nodes[nodes[u].fail].out;   // 合并 fail 链输出
+                for (auto& kv : nodes[u].next) {
+                    int v = kv.second;
+                    int f = nodes[u].fail;
+                    while (f && !nodes[f].next.count(kv.first)) f = nodes[f].fail;
+                    auto it = nodes[f].next.find(kv.first);
+                    nodes[v].fail = (it != nodes[f].next.end() && it->second != v) ? it->second : 0;
+                    q.push(v);
+                }
+            }
+        }
+
+        int Scan(std::wstring const& s) const
+        {
+            int flags = 0, cur = 0;
+            for (wchar_t c : s) {
+                while (cur && !nodes[cur].next.count(c)) cur = nodes[cur].fail;
+                auto it = nodes[cur].next.find(c);
+                cur = (it != nodes[cur].next.end()) ? it->second : 0;
+                if (nodes[cur].out) {
+                    flags |= nodes[cur].out;
+                    if (flags == 3) return flags;
+                }
+            }
+            return flags;
+        }
+    };
+
+    struct RuleIndex
+    {
+        std::unordered_map<std::wstring, int> exact[4];
+        AcAutomaton contains[4];
+        std::vector<Rule> wilds;        // 通配符规则保留遍历
+        bool hasExact[4]{};
+        bool hasContains[4]{};
+        bool hasWild[4]{};
+        bool empty = true;
+    };
+
+    inline std::shared_ptr<const RuleIndex> BuildRuleIndex(std::vector<Rule> const& rules)
+    {
+        auto idx = std::make_shared<RuleIndex>();
+        for (auto const& r : rules) {
+            int f = static_cast<int>(r.field);
+            int flags = r.isWhitelist ? 1 : 2;
+            idx->empty = false;
+            switch (r.mode) {
+            case MatchMode::Exact:
+                idx->exact[f][r.pattern] |= flags;
+                idx->hasExact[f] = true;
+                break;
+            case MatchMode::Contains:
+                idx->contains[f].Add(r.pattern, flags);
+                idx->hasContains[f] = true;
+                break;
+            default:
+                idx->wilds.push_back(r);
+                idx->hasWild[f] = true;
+                break;
+            }
+        }
+        for (int f = 0; f < 4; ++f) if (idx->hasContains[f]) idx->contains[f].Build();
+        return idx;
+    }
+
+    inline std::shared_ptr<const RuleIndex> RulesIndexView;
+
     inline std::atomic<bool> Running{ false };
     inline std::function<void()> EnabledChangedCallback;
     inline bool ForceBlock = false;
@@ -116,10 +212,12 @@ namespace PopupBlocker
 
     inline void SaveRules(std::vector<Rule> const& newRules)
     {
+        auto idx = BuildRuleIndex(newRules); // 锁外构建索引
         std::lock_guard lock(RulesMutex);//不得在持有 RulesMutex 时调用 SaveRules
         SaveRulesJson(newRules, CommunityRemoved);
         Rules = newRules;
         RulesView = std::make_shared<const std::vector<Rule>>(newRules);
+        RulesIndexView = idx;
     }
 
     inline bool AddWhitelistExe(std::wstring const& exe)
@@ -155,10 +253,12 @@ namespace PopupBlocker
         std::vector<Rule> rules;
         std::vector<std::wstring> removed;
         LoadRulesJson(rules, removed);
+        auto idx = BuildRuleIndex(rules); // 锁外构建索引
         std::lock_guard lock(RulesMutex);
         Rules = std::move(rules);
         CommunityRemoved = std::move(removed);
         RulesView = std::make_shared<const std::vector<Rule>>(Rules);
+        RulesIndexView = idx;
     }
 
     inline std::wstring Sha256Hex(winrt::Windows::Storage::Streams::IBuffer const& buf)
@@ -250,7 +350,6 @@ namespace PopupBlocker
 
         if (ShuttingDown.load()) co_return;
 
-        // 【修改】使用 SafeInvoke 消除 Data Race
         SafeInvoke(CommunityRulesFetchCallback, ok, msg);
     }
 
@@ -351,20 +450,43 @@ namespace PopupBlocker
 
         // 0=未命中, 1=白名单, 2=黑名单
         inline int Match(HWND hwnd) {
-            std::shared_ptr<const std::vector<Rule>> rules;
-            { std::lock_guard lock(RulesMutex); rules = RulesView; }
-            if (rules->empty()) return 0;
+            std::shared_ptr<const RuleIndex> idx;
+            { std::lock_guard lock(RulesMutex); idx = RulesIndexView; }
+            if (!idx || idx->empty) return 0;
 
-            std::wstring exe, path, title, cls;
-            bool matchedW = false, matchedB = false;
-            for (auto const& r : *rules) {
-                if (MatchRule(hwnd, r, exe, path, title, cls)) {
-                    if (r.isWhitelist) matchedW = true; else matchedB = true;
+            std::wstring t[4];
+            bool loaded[4]{};
+            auto target = [&](int f) -> std::wstring const& {
+                if (!loaded[f]) {
+                    switch (f) {
+                    case 0: t[f] = GetProcessName(hwnd); break;
+                    case 1: t[f] = GetProcessPath(hwnd); break;
+                    case 2: t[f] = GetTitle(hwnd); break;
+                    default: t[f] = GetClass(hwnd); break;
+                    }
+                    loaded[f] = true;
+                }
+                return t[f];
+                };
+
+            int flags = 0;
+            for (int f = 0; f < 4 && flags != 3; ++f) {
+                if (!idx->hasExact[f] && !idx->hasContains[f] && !idx->hasWild[f]) continue; // 无规则 field：零系统调用
+                if (idx->hasExact[f] || idx->hasContains[f]) {
+                    std::wstring const& s = target(f);
+                    if (idx->hasExact[f]) {
+                        auto it = idx->exact[f].find(s);
+                        if (it != idx->exact[f].end()) flags |= it->second;
+                    }
+                    if (idx->hasContains[f]) flags |= idx->contains[f].Scan(s);
                 }
             }
-            if (matchedW) return 1;
-            if (matchedB) return 2;
-            return 0;
+            for (auto const& r : idx->wilds) {
+                if (flags == 3) break;
+                if (WildcardMatch(target(static_cast<int>(r.field)).c_str(), r.pattern.c_str()))
+                    flags |= r.isWhitelist ? 1 : 2;
+            }
+            return (flags & 1) ? 1 : (flags & 2) ? 2 : 0;
         }
 
         inline void Log(std::wstring const& s)
@@ -529,7 +651,6 @@ namespace PopupBlocker
         if (v.shouldBlock) {
             detail::EnforceBlock(hwnd, v.matchResult);
 
-            // 【修改】使用 SafeInvoke 消除 TOCTOU 崩溃
             if (!ShuttingDown.load()) {
                 SafeInvoke(BlockOccurredCallback, detail::GetProcessName(hwnd), detail::GetTitle(hwnd), v.matchResult);
             }
