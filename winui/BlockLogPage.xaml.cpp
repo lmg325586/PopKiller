@@ -7,6 +7,7 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#include <functional>
 #include <ctime>
 #include <string>
 #if __has_include("BlockLogPage.g.cpp")
@@ -20,7 +21,6 @@ namespace
 {
     inline std::wstring GetRelativeTime(std::wstring const& timeStr)
     {
-        // 期望格式: "2026-08-29 15:30:12" (19 chars)
         if (timeStr.length() < 19) return L"";
 
         int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0;
@@ -41,7 +41,6 @@ namespace
         ULARGE_INTEGER t1, t2;
         t1.LowPart = ftLog.dwLowDateTime; t1.HighPart = ftLog.dwHighDateTime;
         t2.LowPart = ftNow.dwLowDateTime; t2.HighPart = ftNow.dwHighDateTime;
-
 
         long long diffMs = (t2.QuadPart - t1.QuadPart) / 10000;
         if (diffMs < 0) diffMs = 0;
@@ -78,6 +77,36 @@ namespace
         if (need <= 0) return {};
         std::wstring wide(static_cast<size_t>(need) - 1, 0);
         ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), -1, wide.data(), need);
+        return wide;
+    }
+
+    // 增量读取：从 offset 起读，只消费到最后一个 \n（半行防护）
+    std::wstring ReadLogTextFrom(uint64_t offset, uint64_t& consumed)
+    {
+        consumed = 0;
+        HANDLE hf = ::CreateFileW(PopupBlocker::LogPath().c_str(), GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (hf == INVALID_HANDLE_VALUE) return {};
+        LARGE_INTEGER pos{}; pos.QuadPart = static_cast<LONGLONG>(offset);
+        if (!::SetFilePointerEx(hf, pos, nullptr, FILE_BEGIN)) { ::CloseHandle(hf); return {}; }
+
+        std::string buf;
+        char chunk[65536];
+        DWORD rd{};
+        while (::ReadFile(hf, chunk, sizeof(chunk), &rd, nullptr) && rd > 0)
+            buf.append(chunk, rd);
+        ::CloseHandle(hf);
+
+        size_t lastNl = buf.rfind('\n');
+        if (lastNl == std::string::npos) return {};
+        buf.resize(lastNl + 1);
+        consumed = offset + buf.size();
+
+        int need = ::MultiByteToWideChar(CP_UTF8, 0, buf.c_str(), -1, nullptr, 0);
+        if (need <= 0) return {};
+        std::wstring wide(static_cast<size_t>(need) - 1, 0);
+        ::MultiByteToWideChar(CP_UTF8, 0, buf.c_str(), -1, wide.data(), need);
+        if (!wide.empty() && wide[0] == 0xFEFF) wide.erase(0, 1); // offset==0 时的 BOM
         return wide;
     }
 
@@ -164,7 +193,7 @@ namespace winrt::winui::implementation
     BlockLogPage::BlockLogPage()
     {
         InitializeComponent();
-        
+
         this->NavigationCacheMode(Navigation::NavigationCacheMode::Disabled);
 
         Load();
@@ -177,9 +206,152 @@ namespace winrt::winui::implementation
         this->Unloaded([this](auto&&, auto&&)
             {
                 if (m_timer) m_timer.Stop();
-                // Clear callback to prevent access after page is unloaded
                 PopupBlocker::BlockOccurredCallback = nullptr;
             });
+    }
+
+    void BlockLogPage::OnLogListLoaded(IInspectable const&, RoutedEventArgs const&)
+    {
+        std::function<DependencyObject(DependencyObject)> walk =
+            [&](DependencyObject d) -> DependencyObject {
+                if (!d) return nullptr;
+                if (auto sv = d.try_as<Controls::ScrollViewer>()) return sv;
+                int n = Media::VisualTreeHelper::GetChildrenCount(d);
+                for (int i = 0; i < n; ++i) {
+                    auto r = walk(Media::VisualTreeHelper::GetChild(d, i));
+                    if (r) return r;
+                }
+                return nullptr;
+            };
+        auto found = walk(LogList());
+        m_logScrollViewer = found ? found.try_as<Controls::ScrollViewer>() : nullptr;
+
+        if (m_logScrollViewer) {
+            m_logScrollViewer.ViewChanged([this](IInspectable const&,
+                Controls::ScrollViewerViewChangedEventArgs const&)
+                {
+                    if (m_inApplyFilter || !m_logScrollViewer) return;
+                    bool nowPinned = m_logScrollViewer.VerticalOffset() < 4.0;
+                    if (nowPinned && !m_pinnedToTop) {
+                        // 回到顶部：flush 缓冲的新日志
+                        m_pendingNewCount = 0;
+                        SyncJumpButton();
+                        ApplyFilter();
+                    }
+                    m_pinnedToTop = nowPinned;
+                });
+        }
+    }
+
+    std::wstring BlockLogPage::CurrentFilterTag()
+    {
+        std::wstring filterTag = L"all";
+        if (FilterCombo() && FilterCombo().SelectedItem()) {
+            if (auto item = FilterCombo().SelectedItem().try_as<Controls::ComboBoxItem>()) {
+                if (auto tagObj = item.Tag()) {
+                    filterTag = winrt::unbox_value<winrt::hstring>(tagObj).c_str();
+                }
+            }
+        }
+        return filterTag;
+    }
+
+    std::wstring BlockLogPage::CurrentSearchText()
+    {
+        std::wstring searchText;
+        if (SearchBox()) {
+            searchText = hstring(SearchBox().Text()).c_str();
+            std::transform(searchText.begin(), searchText.end(), searchText.begin(), ::towlower);
+        }
+        return searchText;
+    }
+
+    bool BlockLogPage::LinePassFilter(std::wstring const& rawLine, std::wstring const& filterTag,
+        std::wstring const& searchText, int threshold)
+    {
+        if (!searchText.empty()) {
+            std::wstring lowerRaw = rawLine;
+            std::transform(lowerRaw.begin(), lowerRaw.end(), lowerRaw.begin(), ::towlower);
+            if (lowerRaw.find(searchText) == std::wstring::npos) return false;
+        }
+
+        if (filterTag == L"all") return true;
+
+        if (filterTag == L"list") {
+            return (rawLine.find(L"reason=whitelist") != std::wstring::npos) ||
+                (rawLine.find(L"reason=blacklist") != std::wstring::npos);
+        }
+
+        if (filterTag == L"ml_heur") {
+            bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
+            bool mlN = rawLine.find(L" ml=N") != std::wstring::npos;
+            if (mlY || mlN) {
+                bool hasScore = false;
+                int score = 0;
+                auto heurPos = rawLine.find(L"heuristic(");
+                if (heurPos != std::wstring::npos) {
+                    size_t endPos = rawLine.find(L')', heurPos);
+                    if (endPos != std::wstring::npos) {
+                        try {
+                            score = std::stoi(rawLine.substr(heurPos + 10, endPos - heurPos - 10));
+                            hasScore = true;
+                        }
+                        catch (...) {}
+                    }
+                }
+                if (hasScore) {
+                    bool heurSaysPopup = (score >= threshold);
+                    bool mlSaysPopup = mlY;
+                    if (heurSaysPopup != mlSaysPopup) return true;
+                }
+            }
+            return false;
+        }
+
+        if (filterTag == L"ml_list") {
+            bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
+            bool isWhitelist = rawLine.find(L"reason=whitelist") != std::wstring::npos;
+            bool isBlacklist = rawLine.find(L"reason=blacklist") != std::wstring::npos;
+            if ((isWhitelist && mlY) || (isBlacklist && !mlY)) return true;
+            return false;
+        }
+
+        return false;
+    }
+
+    std::wstring BlockLogPage::BuildDisplay(std::wstring const& raw)
+    {
+        std::wstring display = FormatLogLineChinese(raw);
+        if (display.length() >= 19) {
+            std::wstring relTime = GetRelativeTime(display.substr(0, 19));
+            if (!relTime.empty()) display.insert(19, relTime);
+        }
+        if (auto labelIt = m_labels.find(raw); labelIt != m_labels.end()) {
+            if (labelIt->second.label == L"popup") display = L"[弹窗] " + display;
+            else if (labelIt->second.label == L"notpopup") display = L"[误关] " + display;
+        }
+        return display;
+    }
+
+    void BlockLogPage::SyncJumpButton()
+    {
+        if (!NewLogJumpButton()) return;
+        if (m_pendingNewCount == 0) {
+            NewLogJumpButton().Visibility(Visibility::Collapsed);
+        }
+        else {
+            NewLogJumpButton().Content(box_value(hstring(
+                L"↑ 有新日志 (" + std::to_wstring(m_pendingNewCount) + L")")));
+            NewLogJumpButton().Visibility(Visibility::Visible);
+        }
+    }
+
+    void BlockLogPage::UpdateCountText()
+    {
+        if (FilterCountText()) {
+            FilterCountText().Text(hstring(std::to_wstring(m_rawLines.size()) +
+                L" / " + std::to_wstring(m_allLines.size()) + L" 条"));
+        }
     }
 
     void BlockLogPage::ReloadFromFile()
@@ -197,99 +369,77 @@ namespace winrt::winui::implementation
     void BlockLogPage::ApplyFilter()
     {
         if (!LogList()) return;
+        m_inApplyFilter = true;
         LogList().Items().Clear();
         m_rawLines.clear();
 
-        std::wstring filterTag = L"all";
-        if (FilterCombo() && FilterCombo().SelectedItem()) {
-            if (auto item = FilterCombo().SelectedItem().try_as<Controls::ComboBoxItem>()) {
-                if (auto tagObj = item.Tag()) {
-                    filterTag = winrt::unbox_value<winrt::hstring>(tagObj).c_str();
-                }
-            }
-        }
-
-        std::wstring searchText;
-        if (SearchBox()) {
-            searchText = hstring(SearchBox().Text()).c_str();
-            std::transform(searchText.begin(), searchText.end(), searchText.begin(), ::towlower);
-        }
-
+        std::wstring filterTag = CurrentFilterTag();
+        std::wstring searchText = CurrentSearchText();
         int threshold = PopupBlocker::HeuristicThreshold;
-        int shownCount = 0;
-        int totalCount = (int)m_allLines.size();
 
         for (auto it = m_allLines.rbegin(); it != m_allLines.rend(); ++it)
         {
             const std::wstring& rawLine = *it;
-
-            if (!searchText.empty()) {
-                std::wstring lowerRaw = rawLine;
-                std::transform(lowerRaw.begin(), lowerRaw.end(), lowerRaw.begin(), ::towlower);
-                if (lowerRaw.find(searchText) == std::wstring::npos) continue;
-            }
-
-            bool passFilter = false;
-            if (filterTag == L"all") {
-                passFilter = true;
-            }
-            else if (filterTag == L"list") {
-                passFilter = (rawLine.find(L"reason=whitelist") != std::wstring::npos) ||
-                    (rawLine.find(L"reason=blacklist") != std::wstring::npos);
-            }
-            else if (filterTag == L"ml_heur") {
-                bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
-                bool mlN = rawLine.find(L" ml=N") != std::wstring::npos;
-                if (mlY || mlN) {
-                    bool hasScore = false;
-                    int score = 0;
-                    auto heurPos = rawLine.find(L"heuristic(");
-                    if (heurPos != std::wstring::npos) {
-                        size_t endPos = rawLine.find(L')', heurPos);
-                        if (endPos != std::wstring::npos) {
-                            try {
-                                score = std::stoi(rawLine.substr(heurPos + 10, endPos - heurPos - 10));
-                                hasScore = true;
-                            }
-                            catch (...) {}
-                        }
-                    }
-
-                    if (hasScore) {
-                        bool heurSaysPopup = (score >= threshold);
-                        bool mlSaysPopup = mlY;
-                        if (heurSaysPopup != mlSaysPopup) passFilter = true;
-                    }
-                }
-            }
-            else if (filterTag == L"ml_list") {
-                bool mlY = rawLine.find(L" ml=Y") != std::wstring::npos;
-                bool isWhitelist = rawLine.find(L"reason=whitelist") != std::wstring::npos;
-                bool isBlacklist = rawLine.find(L"reason=blacklist") != std::wstring::npos;
-                if ((isWhitelist && mlY) || (isBlacklist && !mlY)) passFilter = true;
-            }
-
-            if (!passFilter) continue;
-
-            std::wstring display = FormatLogLineChinese(rawLine);
-            if (display.length() >= 19) {
-                std::wstring relTime = GetRelativeTime(display.substr(0, 19));
-                if (!relTime.empty()) {
-                    display.insert(19, relTime);
-                }
-            }
-            if (auto labelIt = m_labels.find(rawLine); labelIt != m_labels.end()) {
-                if (labelIt->second.label == L"popup") display = L"[弹窗] " + display;
-                else if (labelIt->second.label == L"notpopup") display = L"[误关] " + display;
-            }
+            if (!LinePassFilter(rawLine, filterTag, searchText, threshold)) continue;
             m_rawLines.push_back(rawLine);
-            LogList().Items().Append(box_value(hstring(display)));
-            shownCount++;
+            LogList().Items().Append(box_value(hstring(BuildDisplay(rawLine))));
         }
 
-        if (FilterCountText()) {
-            FilterCountText().Text(hstring(std::to_wstring(shownCount) + L" / " + std::to_wstring(totalCount) + L" 条"));
+        UpdateCountText();
+        m_pendingNewCount = 0;
+        SyncJumpButton();
+        m_inApplyFilter = false;
+    }
+
+    void BlockLogPage::AppendNewLines()
+    {
+        uint64_t consumed = 0;
+        std::wstring text = ReadLogTextFrom(m_lastFileSize, consumed);
+        if (consumed > m_lastFileSize) m_lastFileSize = consumed;
+        if (text.empty()) return;
+
+        std::vector<std::wstring> newLines; // 文件顺序：旧 → 新
+        size_t start = 0;
+        while (start < text.size()) {
+            size_t nl = text.find(L'\n', start);
+            if (nl == std::wstring::npos) nl = text.size();
+            std::wstring line = text.substr(start, nl - start);
+            if (!line.empty() && line.back() == L'\r') line.pop_back();
+            start = nl + 1;
+            if (!line.empty()) newLines.push_back(line);
         }
+        if (newLines.empty()) return;
+
+        for (auto& l : newLines) m_allLines.push_back(l);
+
+        std::wstring filterTag = CurrentFilterTag();
+        std::wstring searchText = CurrentSearchText();
+        int threshold = PopupBlocker::HeuristicThreshold;
+
+        if (m_pinnedToTop) {
+            // 跟随模式：逆序插到头部，保持最新在上
+            uint32_t appended = 0;
+            for (auto it = newLines.rbegin(); it != newLines.rend(); ++it) {
+                if (LinePassFilter(*it, filterTag, searchText, threshold)) {
+                    m_rawLines.insert(m_rawLines.begin(), *it);
+                    LogList().Items().InsertAt(0, box_value(hstring(BuildDisplay(*it))));
+                    ++appended;
+                }
+            }
+            if (appended > 0 && LogList().Items().Size() > 0)
+                LogList().ScrollIntoView(LogList().Items().GetAt(0));
+        }
+        else {
+            // 阅读模式：不碰列表，只计数
+            uint32_t pass = 0;
+            for (auto& l : newLines)
+                if (LinePassFilter(l, filterTag, searchText, threshold)) ++pass;
+            if (pass > 0) {
+                m_pendingNewCount += pass;
+                SyncJumpButton();
+            }
+        }
+        UpdateCountText();
     }
 
     void BlockLogPage::Load()
@@ -301,6 +451,9 @@ namespace winrt::winui::implementation
             SampleLabels::Load(m_labels);
             ApplyFilter();
         }
+        WIN32_FILE_ATTRIBUTE_DATA fad{};
+        if (::GetFileAttributesExW(PopupBlocker::LogPath().c_str(), GetFileExInfoStandard, &fad))
+            m_lastFileSize = (static_cast<uint64_t>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow;
     }
 
     void BlockLogPage::Filter_Changed(IInspectable const&, Controls::SelectionChangedEventArgs const&)
@@ -321,18 +474,37 @@ namespace winrt::winui::implementation
     void BlockLogPage::OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&)
     {
         if (m_timer) m_timer.Stop();
-        // Clear callback to prevent access after page is navigated away
         PopupBlocker::BlockOccurredCallback = nullptr;
     }
 
     void BlockLogPage::Timer_Tick(IInspectable const&, IInspectable const&)
     {
         if (PopupBlocker::ShuttingDown.load()) return;
-
         auto strongThis = get_strong();
         if (!strongThis) return;
 
-        Load();
+        WIN32_FILE_ATTRIBUTE_DATA fad{};
+        if (!::GetFileAttributesExW(PopupBlocker::LogPath().c_str(), GetFileExInfoStandard, &fad)) return;
+        uint64_t size = (static_cast<uint64_t>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow;
+        ULARGE_INTEGER u{};
+        u.LowPart = fad.ftLastWriteTime.dwLowDateTime;
+        u.HighPart = fad.ftLastWriteTime.dwHighDateTime;
+        uint64_t wt = u.QuadPart;
+
+        if (wt == m_lastWrite && size == m_lastFileSize) return;   // 无变化：零 IO
+        if (size < m_lastFileSize) { m_lastWrite = wt; Load(); return; } // 轮转/清空：全量重建
+        m_lastWrite = wt;
+        AppendNewLines();                                          // 常规：增量
+    }
+
+    void BlockLogPage::NewLogJumpButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        m_pendingNewCount = 0;
+        SyncJumpButton();
+        m_pinnedToTop = true;
+        ApplyFilter();
+        if (LogList().Items().Size() > 0)
+            LogList().ScrollIntoView(LogList().Items().GetAt(0));
     }
 
     void BlockLogPage::Refresh_Click(IInspectable const&, RoutedEventArgs const&)
@@ -455,7 +627,6 @@ namespace winrt::winui::implementation
     BlockLogPage::~BlockLogPage()
     {
         if (m_timer) m_timer.Stop();
-        // Clear callback to prevent access after page is destroyed
         PopupBlocker::BlockOccurredCallback = nullptr;
     }
 }

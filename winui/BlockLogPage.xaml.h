@@ -13,6 +13,9 @@ namespace winrt::winui::implementation
         BlockLogPage();
         ~BlockLogPage();
 
+        // ==========================================
+        // PUBLIC: XAML 绑定的事件处理函数
+        // ==========================================
         void Refresh_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void Clear_Click(winrt::Windows::Foundation::IInspectable const& sender,
@@ -37,7 +40,13 @@ namespace winrt::winui::implementation
         void OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
         void OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
 
+        void OnLogListLoaded(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void NewLogJumpButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+
     private:
+
         void Load();
         void ReloadFromFile();
         void ApplyFilter();
@@ -45,6 +54,15 @@ namespace winrt::winui::implementation
         void Timer_Tick(winrt::Windows::Foundation::IInspectable const&,
             winrt::Windows::Foundation::IInspectable const&);
         void AddRuleFromSelection(bool whitelist);
+
+        void AppendNewLines();
+        bool LinePassFilter(std::wstring const& raw, std::wstring const& filterTag,
+            std::wstring const& searchText, int threshold);
+        std::wstring BuildDisplay(std::wstring const& raw);
+        std::wstring CurrentFilterTag();
+        std::wstring CurrentSearchText();
+        void SyncJumpButton();
+        void UpdateCountText();
 
         std::vector<std::wstring> m_allLines;
         std::vector<std::wstring> m_rawLines;
@@ -55,6 +73,12 @@ namespace winrt::winui::implementation
 
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_timer{ nullptr };
         uint64_t m_lastWrite{ 0 };
+
+        winrt::Microsoft::UI::Xaml::Controls::ScrollViewer m_logScrollViewer{ nullptr };
+        bool m_pinnedToTop{ true };
+        bool m_inApplyFilter{ false };
+        uint64_t m_lastFileSize{ 0 };
+        uint32_t m_pendingNewCount{ 0 };
     };
 }
 
