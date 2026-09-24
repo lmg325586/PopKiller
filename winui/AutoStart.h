@@ -19,14 +19,6 @@ namespace AutoStart
         p = p.substr(0, pos + 1) + L"autostart_debug.log";
         WCHAR user[64]{}; DWORD ulen = 64;
         ::GetUserNameW(user, &ulen);
-        FILE* f{};
-        if (_wfopen_s(&f, p.c_str(), L"a") == 0 && f)
-        {
-            SYSTEMTIME st{}; ::GetLocalTime(&st);
-            fwprintf(f, L"%02d:%02d:%02d user=%s %s\n",
-                st.wHour, st.wMinute, st.wSecond, user, msg);
-            ::fclose(f);
-        }
     }
 
     inline std::wstring GetExePathQuoted()
