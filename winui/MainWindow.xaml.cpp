@@ -115,17 +115,13 @@ namespace winrt::winui::implementation
 
         this->Closed([this](auto&&, auto&&)
             {
-                // Stop all page timers before destroying UI elements
                 if (auto frame = ContentFrame())
                 {
                     if (auto page = frame.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Page>())
                     {
-                        // Try to stop any DispatcherTimer in the current page
-                        // Pages should handle their own cleanup in Unloaded, but we ensure it here
                     }
                 }
 
-                // Explicitly clear ALL page callbacks to prevent use-after-free
                 PopupBlocker::EnabledChangedCallback = nullptr;
                 PopupBlocker::CommunityRulesFetchCallback = nullptr;
                 PopupBlocker::BlockOccurredCallback = nullptr;
@@ -139,9 +135,6 @@ namespace winrt::winui::implementation
                 PopupBlocker::ShuttingDown = true;
                 PopupBlocker::Stop();
 
-                FILE* f{};
-                if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"wb") == 0 && f)
-                    ::fclose(f);
             });
 
         auto titleBar = this->AppWindow().TitleBar();
