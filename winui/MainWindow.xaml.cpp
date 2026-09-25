@@ -124,8 +124,6 @@ namespace winrt::winui::implementation
                     }
                 }
 
-                PopupBlocker::EnabledChangedCallback = nullptr;
-                PopupBlocker::CommunityRulesFetchCallback = nullptr;
                 PopupBlocker::BlockOccurredCallback = nullptr;
 
                 TrayIcon::OnExitRequested = nullptr;
