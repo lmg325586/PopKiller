@@ -27,26 +27,7 @@
         </Grid>
 
         <Grid Grid.Row="3">
-            <ListView x:Name="LogList" SelectionMode="None" Loaded="OnLogListLoaded">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="x:String">
-                        <TextBlock Text="{x:Bind}" TextWrapping="Wrap"
-                                   FontSize="12" FontFamily="Consolas"
-                                   RightTapped="LogItem_RightTapped"
-                                   DoubleTapped="LogItem_DoubleTapped">
-                            <TextBlock.ContextFlyout>
-                                <MenuFlyout>
-                                    <MenuFlyoutItem Text="标记为弹窗（拦截正确）" Click="MarkPopup_Click"/>
-                                    <MenuFlyoutItem Text="标记为误关（非弹窗）" Click="MarkNotPopup_Click"/>
-                                    <MenuFlyoutSeparator/>
-                                    <MenuFlyoutItem Text="添加到黑名单" Click="AddToBlacklist_Click"/>
-                                    <MenuFlyoutItem Text="添加到白名单" Click="AddToWhitelist_Click"/>
-                                </MenuFlyout>
-                            </TextBlock.ContextFlyout>
-                        </TextBlock>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+            <ListView x:Name="LogList" SelectionMode="None" Loaded="OnLogListLoaded"/>
 
             <Button x:Name="NewLogJumpButton" Content="↑ 有新日志"
                     HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0"
@@ -55,6 +36,6 @@
         </Grid>
 
         <TextBlock Grid.Row="4" FontSize="12" Foreground="Gray"
-                   Text="记录每次拦截：时间、命中规则、窗口标题 / 类名 / 进程。最新在上。双击聚合行可展开单次详情，右键条目可标记用于训练数据导出。"/>
+                   Text="同进程事件自动合并，双击展开单次明细（最近 100 条）。右键条目可标记或加规则。"/>
     </Grid>
 </Page>
