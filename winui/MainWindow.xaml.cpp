@@ -9,6 +9,7 @@
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include "TrayIcon.h"
+#include "HeuristicML.h"
 #include <commctrl.h>
 #pragma comment(lib, "comctl32.lib")
 #include <microsoft.ui.xaml.window.h>
@@ -106,6 +107,33 @@ namespace winrt::winui::implementation
         return r;
     }
 
+    // 常驻（MainWindow 层）回调入口：以"自由函数 + owner(MainWindow*)"形式注册，
+    // 只同步设置与引擎状态、不依赖任何页面实例，因此用户离开 PopupBlockerPage 后
+    // 托盘切换开关 / 社区规则后台更新仍会生效，重新进入页面时 UI 不会出现状态漂移。
+    void PersistentEnabledChanged(void* ctx)
+    {
+        auto* self = static_cast<winrt::winui::implementation::MainWindow*>(ctx);
+        if (self) self->OnEnabledChangedPersistent();
+    }
+
+    void PersistentCommunityRulesFetched(void* ctx)
+    {
+        auto* self = static_cast<winrt::winui::implementation::MainWindow*>(ctx);
+        if (self) self->OnCommunityRulesFetched();
+    }
+
+    // 退出清理必须持有 CallbackMutex：引擎线程/托盘线程可能正在 SafeInvoke
+    // 持锁读取这些全局回调，无锁写入构成数据竞争（use-after-free 风险）。
+    // 先置 ShuttingDown，令各回调入口尽早短路，再持锁摘除。
+    void ClearAllCallbacksForShutdown()
+    {
+        PopupBlocker::ShuttingDown = true;
+        std::lock_guard lock(PopupBlocker::CallbackMutex);
+        PopupBlocker::EnabledChangedCallback = nullptr;
+        PopupBlocker::CommunityRulesFetchCallback = nullptr;
+        PopupBlocker::BlockOccurredCallback = nullptr;
+    }
+
     MainWindow::MainWindow()
     {
         InitializeComponent();
@@ -115,16 +143,7 @@ namespace winrt::winui::implementation
 
         this->Closed([this](auto&&, auto&&)
             {
-                if (auto frame = ContentFrame())
-                {
-                    if (auto page = frame.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Page>())
-                    {
-                    }
-                }
-
-                PopupBlocker::EnabledChangedCallback = nullptr;
-                PopupBlocker::CommunityRulesFetchCallback = nullptr;
-                PopupBlocker::BlockOccurredCallback = nullptr;
+                ClearAllCallbacksForShutdown();
 
                 TrayIcon::OnExitRequested = nullptr;
                 TrayIcon::OnHideToTray = nullptr;
@@ -132,7 +151,6 @@ namespace winrt::winui::implementation
                 TrayIcon::Remove();
                 TrayIcon::Init(nullptr);
                 WindowPicker::Cancel();
-                PopupBlocker::ShuttingDown = true;
                 PopupBlocker::Stop();
 
             });
@@ -298,6 +316,82 @@ namespace winrt::winui::implementation
                 ::OutputDebugStringW(L"[PopKiller] Toast 未知异常\n");
             }
             };
+
+        // App/MainWindow 层常驻回调：生命周期与主窗口一致，不随设置页销毁而丢失。
+        // 用户离开 PopupBlockerPage 后，托盘切换开关 / 社区规则后台更新仍会触发这里，
+        // 保证引擎状态与设置始终一致；重新进入页面时 UI 从设置/引擎重新同步。
+        // owner 指针 = MainWindow 实现对象地址（winrt 实现对象即 IInspectable），
+        // 与 PopupBlockerPage 析构时的 ClearCallbackIfOwnedBy 令牌体系一致、互不误伤。
+        {
+            std::lock_guard lock(PopupBlocker::CallbackMutex);
+            owner_bind(PopupBlocker::EnabledChangedCallback,
+                &PersistentEnabledChanged, this);
+            owner_bind(PopupBlocker::CommunityRulesFetchCallback,
+                &PersistentCommunityRulesFetched, this);
+        }
+    }
+
+    // 常驻回调实现：由托盘线程或引擎后台线程经 SafeInvoke 拷贝出回调后调用（不持锁执行），
+    // 此处只做"设置 -> 引擎"的状态同步，UI 相关操作统一调度回 UI 线程。
+    void MainWindow::OnEnabledChangedPersistent()
+    {
+        if (PopupBlocker::ShuttingDown.load()) return;
+
+        const bool on = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
+        if (on)
+        {
+            PopupBlocker::SyncFromSettings();
+            HeuristicML::GetInstance().Init();
+            PopupBlocker::Start();
+        }
+        else
+        {
+            PopupBlocker::Stop();
+        }
+
+        // 回到 UI 线程刷新当前停留在设置页的开关/状态显示（页面可能已销毁，弱引用安全）
+        auto weakThis = get_weak();
+        DispatcherQueue().TryEnqueue([weakThis]()
+            {
+                if (auto self = weakThis.get())
+                    self->RefreshVisibleBlockerPage();
+            });
+    }
+
+    void MainWindow::OnCommunityRulesFetched()
+    {
+        if (PopupBlocker::ShuttingDown.load()) return;
+
+        // 社区规则后台更新完成后，若当前正停留在设置页则刷新其列表；
+        // 否则无需处理——下次进入 PopupBlockerPage 时会通过
+        // ReloadRulesFromEngine() 从引擎重新同步，UI 不会出现状态漂移。
+        // 注意：本函数运行在协程续体线程上，UI 操作必须调度回 UI 线程。
+        auto weakThis = get_weak();
+        try
+        {
+            DispatcherQueue().TryEnqueue([weakThis]()
+                {
+                    auto self = weakThis.get();
+                    if (!self || PopupBlocker::ShuttingDown.load()) return;
+                    self->RefreshVisibleBlockerPage();
+                });
+        }
+        catch (...) {}
+    }
+
+    // UI 线程：若当前导航内容正是 PopupBlockerPage，则通知其从引擎/设置重新同步
+    void MainWindow::RefreshVisibleBlockerPage()
+    {
+        try
+        {
+            if (auto page = ContentFrame().Content()
+                    .try_as<winrt::winui::PopupBlockerPage>())
+            {
+                winrt::get_self<winrt::winui::implementation::PopupBlockerPage>(page)
+                    ->OnExternalStateChanged();
+            }
+        }
+        catch (...) {}
     }
 
     void MainWindow::HandleCloseRequested(
@@ -379,6 +473,12 @@ namespace winrt::winui::implementation
 
     void MainWindow::ExitApplication()
     {
+        // 退出前立即（在 UI 线程上）摘除全部全局回调并置 ShuttingDown，
+        // 避免 Close()/消息循环销毁后，托盘线程或引擎后台线程再经
+        // SafeInvoke 拷贝出的回调触碰已析构的 MainWindow（use-after-free）。
+        // Closed 事件中的再次清理是幂等的。
+        ClearAllCallbacksForShutdown();
+
         m_forceClose = true;
         Close();
     }

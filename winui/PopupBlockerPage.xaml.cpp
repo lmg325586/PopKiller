@@ -64,13 +64,35 @@ namespace
 namespace winrt::winui::implementation
 {
 
+    // 常驻（App/MainWindow 层）回调：仅同步设置与引擎状态，不依赖任何页面实例。
+    // 保证用户离开设置页后，通过托盘切换开关或社区规则后台更新时，
+    // 拦截引擎与设置始终一致；重新进入页面时 UI 会从设置/引擎重新同步。
+    // 定义为自由函数（非 lambda），以便 std::function::target 能识别"所有者"指针。
+}
+
+void winui::PersistentEnabledChanged(void* ctx)
+{
+    auto* self = static_cast<winrt::winui::implementation::MainWindow*>(ctx);
+    if (self) self->OnEnabledChangedPersistent();
+}
+
+void winui::PersistentCommunityRulesFetched(void* ctx)
+{
+    auto* self = static_cast<winrt::winui::implementation::MainWindow*>(ctx);
+    if (self) self->OnCommunityRulesFetched();
+}
+
+namespace winrt::winui::implementation
+{
+
     PopupBlockerPage::~PopupBlockerPage()
     {
         if (m_statusTimer) m_statusTimer.Stop();
-        // 加锁清空回调，防止引擎后台线程在页面析构瞬间调用
-        std::lock_guard lock(PopupBlocker::CallbackMutex);
-        PopupBlocker::EnabledChangedCallback = nullptr;
-        PopupBlocker::CommunityRulesFetchCallback = nullptr;
+        // 只清除"自己注册的"回调（按 owner 指针比对，内部持有 CallbackMutex），
+        // 不误伤 MainWindow/App 层常驻回调；引擎线程持锁读取，无数据竞争。
+        const auto token = this->try_as<IInspectable>();
+        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::EnabledChangedCallback, token.abi());
+        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::CommunityRulesFetchCallback, token.abi());
     }
 
     PopupBlockerPage::PopupBlockerPage()

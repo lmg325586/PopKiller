@@ -16,6 +16,7 @@
 #include "HeuristicScorer.h"
 #include "RuleTypes.h"
 #include "RuleStorage.h"
+#include "OwnerFunction.h"
 #include <winrt/Windows.Web.Http.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Security.Cryptography.h>
@@ -28,17 +29,49 @@ namespace PopupBlocker
 {
     inline std::vector<Rule> Rules;
     inline std::vector<std::wstring> CommunityRemoved;
-    inline std::function<void(bool, std::wstring)> CommunityRulesFetchCallback;
+    // owner_function：携带注册者（owner）指针的回调槽，
+    // 使"仅清除自己注册的回调"成为可能（见 ClearCallbackIfOwnedBy）。
+    // 社区规则拉取完成回调：由 MainWindow 常驻注册（引擎状态同步），
+    // PopupBlockerPage 在显示期间临时注册以刷新 UI，析构时只摘除自己的那份。
+    inline owner_function<void(bool, std::wstring)> CommunityRulesFetchCallback;
     inline std::mutex RulesMutex;
 
     inline std::mutex CallbackMutex;
 
     template <typename Sig, typename... Args>
-    inline void SafeInvoke(std::function<Sig>& slot, Args&&... args)
+    void SafeInvoke(std::function<Sig>& slot, Args&&... args)
     {
         std::function<Sig> f;
         { std::lock_guard lock(CallbackMutex); f = slot; }
         if (f) f(std::forward<Args>(args)...);
+    }
+
+    // owner_function 版 SafeInvoke：持锁拷贝出可调用对象后不持锁执行，
+    // 避免与回调内部的再次加锁形成死锁/长阻塞。
+    template <typename R, typename... S, typename... Args>
+    void SafeInvoke(owner_function<R(S...)>& slot, Args&&... args)
+    {
+        owner_function<R(S...)> f;
+        { std::lock_guard lock(CallbackMutex); f = slot; }
+        if (f) f(std::forward<Args>(args)...);
+    }
+
+    // 仅当槽位中存放的仍是 owner 所注册的回调时才清除，
+    // 避免页面析构时误伤 App/MainWindow 常驻管理层注册的回调。
+    template <typename R, typename... S>
+    void ClearCallbackIfOwnedBy(owner_function<R(S...)>& slot, const void* owner)
+    {
+        std::lock_guard lock(CallbackMutex);
+        if (owner && slot.owner() == owner)
+            slot = nullptr;
+    }
+
+    // 读取槽位当前的注册者指针（用于判断是否已有常驻注册方，避免重复覆盖）。
+    template <typename R, typename... S>
+    const void* CallbackOwnerOf(const owner_function<R(S...)>& slot)
+    {
+        std::lock_guard lock(CallbackMutex);
+        return slot.owner();
     }
 
     inline std::shared_ptr<const std::vector<Rule>> RulesView =
@@ -137,7 +170,9 @@ namespace PopupBlocker
     inline std::shared_ptr<const RuleIndex> RulesIndexView;
 
     inline std::atomic<bool> Running{ false };
-    inline std::function<void()> EnabledChangedCallback;
+    // 开关状态变更回调：MainWindow 常驻注册（负责"设置 -> 引擎"同步），
+    // PopupBlockerPage 显示期间临时注册以刷新开关 UI，析构时只摘除自己的那份。
+    inline owner_function<void()> EnabledChangedCallback;
     inline bool ForceBlock = false;
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;

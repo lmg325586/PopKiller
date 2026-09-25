@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <functional>
+#include "OwnerFunction.h"   // owner_function：携带注册者指针的回调槽（全局唯一定义）
 #include "PopupBlocker.h"
 
 namespace winrt::winui::implementation
@@ -42,6 +44,10 @@ namespace winrt::winui::implementation
 
         void OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
         void OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
+
+        // 由 MainWindow 常驻回调在 UI 线程调用：外部（托盘/后台）状态发生变化时，
+        // 从设置与引擎重新同步本页面 UI，避免"UI 状态与实际拦截状态不一致"。
+        void OnExternalStateChanged();
 
         void RuleItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args);
