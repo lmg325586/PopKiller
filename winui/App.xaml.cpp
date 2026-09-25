@@ -195,34 +195,21 @@ namespace winrt::winui::implementation
         // Toast 本身仍能正常显示；待 AppSDK 修复或改用非 self-contained 后可恢复。
         try
         {
-            OutputDebugStringW(L"[PopKiller] notification: subscribe + Register...\n");
             AppNotificationManager::Default().NotificationInvoked({ this, &App::OnNotificationInvoked });
             AppNotificationManager::Default().Register();
-            OutputDebugStringW(L"[PopKiller] notification: Register OK\n");
 
             // 应用未运行时由通知启动：激活参数从 AppInstance 获取
             if (auto activated = AppInstance::GetCurrent().GetActivatedEventArgs();
                 activated.Kind() == ExtendedActivationKind::AppNotification)
             {
-                OutputDebugStringW(L"[PopKiller] notification: AppNotification activation args found\n");
                 if (auto nargs = activated.Data().try_as<AppNotificationActivatedEventArgs>())
                     HandleNotification(nargs);
             }
-            else
-            {
-                OutputDebugStringW(L"[PopKiller] notification: normal launch\n");
-            }
-        }
-        catch (winrt::hresult_error const& e)
-        {
-            wchar_t buf[192]{};
-            swprintf_s(buf, L"[PopKiller] notification: Register/activation FAILED hr=0x%08X (%s)\n",
-                static_cast<unsigned>(e.code().value), e.message().c_str());
-            OutputDebugStringW(buf);
         }
         catch (...)
         {
-            OutputDebugStringW(L"[PopKiller] notification: Register/activation FAILED unknown\n");
+            // 失败不阻断启动，仅失去按钮点击激活；Toast 显示不受影响。
+            OutputDebugStringW(L"[PopKiller] 通知激活注册失败，已忽略\n");
         }
 
         if (isToastActivation) {
@@ -253,13 +240,11 @@ namespace winrt::winui::implementation
 
     void App::OnNotificationInvoked(AppNotificationManager const&, AppNotificationActivatedEventArgs const& args)
     {
-        OutputDebugStringW(L"[PopKiller] notification: NotificationInvoked fired\n");
         HandleNotification(args);
     }
 
     void App::HandleNotification(AppNotificationActivatedEventArgs const& args)
     {
-        OutputDebugStringW(L"[PopKiller] notification: HandleNotification enter\n");
         auto input = args.Arguments();
         std::wstring action = input.HasKey(L"action") ? std::wstring(input.Lookup(L"action")) : std::wstring{};
         std::wstring exe = input.HasKey(L"exe") ? std::wstring(input.Lookup(L"exe")) : std::wstring{};
