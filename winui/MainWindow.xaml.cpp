@@ -116,7 +116,8 @@ namespace winrt::winui::implementation
         this->Closed([this](auto&&, auto&&)
             {
                 BeginShutdown();
-                winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().UnregisterAll();
+                try { winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().UnregisterAll(); }
+                catch (...) {}
 
                 if (auto frame = ContentFrame())
                 {

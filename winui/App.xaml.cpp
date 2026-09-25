@@ -187,15 +187,28 @@ namespace winrt::winui::implementation
 
         // 注册 Windows 通知激活：unpackaged 应用必须显式 Register，
         // 并订阅运行中点击通知的 NotificationInvoked。
-        AppNotificationManager::Default().NotificationInvoked({ this, &App::OnNotificationInvoked });
-        AppNotificationManager::Default().Register();
-
-        // 应用未运行时由通知启动：激活参数从 AppInstance 获取
-        if (auto activated = AppInstance::GetCurrent().GetActivatedEventArgs();
-            activated.Kind() == ExtendedActivationKind::AppNotification)
+        //
+        // 注意：self-contained + unpackaged 下 AppSDK 2.x 存在已知缺陷
+        // （Register() 因缺少 Microsoft.WindowsAppRuntime.Insights.Resource.dll
+        //   抛 0x8007007E / wil::ResultException，见 WindowsAppSDK #6774）。
+        // 这里按 best-effort 处理：失败不阻断启动，仅失去"按钮点击激活"，
+        // Toast 本身仍能正常显示；待 AppSDK 修复或改用非 self-contained 后可恢复。
+        try
         {
-            if (auto nargs = activated.Data().try_as<AppNotificationActivatedEventArgs>())
-                HandleNotification(nargs);
+            AppNotificationManager::Default().NotificationInvoked({ this, &App::OnNotificationInvoked });
+            AppNotificationManager::Default().Register();
+
+            // 应用未运行时由通知启动：激活参数从 AppInstance 获取
+            if (auto activated = AppInstance::GetCurrent().GetActivatedEventArgs();
+                activated.Kind() == ExtendedActivationKind::AppNotification)
+            {
+                if (auto nargs = activated.Data().try_as<AppNotificationActivatedEventArgs>())
+                    HandleNotification(nargs);
+            }
+        }
+        catch (...)
+        {
+            OutputDebugStringW(L"[PopKiller] 通知激活注册失败(AppSDK self-contained 已知问题 #6774)，已忽略\n");
         }
 
         if (isToastActivation) {
