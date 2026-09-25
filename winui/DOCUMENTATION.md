@@ -1,5 +1,5 @@
 ﻿# 函数输入输出参考
-> 基于当前 `master` 分支（Beta 0.7）代码由 AI 整理。
+> 基于当前 `master` 分支（Beta 0.8）代码由 AI 整理。
 
 ## AppSettings.h（配置读写）
 

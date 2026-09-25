@@ -5,7 +5,7 @@ try { $gitHash = (git rev-parse --short HEAD) 2>$null } catch {}
 if (-not $gitHash) { $gitHash = "unknown" }
 $date = Get-Date -Format "yyyyMMdd"
 
-$baseVersion = "0.7"
+$baseVersion = "0.8"
 $displayString = "Beta $baseVersion ($date.$gitHash)"
 $headerPath = Join-Path $root "winui\VersionInfo.h"
 $content = "#pragma once`r`n#define APP_VERSION_STRING L`"$displayString`"`r`n"
@@ -27,8 +27,10 @@ if (Test-Path $rcPath) {
     $rc = [System.IO.File]::ReadAllText($rcPath)
     if (-not $rc.Contains($displayString)) {
         $verStr = "$baseVersion.$date.$gitHash"
-        $rc = [regex]::Replace($rc, 'FILEVERSION\s+[\d,]+', 'FILEVERSION 0,5,0,0')
-        $rc = [regex]::Replace($rc, 'PRODUCTVERSION\s+[\d,]+', 'PRODUCTVERSION 0,5,0,0')
+        $verParts = $baseVersion -split '\.'
+        $verQuad = "0,$($verParts[1]),0,0"
+        $rc = [regex]::Replace($rc, 'FILEVERSION\s+[\d,]+', "FILEVERSION $verQuad")
+        $rc = [regex]::Replace($rc, 'PRODUCTVERSION\s+[\d,]+', "PRODUCTVERSION $verQuad")
         $rc = [regex]::Replace($rc, '(?<=VALUE "FileVersion",\s*")[^"]*', $verStr)
         $rc = [regex]::Replace($rc, '(?<=VALUE "ProductVersion",\s*")[^"]*', $verStr)
         [System.IO.File]::WriteAllText($rcPath, $rc)

@@ -177,7 +177,7 @@
                     <Grid ColumnDefinitions="Auto,*">
                         <TextBlock Text="当前版本" Style="{StaticResource BodyTextBlockStyle}" 
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock x:Name="VersionTextBlock" Text="Beta 0.7" Grid.Column="1" Margin="16,0,0,0" 
+                        <TextBlock x:Name="VersionTextBlock" Text="Beta 0.8" Grid.Column="1" Margin="16,0,0,0" 
                                    Style="{StaticResource BodyTextBlockStyle}"/>
                     </Grid>
 
