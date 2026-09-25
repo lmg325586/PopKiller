@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "pch.h"
+#include <winrt/Microsoft.UI.Xaml.Input.h>
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include "LabelStorage.h"
@@ -295,6 +296,25 @@ namespace winrt::winui::implementation
         }
     }
 
+    void BlockLogPage::RowRightTapped(IInspectable const& sender,
+        winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const&)
+    {
+        if (auto fe = sender.try_as<FrameworkElement>()) {
+            if (auto tag = fe.Tag()) {
+                size_t gidx = static_cast<size_t>(winrt::unbox_value<uint64_t>(tag));
+                if (gidx < m_groups.size()) m_selectedRaw = m_groups[gidx].lastRaw;
+            }
+        }
+    }
+
+    void BlockLogPage::SubRowRightTapped(IInspectable const& sender,
+        winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const&)
+    {
+        if (auto fe = sender.try_as<FrameworkElement>()) {
+            if (auto tag = fe.Tag()) m_selectedRaw = std::wstring(winrt::unbox_value<hstring>(tag));
+        }
+    }
+
     Controls::StackPanel BlockLogPage::BuildSubRow(std::wstring const& raw)
     {
         auto wrap = Controls::StackPanel();
@@ -374,13 +394,16 @@ namespace winrt::winui::implementation
         Controls::Grid::SetColumn(menuBtn, 5);
         grid.Children().Append(menuBtn);
 
-        wrap.Children().Append(grid);
+        grid.Tag(box_value(hstring(raw)));
+        grid.RightTapped({ this, &BlockLogPage::SubRowRightTapped });
 
+        // 子行顶部细线
         auto line = Shapes::Rectangle();
         line.Height(1);
         line.Opacity(0.4);
         line.Fill(BrushLine());
         wrap.Children().Append(line);
+        wrap.Children().Append(grid);
 
         return wrap;
     }
@@ -394,7 +417,9 @@ namespace winrt::winui::implementation
             : (g.action == L"kill") ? MakeBrush(0x8B, 0x00, 0x00) : MakeBrush(0x61, 0x61, 0x61));
 
         bool many = g.count > 1;
-        ui.chevronBtn.Visibility(many ? Visibility::Visible : Visibility::Collapsed);
+        // 箭头始终可见，允许展开查看单次拦截的详细特征/ML 结果
+        ui.chevronBtn.Visibility(Visibility::Visible);
+        // 只有多次触发才显示次数徽章
         ui.badgeBox.Visibility(many ? Visibility::Visible : Visibility::Collapsed);
         if (many) ui.badgeText.Text(std::to_wstring(g.count));
         ui.rot.Angle(g.expanded ? 90 : 0);
@@ -496,11 +521,6 @@ namespace winrt::winui::implementation
         ui.subPanel.Visibility(Visibility::Collapsed);
         ui.body.Children().Append(ui.subPanel);
 
-        auto foot = Shapes::Rectangle();
-        foot.Height(1);
-        foot.Fill(BrushLine());
-        ui.body.Children().Append(foot);
-
         ui.root.Child(ui.body);
 
         // chevron 按钮（第 0 列）
@@ -536,14 +556,16 @@ namespace winrt::winui::implementation
         Controls::Grid::SetColumn(menuBtn, 8);
         head.Children().Append(menuBtn);
 
+        // 聚合行右键
+        ui.root.RightTapped({ this, &BlockLogPage::RowRightTapped });
+
         return ui;
     }
 
     void BlockLogPage::ToggleExpand(size_t gidx)
     {
         auto& g = m_groups[gidx];
-        if (g.count < 2) return;
-        g.expanded = !g.expanded;
+        g.expanded = !g.expanded; // 允许单次记录展开
 
         // 找该行 UI
         RowUi* ui = nullptr;
@@ -618,6 +640,7 @@ namespace winrt::winui::implementation
         std::wstring line;
         m_groups.clear();
         m_groupIndex.clear();
+        m_seq = 0;
 
         while (std::getline(ss, line, L'\n')) {
             if (!line.empty() && line.back() == L'\r') line.pop_back();
@@ -636,8 +659,10 @@ namespace winrt::winui::implementation
                 tgt.lastTime = g.lastTime;
                 tgt.lastRaw = line;
                 tgt.raws.push_back(line);
+                tgt.seq = ++m_seq;
             }
             else {
+                g.seq = ++m_seq;
                 m_groupIndex[key] = m_groups.size();
                 m_groups.push_back(g);
             }
@@ -656,10 +681,15 @@ namespace winrt::winui::implementation
         std::wstring searchText = CurrentSearchText();
         int threshold = PopupBlocker::HeuristicThreshold;
 
-        for (int i = (int)m_groups.size() - 1; i >= 0; --i) {
-            if (!GroupPassFilter(m_groups[i], filterTag, searchText, threshold)) continue;
-            m_visibleGroups.push_back(static_cast<size_t>(i));
-            auto ui = BuildRow(static_cast<size_t>(i));
+        std::vector<size_t> passIdx;
+        for (size_t i = 0; i < m_groups.size(); ++i)
+            if (GroupPassFilter(m_groups[i], filterTag, searchText, threshold)) passIdx.push_back(i);
+        std::stable_sort(passIdx.begin(), passIdx.end(),
+            [this](size_t a, size_t b) { return m_groups[a].seq > m_groups[b].seq; });
+
+        for (size_t i : passIdx) {
+            m_visibleGroups.push_back(i);
+            auto ui = BuildRow(i);
             UpdateRowUi(ui, m_groups[i]);
             if (m_groups[i].expanded) {
                 size_t n = m_groups[i].raws.size();
@@ -718,9 +748,11 @@ namespace winrt::winui::implementation
                 tgt.lastTime = g.lastTime;
                 tgt.lastRaw = line;
                 tgt.raws.push_back(line);
+                tgt.seq = ++m_seq;
             }
             else {
                 gidx = m_groups.size();
+                g.seq = ++m_seq;
                 m_groupIndex[key] = gidx;
                 m_groups.push_back(g);
             }
@@ -738,17 +770,29 @@ namespace winrt::winui::implementation
                     if (LogList().Items().Size() > 0) LogList().ScrollIntoView(LogList().Items().GetAt(0));
                 }
                 else if (!isNewGroup && pass) {
-                    for (size_t i = 0; i < m_visibleGroups.size(); ++i) {
-                        if (m_visibleGroups[i] == gidx && i < m_rows.size()) {
-                            UpdateRowUi(m_rows[i], grp);
-                            if (grp.expanded) {
-                                m_rows[i].subPanel.Children().InsertAt(0, BuildSubRow(line));
-                                uint32_t cap = 100 + (grp.raws.size() > 100 ? 1 : 0);
-                                while (m_rows[i].subPanel.Children().Size() > cap)
-                                    m_rows[i].subPanel.Children().RemoveAt(m_rows[i].subPanel.Children().Size() - 1);
-                            }
-                            break;
+                    long long pos = -1;
+                    for (size_t i = 0; i < m_visibleGroups.size(); ++i)
+                        if (m_visibleGroups[i] == gidx) { pos = (long long)i; break; }
+                    if (pos >= 0) {
+                        if (pos > 0) {
+                            // 提到最顶：四处同步移动
+                            RowUi moved = m_rows[static_cast<size_t>(pos)];
+                            m_visibleGroups.erase(m_visibleGroups.begin() + pos);
+                            m_rows.erase(m_rows.begin() + pos);
+                            LogList().Items().RemoveAt(static_cast<uint32_t>(pos));
+                            m_visibleGroups.insert(m_visibleGroups.begin(), gidx);
+                            m_rows.insert(m_rows.begin(), moved);
+                            LogList().Items().InsertAt(0, moved.root);
                         }
+                        UpdateRowUi(m_rows[0], grp);
+                        if (grp.expanded) {
+                            m_rows[0].subPanel.Children().InsertAt(0, BuildSubRow(line));
+                            uint32_t cap = 100 + (grp.raws.size() > 100 ? 1 : 0);
+                            while (m_rows[0].subPanel.Children().Size() > cap)
+                                m_rows[0].subPanel.Children().RemoveAt(m_rows[0].subPanel.Children().Size() - 1);
+                        }
+                        if (LogList().Items().Size() > 0)
+                            LogList().ScrollIntoView(LogList().Items().GetAt(0));
                     }
                 }
             }

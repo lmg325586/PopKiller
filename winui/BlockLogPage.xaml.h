@@ -20,6 +20,7 @@ namespace winrt::winui::implementation
         bool expanded = false;
         bool mlY = false;
         int score = 0;
+        uint64_t seq = 0;
     };
 
     struct RowUi {
@@ -59,6 +60,10 @@ namespace winrt::winui::implementation
         void OnLogListLoaded(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void NewLogJumpButton_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void RowChevronClick(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
+        void RowRightTapped(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& e);
+        void SubRowRightTapped(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& e);
 
     private:
         void Load();
@@ -92,6 +97,7 @@ namespace winrt::winui::implementation
 
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_timer{ nullptr };
         uint64_t m_lastWrite{ 0 };
+        uint64_t m_seq = 0;
 
         winrt::Microsoft::UI::Xaml::Controls::ScrollViewer m_logScrollViewer{ nullptr };
         bool m_pinnedToTop{ true };

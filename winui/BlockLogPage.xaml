@@ -34,8 +34,5 @@
                     Visibility="Collapsed" Click="NewLogJumpButton_Click"
                     Style="{ThemeResource AccentButtonStyle}"/>
         </Grid>
-
-        <TextBlock Grid.Row="4" FontSize="12" Foreground="Gray"
-                   Text="同进程事件自动合并，双击展开单次明细（最近 100 条）。右键条目可标记或加规则。"/>
     </Grid>
 </Page>
