@@ -13,6 +13,23 @@
 
             <StackPanel HorizontalAlignment="Left" MaxWidth="800" Spacing="8">
 
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="拦截引擎" FontSize="15" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="EngineStatusText" Text="检测中..."
+                                       FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <Button x:Name="EnableEngineButton" Grid.Column="1" Content="开启拦截"
+                                Visibility="Collapsed" Click="EnableEngine_Click"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
                 <Border x:Name="GlowCard"
                         Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
