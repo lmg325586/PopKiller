@@ -1,6 +1,5 @@
 ﻿#pragma once
 #include "pch.h"
-#include <winrt/Microsoft.UI.Xaml.Input.h>
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include "LabelStorage.h"
@@ -268,13 +267,26 @@ namespace winrt::winui::implementation
         else { icon.Glyph(L""); icon.Foreground(BrushDim()); }
     }
 
-    Controls::MenuFlyout BlockLogPage::BuildMenu(std::wstring const& rawTag)
+    std::wstring BlockLogPage::ResolveRawFromTag(IInspectable const& tag)
+    {
+        if (!tag) return {};
+        if (auto v = tag.try_as<winrt::Windows::Foundation::IReference<uint64_t>>())
+        {
+            size_t g = static_cast<size_t>(v.Value());
+            return g < m_groups.size() ? m_groups[g].lastRaw : std::wstring{};
+        }
+        if (auto v = tag.try_as<winrt::Windows::Foundation::IReference<winrt::hstring>>())
+            return std::wstring(v.Value());
+        return {};
+    }
+
+    Controls::MenuFlyout BlockLogPage::BuildMenu(IInspectable const& tagValue)
     {
         auto fly = Controls::MenuFlyout();
         auto mk = [&](std::wstring const& text, RoutedEventHandler const& h) {
             auto item = Controls::MenuFlyoutItem();
             item.Text(text);
-            item.Tag(box_value(hstring(rawTag)));
+            item.Tag(tagValue);          // 直接转发，调用方决定存 gidx 还是 raw
             item.Click(h);
             fly.Items().Append(item);
             };
@@ -296,25 +308,6 @@ namespace winrt::winui::implementation
         }
     }
 
-    void BlockLogPage::RowRightTapped(IInspectable const& sender,
-        winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const&)
-    {
-        if (auto fe = sender.try_as<FrameworkElement>()) {
-            if (auto tag = fe.Tag()) {
-                size_t gidx = static_cast<size_t>(winrt::unbox_value<uint64_t>(tag));
-                if (gidx < m_groups.size()) m_selectedRaw = m_groups[gidx].lastRaw;
-            }
-        }
-    }
-
-    void BlockLogPage::SubRowRightTapped(IInspectable const& sender,
-        winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const&)
-    {
-        if (auto fe = sender.try_as<FrameworkElement>()) {
-            if (auto tag = fe.Tag()) m_selectedRaw = std::wstring(winrt::unbox_value<hstring>(tag));
-        }
-    }
-
     Controls::StackPanel BlockLogPage::BuildSubRow(std::wstring const& raw)
     {
         auto wrap = Controls::StackPanel();
@@ -327,7 +320,8 @@ namespace winrt::winui::implementation
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
         grid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(20, GridUnitType::Pixel));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
-        grid.ColumnDefinitions().GetAt(3).Width(GridLengthHelper::FromValueAndType(140, GridUnitType::Pixel));
+        // reason 列改为自适应
+        grid.ColumnDefinitions().GetAt(3).Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
         grid.ColumnDefinitions().GetAt(4).Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
@@ -378,7 +372,8 @@ namespace winrt::winui::implementation
         tbDetail.FontFamily(Media::FontFamily(L"Consolas"));
         tbDetail.FontSize(11);
         tbDetail.Foreground(BrushLineStrong());
-        tbDetail.TextTrimming(TextTrimming::CharacterEllipsis);
+        // 去截断，改自动换行
+        tbDetail.TextWrapping(TextWrapping::Wrap);
         Controls::Grid::SetColumn(tbDetail, 4);
         grid.Children().Append(tbDetail);
 
@@ -390,12 +385,12 @@ namespace winrt::winui::implementation
         menuBtn.FontSize(11);
         menuBtn.Background(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 }));
         menuBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
-        menuBtn.Flyout(BuildMenu(raw));
+        menuBtn.Flyout(BuildMenu(box_value(hstring(raw))));
         Controls::Grid::SetColumn(menuBtn, 5);
         grid.Children().Append(menuBtn);
 
-        grid.Tag(box_value(hstring(raw)));
-        grid.RightTapped({ this, &BlockLogPage::SubRowRightTapped });
+        // 右键：ContextFlyout（不引入 Input 委托）
+        grid.ContextFlyout(BuildMenu(box_value(hstring(raw))));
 
         // 子行顶部细线
         auto line = Shapes::Rectangle();
@@ -552,12 +547,12 @@ namespace winrt::winui::implementation
         menuBtn.FontSize(12);
         menuBtn.Background(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 }));
         menuBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
-        menuBtn.Flyout(BuildMenu(m_groups[gidx].lastRaw));
+        menuBtn.Flyout(BuildMenu(box_value(static_cast<uint64_t>(gidx))));
         Controls::Grid::SetColumn(menuBtn, 8);
         head.Children().Append(menuBtn);
 
-        // 聚合行右键
-        ui.root.RightTapped({ this, &BlockLogPage::RowRightTapped });
+        // 聚合行右键：ContextFlyout，Tag 存 gidx
+        ui.root.ContextFlyout(BuildMenu(box_value(static_cast<uint64_t>(gidx))));
 
         return ui;
     }
@@ -866,9 +861,8 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::MarkPopup_Click(IInspectable const& sender, RoutedEventArgs const&)
     {
-        if (auto item = sender.try_as<Controls::MenuFlyoutItem>()) {
-            if (auto tag = item.Tag()) m_selectedRaw = std::wstring(winrt::unbox_value<hstring>(tag));
-        }
+        if (auto item = sender.try_as<Controls::MenuFlyoutItem>())
+            m_selectedRaw = ResolveRawFromTag(item.Tag());
         if (m_selectedRaw.empty()) return;
         auto s = SampleLabels::ParseLine(m_selectedRaw);
         s.label = L"popup";
@@ -880,9 +874,8 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::MarkNotPopup_Click(IInspectable const& sender, RoutedEventArgs const&)
     {
-        if (auto item = sender.try_as<Controls::MenuFlyoutItem>()) {
-            if (auto tag = item.Tag()) m_selectedRaw = std::wstring(winrt::unbox_value<hstring>(tag));
-        }
+        if (auto item = sender.try_as<Controls::MenuFlyoutItem>())
+            m_selectedRaw = ResolveRawFromTag(item.Tag());
         if (m_selectedRaw.empty()) return;
         auto s = SampleLabels::ParseLine(m_selectedRaw);
         s.label = L"notpopup";
@@ -908,17 +901,15 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::AddToBlacklist_Click(IInspectable const& sender, RoutedEventArgs const&)
     {
-        if (auto item = sender.try_as<Controls::MenuFlyoutItem>()) {
-            if (auto tag = item.Tag()) m_selectedRaw = std::wstring(winrt::unbox_value<hstring>(tag));
-        }
+        if (auto item = sender.try_as<Controls::MenuFlyoutItem>())
+            m_selectedRaw = ResolveRawFromTag(item.Tag());
         AddRuleFromSelection(false);
     }
 
     void BlockLogPage::AddToWhitelist_Click(IInspectable const& sender, RoutedEventArgs const&)
     {
-        if (auto item = sender.try_as<Controls::MenuFlyoutItem>()) {
-            if (auto tag = item.Tag()) m_selectedRaw = std::wstring(winrt::unbox_value<hstring>(tag));
-        }
+        if (auto item = sender.try_as<Controls::MenuFlyoutItem>())
+            m_selectedRaw = ResolveRawFromTag(item.Tag());
         AddRuleFromSelection(true);
     }
 

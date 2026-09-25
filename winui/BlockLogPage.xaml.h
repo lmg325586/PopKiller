@@ -60,10 +60,6 @@ namespace winrt::winui::implementation
         void OnLogListLoaded(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void NewLogJumpButton_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void RowChevronClick(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
-        void RowRightTapped(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& e);
-        void SubRowRightTapped(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& e);
 
     private:
         void Load();
@@ -85,7 +81,8 @@ namespace winrt::winui::implementation
         winrt::Microsoft::UI::Xaml::Controls::StackPanel BuildSubRow(std::wstring const& raw);
         void ToggleExpand(size_t gidx);
         void SetLabelIcon(winrt::Microsoft::UI::Xaml::Controls::FontIcon const& icon, std::wstring const& raw);
-        winrt::Microsoft::UI::Xaml::Controls::MenuFlyout BuildMenu(std::wstring const& rawTag);
+        winrt::Microsoft::UI::Xaml::Controls::MenuFlyout BuildMenu(winrt::Windows::Foundation::IInspectable const& tagValue);
+        std::wstring ResolveRawFromTag(winrt::Windows::Foundation::IInspectable const& tag);
 
         std::vector<LogGroup> m_groups;
         std::unordered_map<std::wstring, size_t> m_groupIndex;
