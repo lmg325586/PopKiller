@@ -244,7 +244,7 @@ namespace TrayIcon
                         ::AppendMenuW(pauseMenu, MF_SEPARATOR, 0, nullptr);
                         ::AppendMenuW(pauseMenu, MF_STRING, IDM_RESUME, L"立即恢复");
                     }
-                    ::AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(pauseMenu), L"暂停拦截 ▶");
+                    ::AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(pauseMenu), L"暂停拦截");
                 }
 
                 ::AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);

@@ -598,6 +598,9 @@ namespace winrt::winui::implementation
                 return false;
         }
         if (filterTag == L"all") return true;
+        if (filterTag == L"action_block")   return g.action == L"block";
+        if (filterTag == L"action_allow")   return g.action == L"allow";
+        if (filterTag == L"action_monitor") return g.action == L"monitor";
         if (filterTag == L"list") return (g.reason == L"whitelist" || g.reason == L"blacklist");
         if (filterTag == L"ml_heur") {
             if (g.reason == L"heuristic") return (g.score >= threshold) != g.mlY;

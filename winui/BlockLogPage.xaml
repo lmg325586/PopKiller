@@ -17,6 +17,9 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
                 <ComboBox x:Name="FilterCombo" SelectionChanged="Filter_Changed" Width="160" SelectedIndex="0">
                     <ComboBoxItem Content="全部日志" Tag="all"/>
+                    <ComboBoxItem Content="仅拦截" Tag="action_block"/>
+                    <ComboBoxItem Content="仅放行" Tag="action_allow"/>
+                    <ComboBoxItem Content="仅监控" Tag="action_monitor"/>
                     <ComboBoxItem Content="命中黑/白名单" Tag="list"/>
                     <ComboBoxItem Content="ML与启发冲突" Tag="ml_heur"/>
                     <ComboBoxItem Content="ML与名单冲突" Tag="ml_list"/>
