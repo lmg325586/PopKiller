@@ -19,6 +19,9 @@ namespace winrt::winui::implementation
         winrt::fire_and_forget ShowCloseConfirmation();
         void ExitApplication();
 
+        // 退出链路口：最早置位 ShuttingDown 并 join 引擎线程（幂等）
+        void BeginShutdown();
+
         winrt::hstring m_currentTag{ L"Home" };
         bool m_forceClose{ false };
         bool m_closeDialogOpen{ false };

@@ -360,6 +360,8 @@ namespace PopupBlocker
         inline std::thread Worker;
         inline HWINEVENTHOOK HookShow{};
         inline HWINEVENTHOOK HookFg{};
+        inline std::mutex WorkerMutex;   // 串行化 Start/Stop，避免 Running 与 Worker 状态错配
+        inline HANDLE ReadyEvent{};      // 手动重置事件：本线程消息队列已建立
 
         inline std::wstring GetProcessName(HWND hwnd)
         {
@@ -634,9 +636,15 @@ namespace PopupBlocker
         }
 
         inline DWORD WINAPI ThreadMain(LPVOID) {
+            // 先强制建立本线程消息队列，再通知就绪：保证 Stop() 的
+            // PostThreadMessageW(WM_QUIT) 不会因队列尚未建立而静默丢失。
+            MSG msg;
+            ::PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+            if (ReadyEvent) ::SetEvent(ReadyEvent);
+
             HookShow = ::SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
             HookFg = ::SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            MSG msg; while (::GetMessageW(&msg, nullptr, 0, 0) > 0) { ::TranslateMessage(&msg); ::DispatchMessageW(&msg); }
+            while (::GetMessageW(&msg, nullptr, 0, 0) > 0) { ::TranslateMessage(&msg); ::DispatchMessageW(&msg); }
             if (HookShow) ::UnhookWinEvent(HookShow); if (HookFg) ::UnhookWinEvent(HookFg);
             HookShow = HookFg = nullptr; return 0;
         }
@@ -645,6 +653,7 @@ namespace PopupBlocker
     inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD idEvent, HWND hwnd,
         LONG idObject, LONG idChild, DWORD, DWORD idEventTime)
     {
+        if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
         detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime);
         if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
@@ -657,8 +666,29 @@ namespace PopupBlocker
         }
     }
 
-    inline void Start() { if (Running.exchange(true)) return; InitSelfExe(); detail::Worker = std::thread([] { detail::ThreadMain(nullptr); }); }
-    inline void Stop() { if (!Running.exchange(false)) return; ::PostThreadMessageW(::GetThreadId(detail::Worker.native_handle()), WM_QUIT, 0, 0); if (detail::Worker.joinable()) detail::Worker.join(); }
+    inline void Start()
+    {
+        std::lock_guard lock(detail::WorkerMutex);
+        if (Running.exchange(true)) return;
+        InitSelfExe();
+        if (!detail::ReadyEvent)
+            detail::ReadyEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        if (detail::ReadyEvent) ::ResetEvent(detail::ReadyEvent);
+        detail::Worker = std::thread([] { detail::ThreadMain(nullptr); });
+        // 等消息队列就绪（正常瞬时返回），确保随后的 Stop() 能可靠投递 WM_QUIT。
+        if (detail::ReadyEvent) ::WaitForSingleObject(detail::ReadyEvent, 2000);
+    }
+
+    inline void Stop()
+    {
+        std::lock_guard lock(detail::WorkerMutex);
+        if (!Running.exchange(false)) return;
+        if (detail::Worker.joinable())
+        {
+            ::PostThreadMessageW(::GetThreadId(detail::Worker.native_handle()), WM_QUIT, 0, 0);
+            detail::Worker.join();
+        }
+    }
 
     inline void PauseForMinutes(int minutes)
     {

@@ -41,7 +41,6 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
 
         void OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
-        void OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
 
         void RuleItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args);

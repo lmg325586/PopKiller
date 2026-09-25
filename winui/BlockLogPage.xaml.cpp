@@ -165,10 +165,6 @@ namespace winrt::winui::implementation
         m_timer.Interval(std::chrono::seconds(1));
         m_timer.Tick({ get_weak(), &BlockLogPage::Timer_Tick });
         m_timer.Start();
-
-        this->Unloaded([this](auto&&, auto&&) {
-            if (m_timer) m_timer.Stop();
-            });
     }
 
     BlockLogPage::~BlockLogPage()
@@ -836,9 +832,6 @@ namespace winrt::winui::implementation
     void BlockLogPage::Filter_Changed(IInspectable const&, Controls::SelectionChangedEventArgs const&) { ApplyFilter(); }
     void BlockLogPage::Search_Changed(IInspectable const&, Controls::TextChangedEventArgs const&) { ApplyFilter(); }
     void BlockLogPage::OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&) { Load(); }
-    void BlockLogPage::OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&) {
-        if (m_timer) m_timer.Stop();
-    }
 
     void BlockLogPage::NewLogJumpButton_Click(IInspectable const&, RoutedEventArgs const&)
     {

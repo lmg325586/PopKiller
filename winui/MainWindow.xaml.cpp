@@ -115,6 +115,8 @@ namespace winrt::winui::implementation
 
         this->Closed([this](auto&&, auto&&)
             {
+                BeginShutdown();
+
                 if (auto frame = ContentFrame())
                 {
                     if (auto page = frame.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Page>())
@@ -122,8 +124,6 @@ namespace winrt::winui::implementation
                     }
                 }
 
-                PopupBlocker::EnabledChangedCallback = nullptr;
-                PopupBlocker::CommunityRulesFetchCallback = nullptr;
                 PopupBlocker::BlockOccurredCallback = nullptr;
 
                 TrayIcon::OnExitRequested = nullptr;
@@ -132,8 +132,6 @@ namespace winrt::winui::implementation
                 TrayIcon::Remove();
                 TrayIcon::Init(nullptr);
                 WindowPicker::Cancel();
-                PopupBlocker::ShuttingDown = true;
-                PopupBlocker::Stop();
 
             });
 
@@ -157,10 +155,10 @@ namespace winrt::winui::implementation
         }
 
         PopupBlocker::EnsureDefaultRules();
-        if (AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1)
+        bool blockerEnabled = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
+        if (blockerEnabled)
         {
             PopupBlocker::SyncFromSettings();
-            PopupBlocker::Start();
         }
 
         auto menuItems = NavView().MenuItems();
@@ -298,17 +296,37 @@ namespace winrt::winui::implementation
                 ::OutputDebugStringW(L"[PopKiller] Toast 未知异常\n");
             }
             };
+
+        // 引擎必须在 BlockOccurredCallback 注册完成后再启动，避免引擎线程
+        // 与 UI 线程并发读写同一回调槽（未加锁写 vs SafeInvoke 加锁读）。
+        if (blockerEnabled)
+        {
+            PopupBlocker::Start();
+        }
+    }
+
+    void MainWindow::BeginShutdown()
+    {
+        // 退出链路口：在任何窗口/控件析构之前先立旗，再 join 引擎线程。
+        // 幂等；ShuttingDown 一旦置位不再复位。
+        if (PopupBlocker::ShuttingDown.exchange(true)) return;
+        PopupBlocker::Stop();
     }
 
     void MainWindow::HandleCloseRequested(
         winrt::Microsoft::UI::Windowing::AppWindow const&,
         winrt::Microsoft::UI::Windowing::AppWindowClosingEventArgs const& args)
     {
-        if (m_forceClose) return;
+        if (m_forceClose)
+        {
+            BeginShutdown();
+            return;
+        }
 
         int closeBehavior = AppSettings::ReadInt(L"UI", L"CloseBehavior", -1); // 默认 -1
         if (closeBehavior == 1)
         {
+            BeginShutdown();
             m_forceClose = true;
             return;
         }

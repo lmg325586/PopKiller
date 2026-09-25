@@ -204,9 +204,9 @@ namespace TrayIcon
             AppSettings::WriteInt(L"Blocker", L"Enabled", 1);
         }
 
-        // Check ShuttingDown before invoking callback
-        if (!PopupBlocker::ShuttingDown.load() && PopupBlocker::EnabledChangedCallback)
-            PopupBlocker::EnabledChangedCallback();
+        // Check ShuttingDown before invoking callback；经 SafeInvoke 取槽，避免无锁读
+        if (!PopupBlocker::ShuttingDown.load())
+            PopupBlocker::SafeInvoke(PopupBlocker::EnabledChangedCallback);
 
         UpdateTrayState();
     }

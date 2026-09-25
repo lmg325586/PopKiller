@@ -151,7 +151,7 @@ namespace winrt::winui::implementation
         }
     }
 
-    void HomePage::GoToSettings_Tapped(winrt::Windows::Foundation::IInspectable const& sender,
+    void HomePage::GoToSettings_Tapped(winrt::Windows::Foundation::IInspectable const&,
         winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&)
     {
         auto window = winrt::winui::implementation::App::window;
