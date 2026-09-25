@@ -8,8 +8,11 @@
 #include "RuleIOPage.xaml.h"
 #include <microsoft.ui.xaml.window.h>
 #include <winrt/Windows.System.h>
+#include <winrt/Microsoft.UI.Xaml.XamlTypeInfo.h>
 #include <algorithm>
 #include <sstream>
+#include <mutex>
+#include <utility>
 #if __has_include("PopupBlockerPage.g.cpp")
 #include "PopupBlockerPage.g.cpp"
 #endif
@@ -77,33 +80,133 @@ namespace winrt::winui::implementation
     // 页面自身回调入口对应的自由函数（非 lambda），配合 owner_bind 携带
     // owner = 本页面实现对象指针，使析构/卸载时能"只清除自己注册的回调"。
     // 注意：这些入口可能由托盘线程或引擎协程续体线程经 SafeInvoke 调用（不持锁执行），
-    // 一切 UI 操作必须调度回 UI 线程，并用弱引用防止页面在排队期间被销毁。
+    // 一切 UI 操作必须调度回 UI 线程，并防止页面在排队期间被销毁。
+    //
+    // ============================ 编译错误修复说明 ============================
+    // [C2440] "初始化": 无法从 "initializer list" 转换为 "winrt::weak_ref<D>"
+    //   原写法 winrt::weak_ref<PopupBlockerPage> weak{ *self }; 非法：
+    //   C++/WinRT 的 weak_ref<T> 仅接受派生自 winrt::weak_ref_source 的类型
+    //   （投影类 / COM 引用 / get_weak() 返回值）。实现类 PopupBlockerPageT<>
+    //   并不派生自 weak_ref_source，用 *self 做列表初始化会命中不可访问的基类
+    //   构造（winrt_weak_ref 的 protected 构造走 initializer-list 路径），故报
+    //   "无法从 initializer list 转换"。成员函数内的正确写法是 CTAD + get_weak：
+    //       winrt::weak_ref weak = self.get_weak();
+    //   但这两个入口只有裸 ctx 指针可用——页面随时可能在其他线程销毁，解引用
+    //   ctx 提升弱引用本身就是 use-after-free，因此这里彻底不使用 weak_ref，
+    //   改用"存活校验 + 强引用投影对象入队"方案（见下）。
+    // [C2248] 无法访问 private 成员 UpdateCommunityStatus
+    //   友元声明不跨命名空间查找：回调入口位于 implementation 命名空间内的
+    //   匿名命名空间，而 UpdateCommunityStatus 是 private 成员，直接调用报
+    //   C2248。修复方式：不再从自由函数触碰私有成员，统一改走公开的
+    //   OnExternalStateChanged()（public；内部完成开关同步、状态刷新与
+    //   ReloadRulesFromEngine 社区规则重同步，覆盖两类外部变化；其内部的
+    //   get_strong() 兜底保证对象有效）。
+    // [E1696 / 第二处 C2440] IntelliSense 级联误报
+    //   上述真实编译错误会使 MSBuild 跳过 XAML 代码生成步骤（App.xaml.g.hpp /
+    //   *.g.h 未产出），IntelliSense 随之报 E1696 无法打开源文件 "App.xaml.g.hpp"，
+    //   并对同一 weak_ref 初始化再报一次 C2440。修掉根因后此组错误自动消失；
+    //   若 IDE 仍显示旧错误，清理 obj/bin 后重新生成即可再生成 .g.hpp。
+    // ==========================================================================
+    namespace
+    {
+        // 把"通知存活页面刷新"的队列项投递到 UI 线程。
+        // page 为当前存活的 PopupBlockerPage 投影对象（强引用），lambda 捕获它即可
+        // 安全跨越排队窗口期：页面即便随后被导航销毁，强引用也会延长其生命周期，
+        // 队列项执行时对象必然有效。
+        void EnqueuePageRefresh(winrt::winui::PopupBlockerPage const& page)
+        {
+            auto queue = Microsoft::UI::Xaml::XamlDispatcherQueueProvider::DispatcherQueue();
+            if (!queue) return;   // 不在 STA/XAML 消息循环环境（如进程退出阶段）：放弃刷新
+            queue.TryEnqueue([page]()
+                {
+                    winrt::get_self<PopupBlockerPage>(page)->OnExternalStateChanged();
+                });
+        }
+
+        // 当前存活的 PopupBlockerPage 页面登记表（弱引用列表）。
+        // 页面在 Loaded 时登记、Unloaded/析构时注销；登记与注销都发生在 UI 线程。
+        // 自由回调入口据此把"裸 owner 指针"换算成公开投影对象（强引用）：
+        //   - 查无此页 -> 页面正在/已经销毁，立即返回，全程不解引用 ctx；
+        //   - 查到     -> lock() 提升弱引用成功，拿到必然有效的强引用。
+        // 相比原方案里对已可能销毁的对象构造 winrt::weak_ref（C2440）或调用私有
+        // 成员 UpdateCommunityStatus（C2248），该方案既编译合法又线程安全。
+        std::mutex g_pageRegistryMutex;
+        std::vector<winrt::weak_ref<winrt::winui::PopupBlockerPage>> g_livePages;
+
+        void RegisterLivePage(winrt::winui::PopupBlockerPage const& page)
+        {
+            std::lock_guard lock(g_pageRegistryMutex);
+            g_livePages.push_back(winrt::weak_ref{ page });
+        }
+
+        // 注销页面登记（按 owner 令牌比对，同时顺带清理已失效的弱引用项）。
+        // 仅在 UI 线程调用（Unloaded / 析构），提升比对无并发销毁风险。
+        void UnregisterLivePage(const void* owner)
+        {
+            std::lock_guard lock(g_pageRegistryMutex);
+            for (auto it = g_livePages.begin(); it != g_livePages.end(); )
+            {
+                auto page = it->lock();
+                if (!page ||
+                    static_cast<const void*>(winrt::get_self<PopupBlockerPage>(*page)) == owner)
+                    it = g_livePages.erase(it);   // 死项或命中项：移除
+                else
+                    ++it;
+            }
+        }
+
+        // 返回与 owner 令牌匹配的存活页面投影对象（强引用）；查无此页返回 nullptr。
+        // weak_ref::lock() 本身线程安全（内部原子地检查源对象并提升），因此可在
+        // 后台回调线程直接对表项尝试提升：成功即证明对象此刻必然有效；失败说明
+        // 页面正在/已经销毁，跳过即可——全程不解引用可能已悬空的 ctx。
+        winrt::winui::PopupBlockerPage LivePageFromToken(const void* owner)
+        {
+            std::vector<winrt::weak_ref<winrt::winui::PopupBlockerPage>> snapshot;
+            {
+                std::lock_guard lock(g_pageRegistryMutex);
+                snapshot = g_livePages;   // 拷贝 weak_ref 列表（不触碰目标对象）
+            }
+            for (auto const& w : snapshot)
+            {
+                if (auto page = w.lock())
+                {
+                    if (static_cast<const void*>(winrt::get_self<PopupBlockerPage>(*page)) == owner)
+                        return page;      // 提升成功：引用计数 >= 2，对象必然存活
+                }
+            }
+            return nullptr;
+        }
+    }
+
     void PageEnabledChanged(void* ctx)
     {
-        auto* self = static_cast<PopupBlockerPage*>(ctx);
-        if (!self) return;
-        winrt::weak_ref<PopupBlockerPage> weak{ *self };
-        self->DispatcherQueue().TryEnqueue([weak]()
-            {
-                if (auto s = weak.get()) s->OnExternalStateChanged();
-            });
+        // 双重存活校验：
+        //   a. IsCallbackOwnedBy —— 持 CallbackMutex，与页面析构/Unloaded 的
+        //      ClearCallbackIfOwnedBy 摘除路径互斥；槽位已被摘除/替换则直接返回。
+        //   b. LivePageFromToken —— 从页面登记表提升弱引用，拿到必然有效的强引用
+        //      投影对象；查无此页同样立即返回，全程不解引用可能已销毁的 ctx。
+        if (!PopupBlocker::IsCallbackOwnedBy(PopupBlocker::EnabledChangedCallback, ctx))
+            return;
+        if (auto page = LivePageFromToken(ctx)) EnqueuePageRefresh(page);
     }
 
     void PageCommunityRulesFetched(void* ctx, bool ok, std::wstring msg)
     {
-        auto* self = static_cast<PopupBlockerPage*>(ctx);
-        if (!self) return;
-        // 引擎协程续体线程 -> UI 线程；用弱引用防止页面在排队期间被销毁。
-        winrt::weak_ref<PopupBlockerPage> weak{ *self };
-        self->DispatcherQueue().TryEnqueue([weak, ok, msg]()
-            {
-                if (auto s = weak.get()) s->UpdateCommunityStatus(ok, msg);
-            });
+        // 引擎协程续体线程 -> UI 线程；同上，先校验存活、再取投影对象入队。
+        // 拉取结果（ok/msg）无需在此消费：OnExternalStateChanged ->
+        // ReloadRulesFromEngine 会从引擎重新同步社区规则与列表显示。
+        if (!PopupBlocker::IsCallbackOwnedBy(PopupBlocker::CommunityRulesFetchCallback, ctx))
+            return;
+        (void)ok; (void)msg;
+        if (auto page = LivePageFromToken(ctx)) EnqueuePageRefresh(page);
     }
 
     PopupBlockerPage::~PopupBlockerPage()
     {
         if (m_statusTimer) m_statusTimer.Stop();
+        // 注销页面登记：此后任何后台线程的回调入口经 LivePageFromToken 都查不到
+        // 本页面，不会再触碰正在销毁的对象（弱引用也已自动失效，双保险）。
+        UnregisterLivePage(PageOwnerToken(this));
         // 只清除"自己注册的"回调（按 owner 指针比对，内部持有 CallbackMutex），
         // 不误伤 MainWindow/App 层常驻回调；引擎线程持锁读取，无数据竞争。
         PopupBlocker::ClearCallbackIfOwnedBy(
@@ -134,8 +237,12 @@ namespace winrt::winui::implementation
         // 使析构/卸载时能通过 ClearCallbackIfOwnedBy 只摘除自己注册的那份。
         m_callbackOwnerToken = PageOwnerToken(this);
 
-        this->Loaded([this](auto&&, auto&&)
+        this->Loaded([this, self = get_strong()](auto&&, auto&&)
             {
+                // 登记存活页面（投影对象弱引用），供自由回调入口安全换算强引用。
+                // NavigationCacheMode::Disabled 下 Loaded 每实例至多触发一次，无需去重。
+                RegisterLivePage(self);
+
                 // 仅当槽位为空（MainWindow 尚未注册，或其常驻回调已被退出清理摘除）时，
                 // 才临时注册页面回调用于外部状态变化时刷新本页面 UI；
                 // 绝不覆盖 MainWindow 层常驻回调——托盘切换开关 / 社区规则后台更新
@@ -156,6 +263,8 @@ namespace winrt::winui::implementation
         this->Unloaded([this](auto&&, auto&&)
             {
                 if (m_statusTimer) m_statusTimer.Stop();
+                // 离开页面即注销登记，回调入口不再向本页派发刷新。
+                UnregisterLivePage(m_callbackOwnerToken);
                 // 离开页面时停止向已不可见的 UI 派发回调；只清除自己注册的回调，
                 // 绝不清空 MainWindow/App 层常驻回调（托盘/后台线程依赖它们同步引擎状态）。
                 PopupBlocker::ClearCallbackIfOwnedBy(

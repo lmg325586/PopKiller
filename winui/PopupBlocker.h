@@ -74,6 +74,17 @@ namespace PopupBlocker
         return slot.owner();
     }
 
+    // 判断槽位中存放的是否仍是 owner 所注册的回调（持锁比对，供回调入口在
+    // 解引用任何裸 owner 指针之前先做存活校验；若槽位已被 ClearCallbackIfOwnedBy
+    // 摘除或被 MainWindow 常驻回调替换，返回 false，调用方应立即放弃 UI 操作）。
+    template <typename R, typename... Args>
+    bool IsCallbackOwnedBy(const owner_function<R(Args...)>& slot, const void* owner)
+    {
+        if (!owner) return false;
+        std::lock_guard lock(CallbackMutex);
+        return static_cast<bool>(slot) && slot.owner() == owner;
+    }
+
     inline std::shared_ptr<const std::vector<Rule>> RulesView =
         std::make_shared<const std::vector<Rule>>();
 
