@@ -40,7 +40,14 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!--
+      使用框架包依赖模式（非 self-contained）：
+      self-contained + unpackaged 下 AppNotificationManager.Register() 因缺少
+      Microsoft.WindowsAppRuntime.Insights.Resource.dll 必抛 0x8007007E
+      （WindowsAppSDK #6774），导致 Toast 按钮激活不可用。
+      框架依赖模式由系统已安装的 WinAppSDK Runtime 提供该资源。
+    -->
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <ItemGroup Label="ProjectConfigurations">
