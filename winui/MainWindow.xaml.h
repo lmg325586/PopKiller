@@ -10,14 +10,6 @@ namespace winrt::winui::implementation
     {
         MainWindow();
 
-        // 常驻（App/MainWindow 层）回调入口对应的自由函数，定义于 MainWindow.xaml.cpp。
-        // 以"函数指针 + owner(MainWindow*)"经 owner_bind 存入全局回调槽，
-        // 使 PopupBlockerPage 析构时能通过 owner() 精确识别并只清除自己注册的回调。
-        void PersistentEnabledChanged(void* ctx);
-        void PersistentCommunityRulesFetched(void* ctx);
-        // 退出清理：先置 ShuttingDown，再持 CallbackMutex 摘除全部全局回调。
-        void ClearAllCallbacksForShutdown();
-
         void NavView_SelectionChanged(winrt::Microsoft::UI::Xaml::Controls::NavigationView const& sender,
             winrt::Microsoft::UI::Xaml::Controls::NavigationViewSelectionChangedEventArgs const& args);
         void NavigateToTag(winrt::hstring const& tag);
@@ -43,15 +35,13 @@ namespace winrt::winui::implementation
     };
 }
 
-// App/MainWindow 层常驻回调的自由函数（定义在 MainWindow.xaml.cpp，
-// 位于 winrt::winui::implementation 命名空间）。
-// 以"自由函数指针 + owner(MainWindow*)"形式经 owner_bind 存入回调槽，
+// App/MainWindow 层常驻回调入口对应的自由函数（定义在 MainWindow.xaml.cpp）。
+// 以"自由函数指针 + owner(MainWindow*)"形式经 owner_bind 存入全局回调槽，
 // 使 PopupBlockerPage 析构时能通过 owner() 精确识别并只清除自己注册的回调。
-
-// App/MainWindow 层常驻回调的自由函数（定义在 MainWindow.xaml.cpp，
-// 位于 winrt::winui::implementation 命名空间）。
-// 以"自由函数指针 + owner(MainWindow*)"形式经 owner_bind 存入回调槽，
-// 使 PopupBlockerPage 析构时能通过 owner() 精确识别并只清除自己注册的回调。
+void PersistentEnabledChanged(void* ctx);
+void PersistentCommunityRulesFetched(void* ctx);
+// 退出清理：先置 ShuttingDown，再持 CallbackMutex 摘除全部全局回调。
+void ClearAllCallbacksForShutdown();
 
 namespace winrt::winui::factory_implementation
 {

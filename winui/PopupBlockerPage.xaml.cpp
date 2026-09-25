@@ -63,36 +63,38 @@ namespace
 
 namespace winrt::winui::implementation
 {
+    // 页面自身回调入口对应的自由函数（非 lambda），配合 owner_bind 携带
+    // owner = 本页面 IInspectable 指针，使析构时能"只清除自己注册的回调"。
+    void PageEnabledChanged(void* ctx)
+    {
+        auto* self = static_cast<PopupBlockerPage*>(ctx);
+        if (!self) return;
+        self->m_initialized = false;
+        self->EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
+        self->m_initialized = true;
+    }
 
-    // 常驻（App/MainWindow 层）回调：仅同步设置与引擎状态，不依赖任何页面实例。
-    // 保证用户离开设置页后，通过托盘切换开关或社区规则后台更新时，
-    // 拦截引擎与设置始终一致；重新进入页面时 UI 会从设置/引擎重新同步。
-    // 定义为自由函数（非 lambda），以便 std::function::target 能识别"所有者"指针。
-}
-
-void winui::PersistentEnabledChanged(void* ctx)
-{
-    auto* self = static_cast<winrt::winui::implementation::MainWindow*>(ctx);
-    if (self) self->OnEnabledChangedPersistent();
-}
-
-void winui::PersistentCommunityRulesFetched(void* ctx)
-{
-    auto* self = static_cast<winrt::winui::implementation::MainWindow*>(ctx);
-    if (self) self->OnCommunityRulesFetched();
-}
-
-namespace winrt::winui::implementation
-{
+    void PageCommunityRulesFetched(void* ctx, bool ok, std::wstring msg)
+    {
+        auto* self = static_cast<PopupBlockerPage*>(ctx);
+        if (!self) return;
+        // 引擎协程续体线程 -> UI 线程；用弱引用防止页面在排队期间被销毁。
+        winrt::weak_ref<PopupBlockerPage> weak{ *self };
+        self->DispatcherQueue().TryEnqueue([weak, ok, msg]()
+            {
+                if (auto s = weak.get()) s->UpdateCommunityStatus(ok, msg);
+            });
+    }
 
     PopupBlockerPage::~PopupBlockerPage()
     {
         if (m_statusTimer) m_statusTimer.Stop();
         // 只清除"自己注册的"回调（按 owner 指针比对，内部持有 CallbackMutex），
         // 不误伤 MainWindow/App 层常驻回调；引擎线程持锁读取，无数据竞争。
-        const auto token = this->try_as<IInspectable>();
-        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::EnabledChangedCallback, token.abi());
-        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::CommunityRulesFetchCallback, token.abi());
+        const winrt::IInspectable token = this->try_as<IInspectable>();
+        const void* selfToken = token ? token.abi() : nullptr;
+        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::EnabledChangedCallback, selfToken);
+        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::CommunityRulesFetchCallback, selfToken);
     }
 
     PopupBlockerPage::PopupBlockerPage()
@@ -113,43 +115,37 @@ namespace winrt::winui::implementation
 
         EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
 
-        // 外层与内层 Lambda 全部捕获弱引用
-        auto setupCallbacks = [weakThis = get_weak()]()
+        // 页面自身回调令牌：与 MainWindow 常驻注册（owner = MainWindow*）区分，
+        // 使析构/卸载时能通过 ClearCallbackIfOwnedBy 只摘除自己注册的那份。
+        const winrt::IInspectable token = this->try_as<IInspectable>();
+        m_callbackOwnerToken = token ? token.abi() : nullptr;
+
+        this->Loaded([this](auto&&, auto&&)
             {
-                if (auto self = weakThis.get())
+                // 仅当槽位当前没有常驻注册方（MainWindow 层）时才临时注册页面回调；
+                // 若被覆盖（如 MainWindow 晚于本事件重建回调），在 OnNavigatedTo 中重新注册。
+                std::lock_guard lock(PopupBlocker::CallbackMutex);
+                if (!PopupBlocker::CallbackOwnerOf(PopupBlocker::EnabledChangedCallback))
                 {
-                    PopupBlocker::EnabledChangedCallback = [weakThis]()
-                        {
-                            if (auto s = weakThis.get()) {
-                                s->m_initialized = false;
-                                s->EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
-                                s->m_initialized = true;
-                            }
-                        };
-
-                    PopupBlocker::CommunityRulesFetchCallback = [weakThis](bool ok, std::wstring msg)
-                        {
-                            if (auto s = weakThis.get()) {
-                                s->DispatcherQueue().TryEnqueue([weakThis, ok, msg]()
-                                    {
-                                        if (auto s2 = weakThis.get()) s2->UpdateCommunityStatus(ok, msg);
-                                    });
-                            }
-                        };
+                    owner_bind(PopupBlocker::EnabledChangedCallback,
+                        &PageEnabledChanged, m_callbackOwnerToken);
                 }
-            };
-
-        this->Loaded([setupCallbacks](auto&&, auto&&) {
-            std::lock_guard lock(PopupBlocker::CallbackMutex);
-            setupCallbacks();
+                if (!PopupBlocker::CallbackOwnerOf(PopupBlocker::CommunityRulesFetchCallback))
+                {
+                    owner_bind(PopupBlocker::CommunityRulesFetchCallback,
+                        &PageCommunityRulesFetched, m_callbackOwnerToken);
+                }
             });
 
         this->Unloaded([this](auto&&, auto&&)
             {
                 if (m_statusTimer) m_statusTimer.Stop();
-                std::lock_guard lock(PopupBlocker::CallbackMutex);
-                PopupBlocker::EnabledChangedCallback = nullptr;
-                PopupBlocker::CommunityRulesFetchCallback = nullptr;
+                // 离开页面时停止向已不可见的 UI 派发回调；只清除自己注册的回调，
+                // 绝不清空 MainWindow/App 层常驻回调（托盘/后台线程依赖它们同步引擎状态）。
+                PopupBlocker::ClearCallbackIfOwnedBy(
+                    PopupBlocker::EnabledChangedCallback, m_callbackOwnerToken);
+                PopupBlocker::ClearCallbackIfOwnedBy(
+                    PopupBlocker::CommunityRulesFetchCallback, m_callbackOwnerToken);
             });
 
         m_initialized = true;

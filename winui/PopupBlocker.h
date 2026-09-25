@@ -58,8 +58,8 @@ namespace PopupBlocker
 
     // 仅当槽位中存放的仍是 owner 所注册的回调时才清除，
     // 避免页面析构时误伤 App/MainWindow 常驻管理层注册的回调。
-    template <typename R, typename... S>
-    void ClearCallbackIfOwnedBy(owner_function<R(S...)>& slot, const void* owner)
+    template <typename R, typename... Args>
+    void ClearCallbackIfOwnedBy(owner_function<R(Args...)>& slot, const void* owner)
     {
         std::lock_guard lock(CallbackMutex);
         if (owner && slot.owner() == owner)
@@ -67,8 +67,8 @@ namespace PopupBlocker
     }
 
     // 读取槽位当前的注册者指针（用于判断是否已有常驻注册方，避免重复覆盖）。
-    template <typename R, typename... S>
-    const void* CallbackOwnerOf(const owner_function<R(S...)>& slot)
+    template <typename R, typename... Args>
+    const void* CallbackOwnerOf(const owner_function<R(Args...)>& slot)
     {
         std::lock_guard lock(CallbackMutex);
         return slot.owner();
@@ -173,6 +173,11 @@ namespace PopupBlocker
     // 开关状态变更回调：MainWindow 常驻注册（负责"设置 -> 引擎"同步），
     // PopupBlockerPage 显示期间临时注册以刷新开关 UI，析构时只摘除自己的那份。
     inline owner_function<void()> EnabledChangedCallback;
+
+    // 拦截事件通知回调（Toast）：MainWindow 层注册，生命周期与主窗口一致；
+    // 写入/清空必须持有 CallbackMutex，消费方经 SafeInvoke 持锁拷贝后无锁调用。
+    inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
+
     inline bool ForceBlock = false;
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;
@@ -189,8 +194,6 @@ namespace PopupBlocker
     inline int HeuristicThreshold = 70;
     inline bool VerboseLog = false;
     inline bool MLHeuristic = false;
-
-    inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
 
     inline long long NowMs()
     {
