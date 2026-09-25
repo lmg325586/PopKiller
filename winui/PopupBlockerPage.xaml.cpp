@@ -9,6 +9,7 @@
 #include <microsoft.ui.xaml.window.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Microsoft.UI.Xaml.XamlTypeInfo.h>
+#include <winrt/Microsoft.System.h>   // winrt::Microsoft::System::DispatcherQueue
 #include <algorithm>
 #include <sstream>
 #include <mutex>
@@ -115,7 +116,10 @@ namespace winrt::winui::implementation
         // 队列项执行时对象必然有效。
         void EnqueuePageRefresh(winrt::winui::PopupBlockerPage const& page)
         {
-            auto queue = Microsoft::UI::Xaml::XamlDispatcherQueueProvider::DispatcherQueue();
+            // 从 XAML 线程上下文获取所属 DispatcherQueue（WinUI 3 队列类型为
+            // Microsoft::System::DispatcherQueue；XamlTypeInfo 程序集中并无
+            // XamlDispatcherQueueProvider，原写法导致 C2039/C2065）。
+            auto queue = Microsoft::System::DispatcherQueue::GetForCurrentThread();
             if (!queue) return;   // 不在 STA/XAML 消息循环环境（如进程退出阶段）：放弃刷新
             queue.TryEnqueue([page]()
                 {
@@ -146,9 +150,11 @@ namespace winrt::winui::implementation
             std::lock_guard lock(g_pageRegistryMutex);
             for (auto it = g_livePages.begin(); it != g_livePages.end(); )
             {
+                // winrt::weak_ref<T>::lock() 直接返回强引用投影对象 T（而非智能指针），
+                // 因此不能对返回值再做解引用（原 *it->lock() 导致 E0063/C2679）。
                 auto page = it->lock();
                 if (!page ||
-                    static_cast<const void*>(winrt::get_self<PopupBlockerPage>(*page)) == owner)
+                    static_cast<const void*>(winrt::get_self<PopupBlockerPage>(page)) == owner)
                     it = g_livePages.erase(it);   // 死项或命中项：移除
                 else
                     ++it;
@@ -168,9 +174,12 @@ namespace winrt::winui::implementation
             }
             for (auto const& w : snapshot)
             {
+                // 同上：w.lock() 返回 winrt::winui::PopupBlockerPage 投影对象，直接传入
+                // get_self 即可，无需（也不能）解引用；get_self 结果与 RegisterLivePage
+                // 时写入的 owner 令牌同为实现对象指针，类型匹配。
                 if (auto page = w.lock())
                 {
-                    if (static_cast<const void*>(winrt::get_self<PopupBlockerPage>(*page)) == owner)
+                    if (static_cast<const void*>(winrt::get_self<PopupBlockerPage>(page)) == owner)
                         return page;      // 提升成功：引用计数 >= 2，对象必然存活
                 }
             }
