@@ -4,12 +4,14 @@
 #include "TrayIcon.h"
 #include "PopupBlocker.h"
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
+#include <winrt/Microsoft.Windows.AppNotifications.h>
 #include <shellapi.h>
 #include <sstream>
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 using namespace winrt::Microsoft::Windows::AppLifecycle;
+using namespace winrt::Microsoft::Windows::AppNotifications;
 
 namespace
 {
@@ -183,6 +185,33 @@ namespace winrt::winui::implementation
 
         window = make<MainWindow>();
 
+        // 注册 Windows 通知激活：unpackaged 应用必须显式 Register，
+        // 并订阅运行中点击通知的 NotificationInvoked。
+        //
+        // 注意：self-contained + unpackaged 下 AppSDK 2.x 存在已知缺陷
+        // （Register() 因缺少 Microsoft.WindowsAppRuntime.Insights.Resource.dll
+        //   抛 0x8007007E / wil::ResultException，见 WindowsAppSDK #6774）。
+        // 这里按 best-effort 处理：失败不阻断启动，仅失去"按钮点击激活"，
+        // Toast 本身仍能正常显示；待 AppSDK 修复或改用非 self-contained 后可恢复。
+        try
+        {
+            AppNotificationManager::Default().NotificationInvoked({ this, &App::OnNotificationInvoked });
+            AppNotificationManager::Default().Register();
+
+            // 应用未运行时由通知启动：激活参数从 AppInstance 获取
+            if (auto activated = AppInstance::GetCurrent().GetActivatedEventArgs();
+                activated.Kind() == ExtendedActivationKind::AppNotification)
+            {
+                if (auto nargs = activated.Data().try_as<AppNotificationActivatedEventArgs>())
+                    HandleNotification(nargs);
+            }
+        }
+        catch (...)
+        {
+            // 失败不阻断启动，仅失去按钮点击激活；Toast 显示不受影响。
+            OutputDebugStringW(L"[PopKiller] 通知激活注册失败，已忽略\n");
+        }
+
         if (isToastActivation) {
             std::wstring a = action, x = exeParam;
             window.DispatcherQueue().TryEnqueue([a, x]() {
@@ -207,5 +236,39 @@ namespace winrt::winui::implementation
         {
             window.Activate();
         }
+    }
+
+    void App::OnNotificationInvoked(AppNotificationManager const&, AppNotificationActivatedEventArgs const& args)
+    {
+        HandleNotification(args);
+    }
+
+    void App::HandleNotification(AppNotificationActivatedEventArgs const& args)
+    {
+        auto input = args.Arguments();
+        std::wstring action = input.HasKey(L"action") ? std::wstring(input.Lookup(L"action")) : std::wstring{};
+        std::wstring exe = input.HasKey(L"exe") ? std::wstring(input.Lookup(L"exe")) : std::wstring{};
+        if (action.empty()) return;
+
+        if (!App::window) return;
+        App::window.DispatcherQueue().TryEnqueue([action, exe]()
+            {
+                auto w = winrt::winui::implementation::App::window;
+                if (!w) return;
+                w.Activate();
+
+                if (action == L"log")
+                {
+                    if (auto mw = w.try_as<winrt::winui::MainWindow>())
+                    {
+                        winrt::get_self<winrt::winui::implementation::MainWindow>(mw)
+                            ->NavigateToTag(L"BlockLog");
+                    }
+                }
+                else if (action == L"whitelist" && !exe.empty())
+                {
+                    PopupBlocker::AddWhitelistExe(exe);
+                }
+            });
     }
 }

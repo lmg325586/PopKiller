@@ -40,6 +40,12 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
+    <!--
+      自包含便携部署。注意：self-contained + unpackaged 下 AppNotificationManager.Register()
+      需要 Microsoft.WindowsAppRuntime.Insights.Resource.dll，而 WindowsAppSDK NuGet 包未包含它
+      （WindowsAppSDK #6774）。工程末尾的 CopyAppNotificationInsightsResource 目标会从本机
+      已安装的框架包把该 DLL 复制到输出目录，从而在保持自包含便携的同时启用 Toast 按钮激活。
+    -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -359,4 +365,18 @@
 		<Exec Command="echo [Version] running GenerateVersion.ps1" />
 		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\scripts\GenerateVersion.ps1&quot;" />
 	</Target>
+  <!--
+    自包含 + unpackaged 下 AppNotificationManager.Register() 依赖
+    Microsoft.WindowsAppRuntime.Insights.Resource.dll，而 WindowsAppSDK NuGet 包未随附该文件
+    （WindowsAppSDK #6774）。从本机已安装的 WinAppSDK 2.4.0 框架包复制一份到输出目录，
+    使 Toast 按钮激活在自包含模式下可用。
+    若升级了 WindowsAppSDK 版本，请同步更新下面的版本号路径。
+  -->
+  <Target Name="CopyAppNotificationInsightsResource" AfterTargets="Build" Condition="'$(Platform)'=='x64'">
+    <PropertyGroup>
+      <_InsightsResource>$(ProgramW6432)\WindowsApps\Microsoft.WindowsAppRuntime.2_2.4.0.0_x64__8wekyb3d8bbwe\Microsoft.WindowsAppRuntime.Insights.Resource.dll</_InsightsResource>
+    </PropertyGroup>
+    <Copy SourceFiles="$(_InsightsResource)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(_InsightsResource)')" />
+    <Warning Text="未找到 $(_InsightsResource)；缺少它将导致 Toast 按钮激活不可用（WindowsAppSDK #6774）。请安装对应的 WinAppSDK Runtime 或更新本目标中的框架包版本路径。" Condition="!Exists('$(_InsightsResource)')" />
+  </Target>
 </Project>

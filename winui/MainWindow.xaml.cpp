@@ -116,6 +116,8 @@ namespace winrt::winui::implementation
         this->Closed([this](auto&&, auto&&)
             {
                 BeginShutdown();
+                try { winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().UnregisterAll(); }
+                catch (...) {}
 
                 if (auto frame = ContentFrame())
                 {
@@ -260,18 +262,18 @@ namespace winrt::winui::implementation
                 if (matchResult == 2) {
 
                     actionsXml = L"<actions>"
-                        L"<action content=\"查看日志\" activationType=\"protocol\" arguments=\"popkiller://toast?action=log\"/>"
+                        L"<action content=\"查看日志\" arguments=\"action=log\"/>"
                         L"</actions>";
                 }
                 else {
 
                     actionsXml = L"<actions>"
-                        L"<action content=\"加入白名单\" activationType=\"protocol\" arguments=\"popkiller://toast?action=whitelist&amp;exe=" + XmlEscape(exe) + L"\"/>"
-                        L"<action content=\"查看日志\" activationType=\"protocol\" arguments=\"popkiller://toast?action=log\"/>"
+                        L"<action content=\"加入白名单\" arguments=\"action=whitelist&amp;exe=" + XmlEscape(exe) + L"\"/>"
+                        L"<action content=\"查看日志\" arguments=\"action=log\"/>"
                         L"</actions>";
                 }
 
-                std::wstring xml = L"<toast launch=\"popkiller://toast?action=log\" activationType=\"protocol\">"
+                std::wstring xml = L"<toast launch=\"action=log\">"
                     L"<visual><binding template=\"ToastGeneric\">"
                     L"<text>" + toastTitle + L"</text>"
                     L"<text>进程：" + XmlEscape(exe) + L"</text>";
