@@ -115,6 +115,8 @@ namespace winrt::winui::implementation
 
         this->Closed([this](auto&&, auto&&)
             {
+                BeginShutdown();
+
                 if (auto frame = ContentFrame())
                 {
                     if (auto page = frame.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Page>())
@@ -132,8 +134,6 @@ namespace winrt::winui::implementation
                 TrayIcon::Remove();
                 TrayIcon::Init(nullptr);
                 WindowPicker::Cancel();
-                PopupBlocker::ShuttingDown = true;
-                PopupBlocker::Stop();
 
             });
 
@@ -300,15 +300,28 @@ namespace winrt::winui::implementation
             };
     }
 
+    void MainWindow::BeginShutdown()
+    {
+        // 退出链路口：在任何窗口/控件析构之前先立旗，再 join 引擎线程。
+        // 幂等；ShuttingDown 一旦置位不再复位。
+        if (PopupBlocker::ShuttingDown.exchange(true)) return;
+        PopupBlocker::Stop();
+    }
+
     void MainWindow::HandleCloseRequested(
         winrt::Microsoft::UI::Windowing::AppWindow const&,
         winrt::Microsoft::UI::Windowing::AppWindowClosingEventArgs const& args)
     {
-        if (m_forceClose) return;
+        if (m_forceClose)
+        {
+            BeginShutdown();
+            return;
+        }
 
         int closeBehavior = AppSettings::ReadInt(L"UI", L"CloseBehavior", -1); // 默认 -1
         if (closeBehavior == 1)
         {
+            BeginShutdown();
             m_forceClose = true;
             return;
         }

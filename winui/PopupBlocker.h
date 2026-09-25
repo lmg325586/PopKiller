@@ -645,6 +645,7 @@ namespace PopupBlocker
     inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD idEvent, HWND hwnd,
         LONG idObject, LONG idChild, DWORD, DWORD idEventTime)
     {
+        if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
         detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime);
         if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
