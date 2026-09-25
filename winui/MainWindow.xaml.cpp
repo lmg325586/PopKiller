@@ -91,6 +91,17 @@ namespace
 
 namespace winrt::winui::implementation
 {
+    namespace
+    {
+        // 常驻（MainWindow 层）回调的 owner 令牌：即 MainWindow 实现对象地址。
+        // winrt 中 get_self<impl>(abi_arg)<interface> 只是对同一指数的静态转换，
+        // 因此该值与注册时写入槽位的 owner 一致，可用于精确比对。
+        inline const void* MainWindowOwnerToken(winrt::winui::implementation::MainWindow* self) noexcept
+        {
+            return static_cast<const void*>(self);
+        }
+    }
+
 
     std::wstring XmlEscape(std::wstring const& s)
     {
@@ -325,9 +336,9 @@ namespace winrt::winui::implementation
         {
             std::lock_guard lock(PopupBlocker::CallbackMutex);
             owner_bind(PopupBlocker::EnabledChangedCallback,
-                &PersistentEnabledChanged, this);
+                &PersistentEnabledChanged, MainWindowOwnerToken(this));
             owner_bind(PopupBlocker::CommunityRulesFetchCallback,
-                &PersistentCommunityRulesFetched, this);
+                &PersistentCommunityRulesFetched, MainWindowOwnerToken(this));
         }
     }
 

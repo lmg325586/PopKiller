@@ -78,6 +78,11 @@ namespace winrt::winui::implementation
 
         bool m_initialized{ false };
 
+        // 本页面注册回调时使用的 owner 令牌（页面 IInspectable 的 abi() 指针）。
+        // MainWindow 常驻回调的 owner 为 MainWindow*，两者互不误伤：
+        // 析构/卸载/离开页面时经 ClearCallbackIfOwnedBy 只摘除自己注册的那份。
+        const void* m_callbackOwnerToken{ nullptr };
+
 
         std::vector<RuleItem> m_rules;
         std::wstring m_searchText;

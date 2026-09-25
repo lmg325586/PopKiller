@@ -63,15 +63,30 @@ namespace
 
 namespace winrt::winui::implementation
 {
+    // 页面自身回调的 owner 令牌：即 PopupBlockerPage 实现对象地址。
+    // winrt 中 get_self<impl>(abi_arg)<interface> 只是对同一指数的静态转换，
+    // 因此该值与注册时写入槽位的 owner、以及 ClearCallbackIfOwnedBy 的比对值一致。
+    namespace
+    {
+        inline const void* PageOwnerToken(PopupBlockerPage* self) noexcept
+        {
+            return static_cast<const void*>(self);
+        }
+    }
+
     // 页面自身回调入口对应的自由函数（非 lambda），配合 owner_bind 携带
-    // owner = 本页面 IInspectable 指针，使析构时能"只清除自己注册的回调"。
+    // owner = 本页面实现对象指针，使析构/卸载时能"只清除自己注册的回调"。
+    // 注意：这些入口可能由托盘线程或引擎协程续体线程经 SafeInvoke 调用（不持锁执行），
+    // 一切 UI 操作必须调度回 UI 线程，并用弱引用防止页面在排队期间被销毁。
     void PageEnabledChanged(void* ctx)
     {
         auto* self = static_cast<PopupBlockerPage*>(ctx);
         if (!self) return;
-        self->m_initialized = false;
-        self->EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
-        self->m_initialized = true;
+        winrt::weak_ref<PopupBlockerPage> weak{ *self };
+        self->DispatcherQueue().TryEnqueue([weak]()
+            {
+                if (auto s = weak.get()) s->OnExternalStateChanged();
+            });
     }
 
     void PageCommunityRulesFetched(void* ctx, bool ok, std::wstring msg)
@@ -91,10 +106,10 @@ namespace winrt::winui::implementation
         if (m_statusTimer) m_statusTimer.Stop();
         // 只清除"自己注册的"回调（按 owner 指针比对，内部持有 CallbackMutex），
         // 不误伤 MainWindow/App 层常驻回调；引擎线程持锁读取，无数据竞争。
-        const winrt::IInspectable token = this->try_as<IInspectable>();
-        const void* selfToken = token ? token.abi() : nullptr;
-        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::EnabledChangedCallback, selfToken);
-        PopupBlocker::ClearCallbackIfOwnedBy(PopupBlocker::CommunityRulesFetchCallback, selfToken);
+        PopupBlocker::ClearCallbackIfOwnedBy(
+            PopupBlocker::EnabledChangedCallback, PageOwnerToken(this));
+        PopupBlocker::ClearCallbackIfOwnedBy(
+            PopupBlocker::CommunityRulesFetchCallback, PageOwnerToken(this));
     }
 
     PopupBlockerPage::PopupBlockerPage()
@@ -117,20 +132,21 @@ namespace winrt::winui::implementation
 
         // 页面自身回调令牌：与 MainWindow 常驻注册（owner = MainWindow*）区分，
         // 使析构/卸载时能通过 ClearCallbackIfOwnedBy 只摘除自己注册的那份。
-        const winrt::IInspectable token = this->try_as<IInspectable>();
-        m_callbackOwnerToken = token ? token.abi() : nullptr;
+        m_callbackOwnerToken = PageOwnerToken(this);
 
         this->Loaded([this](auto&&, auto&&)
             {
-                // 仅当槽位当前没有常驻注册方（MainWindow 层）时才临时注册页面回调；
-                // 若被覆盖（如 MainWindow 晚于本事件重建回调），在 OnNavigatedTo 中重新注册。
+                // 仅当槽位为空（MainWindow 尚未注册，或其常驻回调已被退出清理摘除）时，
+                // 才临时注册页面回调用于外部状态变化时刷新本页面 UI；
+                // 绝不覆盖 MainWindow 层常驻回调——托盘切换开关 / 社区规则后台更新
+                // 必须始终先经 MainWindow 同步"设置 -> 引擎"，用户离开本页后依然生效。
                 std::lock_guard lock(PopupBlocker::CallbackMutex);
-                if (!PopupBlocker::CallbackOwnerOf(PopupBlocker::EnabledChangedCallback))
+                if (!PopupBlocker::EnabledChangedCallback)
                 {
                     owner_bind(PopupBlocker::EnabledChangedCallback,
                         &PageEnabledChanged, m_callbackOwnerToken);
                 }
-                if (!PopupBlocker::CallbackOwnerOf(PopupBlocker::CommunityRulesFetchCallback))
+                if (!PopupBlocker::CommunityRulesFetchCallback)
                 {
                     owner_bind(PopupBlocker::CommunityRulesFetchCallback,
                         &PageCommunityRulesFetched, m_callbackOwnerToken);
@@ -245,6 +261,10 @@ namespace winrt::winui::implementation
     {
         auto self = get_strong();
         if (!self) return;
+
+        // 由 OnExternalStateChanged / OnNavigatedTo 程序性同步开关时抑制回写，
+        // 避免"外部状态 -> UI -> 再写设置/引擎"的反向干扰。
+        if (!m_initialized) return;
 
         bool on = EnableToggle().IsOn();
         AppSettings::WriteInt(L"Blocker", L"Enabled", on ? 1 : 0);
@@ -506,6 +526,16 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&)
     {
+        // 重新进入页面：从设置/引擎全量重新同步 UI（开关、状态条、规则列表），
+        // 确保与托盘/后台线程在页面离开期间所做的变更保持一致，不出现状态漂移。
+        m_initialized = false;
+        EnableToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1);
+        CommunityRulesToggle().IsOn(
+            AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) == 1);
+        m_initialized = true;
+
+        if (!m_statusTimer) m_statusTimer.Start();
+        RefreshStatus();
         ReloadRulesFromEngine();
         RefreshList();
     }
@@ -513,9 +543,35 @@ namespace winrt::winui::implementation
     void PopupBlockerPage::OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&)
     {
         if (m_statusTimer) m_statusTimer.Stop();
-        std::lock_guard lock(PopupBlocker::CallbackMutex);
-        PopupBlocker::EnabledChangedCallback = nullptr;
-        PopupBlocker::CommunityRulesFetchCallback = nullptr;
+        // 只清除"自己注册的"回调（按 owner 令牌比对，内部持有 CallbackMutex）。
+        // 绝不能无条件置空：MainWindow/App 层常驻回调必须存活，
+        // 否则用户离开本页后，托盘切换开关 / 社区规则后台更新的回调将丢失，
+        // 引擎状态与设置脱节，重新进入页面时 UI 与实际拦截状态不一致。
+        PopupBlocker::ClearCallbackIfOwnedBy(
+            PopupBlocker::EnabledChangedCallback, m_callbackOwnerToken);
+        PopupBlocker::ClearCallbackIfOwnedBy(
+            PopupBlocker::CommunityRulesFetchCallback, m_callbackOwnerToken);
+    }
+
+    // UI 线程：由 MainWindow 常驻回调（托盘切换开关）或本页面自身回调触发，
+    // 从设置与引擎重新同步本页面 UI，消除"UI 状态与实际拦截状态不一致"。
+    void PopupBlockerPage::OnExternalStateChanged()
+    {
+        auto self = get_strong();
+        if (!self) return;
+
+        // 外部（托盘/后台）改动了开关：先同步开关显示（抑制 Toggled 回写，避免反向干扰引擎），
+        // 再刷新运行状态与规则列表。
+        const bool on = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
+        if (EnableToggle().IsOn() != on)
+        {
+            m_initialized = false;
+            EnableToggle().IsOn(on);
+            m_initialized = true;
+        }
+
+        RefreshStatus();
+        ReloadRulesFromEngine();
     }
 
     void PopupBlockerPage::RuleItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,

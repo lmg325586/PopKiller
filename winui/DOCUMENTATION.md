@@ -77,8 +77,8 @@
 | `ToastNotify` | `bool` | 拦截通知开关（默认开） |
 | `kMLArbLow` | `constexpr int` | ML 仲裁下限分数（35） |
 | `kMLArbHigh` | `constexpr int` | ML 仲裁上限分数（90） |
-| `EnabledChangedCallback` | `std::function<void()>` | 拦截状态变更回调 |
-| `CommunityRulesFetchCallback` | `std::function<void(bool, std::wstring)>` | 社区规则拉取完成回调 |
+| `EnabledChangedCallback` | `owner_function<void()>` | 拦截状态变更回调（携带注册者 owner 指针，MainWindow 常驻注册，页面仅临时注册自己的一份） |
+| `CommunityRulesFetchCallback` | `owner_function<void(bool, std::wstring)>` | 社区规则拉取完成回调（同上，清理时经 `ClearCallbackIfOwnedBy` 只摘除自己注册的回调） |
 | `BlockOccurredCallback` | `std::function<void(exeName, windowTitle, matchResult)>` | 拦截发生回调（用于 Toast 通知） |
 
 ### ⚠️ 重要：避免死锁

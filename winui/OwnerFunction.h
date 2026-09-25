@@ -34,7 +34,10 @@ public:
             !std::is_same_v<std::decay_t<F>, std::nullptr_t> &&
             std::is_invocable_r_v<R, std::decay_t<F>&, void*, Args...>>>
     owner_function(F&& f, const void* owner = nullptr)
-        : m_owner(owner), m_state(std::make_shared<state_model<std::decay_t<F>>>(std::forward<F>(f))) {}
+        : m_owner(owner), m_state(std::make_shared<state_model<std::decay_t<F>>>(std::forward<F>(f)))
+    {
+        m_invoke = &do_invoke<std::decay_t<F>>;
+    }
 
     // 带显式 owner 的构造（语义同上，便于调用点自文档化）。
     template <typename F>
@@ -84,7 +87,7 @@ private:
 // 注册辅助：把可调用对象 f 连同其所有者指针 owner 存入槽位 slot。
 // f 需接受 (void* owner, args...)；lambda 形参写 void* 时可省略实参转换。
 template <typename R, typename... Args, typename F>
-void owner_bind(owner_function<R(Args...)>& slot, F&& f, const void* owner)
+inline void owner_bind(owner_function<R(Args...)>& slot, F&& f, const void* owner)
 {
     using fn_t = owner_function<R(Args...)>;
     using decay_f = std::decay_t<F>;
