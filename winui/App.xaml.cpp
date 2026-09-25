@@ -4,12 +4,14 @@
 #include "TrayIcon.h"
 #include "PopupBlocker.h"
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
+#include <winrt/Microsoft.Windows.AppNotifications.h>
 #include <shellapi.h>
 #include <sstream>
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 using namespace winrt::Microsoft::Windows::AppLifecycle;
+using namespace winrt::Microsoft::Windows::AppNotifications;
 
 namespace
 {
@@ -183,6 +185,19 @@ namespace winrt::winui::implementation
 
         window = make<MainWindow>();
 
+        // 注册 Windows 通知激活：unpackaged 应用必须显式 Register，
+        // 并订阅运行中点击通知的 NotificationInvoked。
+        AppNotificationManager::Default().NotificationInvoked({ this, &App::OnNotificationInvoked });
+        AppNotificationManager::Default().Register();
+
+        // 应用未运行时由通知启动：激活参数从 AppInstance 获取
+        if (auto activated = AppInstance::GetCurrent().GetActivatedEventArgs();
+            activated.Kind() == ExtendedActivationKind::AppNotification)
+        {
+            if (auto nargs = activated.Data().try_as<AppNotificationActivatedEventArgs>())
+                HandleNotification(nargs);
+        }
+
         if (isToastActivation) {
             std::wstring a = action, x = exeParam;
             window.DispatcherQueue().TryEnqueue([a, x]() {
@@ -207,5 +222,39 @@ namespace winrt::winui::implementation
         {
             window.Activate();
         }
+    }
+
+    void App::OnNotificationInvoked(AppNotificationManager const&, AppNotificationActivatedEventArgs const& args)
+    {
+        HandleNotification(args);
+    }
+
+    void App::HandleNotification(AppNotificationActivatedEventArgs const& args)
+    {
+        auto input = args.Arguments();
+        std::wstring action = input.HasKey(L"action") ? std::wstring(input.Lookup(L"action")) : std::wstring{};
+        std::wstring exe = input.HasKey(L"exe") ? std::wstring(input.Lookup(L"exe")) : std::wstring{};
+        if (action.empty()) return;
+
+        if (!App::window) return;
+        App::window.DispatcherQueue().TryEnqueue([action, exe]()
+            {
+                auto w = winrt::winui::implementation::App::window;
+                if (!w) return;
+                w.Activate();
+
+                if (action == L"log")
+                {
+                    if (auto mw = w.try_as<winrt::winui::MainWindow>())
+                    {
+                        winrt::get_self<winrt::winui::implementation::MainWindow>(mw)
+                            ->NavigateToTag(L"BlockLog");
+                    }
+                }
+                else if (action == L"whitelist" && !exe.empty())
+                {
+                    PopupBlocker::AddWhitelistExe(exe);
+                }
+            });
     }
 }
