@@ -8,6 +8,7 @@
     <Page Include="HomePage.xaml" />
     <Page Include="SettingsPage.xaml" />
     <Page Include="LicensePage.xaml" />
+    <Page Include="PrivacyPage.xaml" />
     <Page Include="PopupBlockerPage.xaml" />
     <Page Include="BlockLogPage.xaml" />
     <Page Include="RuleIOPage.xaml" />

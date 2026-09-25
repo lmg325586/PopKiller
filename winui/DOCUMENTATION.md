@@ -316,6 +316,7 @@ SaveRules(rules); // 安全调用
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `LicenseLink_Click(sender, args)` | 链接 | `void` | 导航到许可证页 |
+| `PrivacyLink_Click(sender, args)` | 链接 | `void` | 导航到隐私声明页 |
 | `ThemeComboBox_SelectionChanged(sender, args)` | 下拉 | `void` | 写主题、应用背景与标题栏 |
 | `ForceBlockToggle_Toggled(sender, args)` | 开关 | `void` | 写 `ForceBlock` 并同步引擎 |
 | `HeuristicModeCombo_SelectionChanged(sender, args)` | 下拉 | `void` | 下标↔模式映射（0/2/1）写 ini + Sync |

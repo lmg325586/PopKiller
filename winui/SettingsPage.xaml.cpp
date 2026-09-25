@@ -5,6 +5,7 @@
 #include "AutoStart.h"
 #include "AppSettings.h"
 #include "LicensePage.xaml.h"
+#include "PrivacyPage.xaml.h"
 #include "PopupBlocker.h"
 #include "winrt/Windows.UI.Xaml.Interop.h"
 #if __has_include("SettingsPage.g.cpp")
@@ -65,6 +66,11 @@ namespace winrt::winui::implementation
     void SettingsPage::LicenseLink_Click(IInspectable const&, RoutedEventArgs const&)
     {
         Frame().Navigate(xaml_typename<winrt::winui::LicensePage>());
+    }
+
+    void SettingsPage::PrivacyLink_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        Frame().Navigate(xaml_typename<winrt::winui::PrivacyPage>());
     }
 
     void SettingsPage::ThemeComboBox_SelectionChanged(IInspectable const&,
