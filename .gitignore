@@ -364,4 +364,7 @@ FodyWeavers.xsd
 /winui/labels.json
 
 # 预生成脚本产生的头
-winui/VersionInfo.h 
+winui/VersionInfo.h
+
+# 本地打包输出（7z 归档等），不计入 git
+/dist/ 
