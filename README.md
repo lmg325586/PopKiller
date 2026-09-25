@@ -431,7 +431,7 @@ PopKiller/
     ├── SettingsPage.xaml(.cpp/.h)     # 设置页（外观、拦截、通知、自启、关闭行为、关于）
     ├── BlockLogPage.xaml(.cpp/.h)     # 拦截日志页（搜索、过滤）
     ├── LicensePage.xaml(.cpp/.h)      # 许可证页
-    ├── PopupBlocker.h              # 拦截引擎核心（钩子、匹配、日志、强杀、社区规则拉取、SHA256校验、通知回调）
+    ├── PopupBlocker.h              # 拦截引擎核心（钩子、匹配、日志、社区规则拉取、SHA256校验、通知回调）
     ├── HeuristicScorer.h           # 启发式打分引擎
     ├── HeuristicML.h               # 静态机器学习识别（ONNX 双模型推理）
     ├── RuleTypes.h                 # 规则类型定义与工具函数

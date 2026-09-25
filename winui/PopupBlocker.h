@@ -603,36 +603,10 @@ namespace PopupBlocker
             Log(logMsg);
         }
 
-        inline void ScheduleForceKill(HWND hwnd)
-        {
-            std::thread([hwnd]() {
-                ::Sleep(400);
-                if (!::IsWindow(hwnd)) return;
-                DWORD pid = 0;
-                ::GetWindowThreadProcessId(hwnd, &pid);
-                if (!pid) return;
-                HANDLE hProcess = ::OpenProcess(
-                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pid);
-                if (!hProcess) return;
-                WCHAR path[MAX_PATH] = {};
-                DWORD size = MAX_PATH;
-                if (::QueryFullProcessImageNameW(hProcess, 0, path, &size)) {
-                    std::wstring p = path;
-                    std::transform(p.begin(), p.end(), p.begin(), ::towlower);
-                    bool isSystemPath = (p.find(L"c:\\windows\\") == 0) ||
-                        (p.find(L"c:\\program files\\") == 0) ||
-                        (p.find(L"c:\\program files (x86)\\") == 0);
-                    if (!isSystemPath) ::TerminateProcess(hProcess, 0);
-                }
-                ::CloseHandle(hProcess);
-                }).detach();
-        }
-
-        inline void EnforceBlock(HWND hwnd, int matchResult)
+        inline void EnforceBlock(HWND hwnd)
         {
             ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
             ::ShowWindowAsync(hwnd, SW_HIDE);
-            if (matchResult == 2) ScheduleForceKill(hwnd);
         }
 
         inline DWORD WINAPI ThreadMain(LPVOID) {
@@ -658,7 +632,7 @@ namespace PopupBlocker
         detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime);
         if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
         if (v.shouldBlock) {
-            detail::EnforceBlock(hwnd, v.matchResult);
+            detail::EnforceBlock(hwnd);
 
             if (!ShuttingDown.load()) {
                 SafeInvoke(BlockOccurredCallback, detail::GetProcessName(hwnd), detail::GetTitle(hwnd), v.matchResult);

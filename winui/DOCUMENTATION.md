@@ -138,8 +138,7 @@ SaveRules(rules); // 安全调用
 | `PassEventFilter(hwnd, idObject, idChild)` | 句柄、对象、子ID | `bool` | 事件预过滤（跳过自身/非窗口/对象） |
 | `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 综合评估：规则匹配+启发式+ML+raw |
 | `WriteEventLog(hwnd, idEvent, v)` | 句柄、事件、评估结果 | `void` | 写日志（含启发式明细+raw+ml） |
-| `ScheduleForceKill(hwnd)` | 句柄 | `void` | 延迟 400ms 强杀进程线程（非系统路径） |
-| `EnforceBlock(hwnd, matchResult)` | 句柄、匹配结果 | `void` | 关闭/隐藏窗口，黑名单起强杀，触发通知回调 |
+| `EnforceBlock(hwnd)` | 句柄 | `void` | 关闭/隐藏窗口（黑名单与启发式命中一致），随后触发通知回调 |
 | `ThreadMain(lp)` | 无 | `DWORD` | 挂 SHOW/FOREGROUND 双钩子 + 消息循环 |
 | `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→评估→执行→日志→通知 |
 

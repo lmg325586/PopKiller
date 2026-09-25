@@ -97,7 +97,6 @@ namespace
         ReplaceAll(s, L"action=monitor", L"动作=监控");
         ReplaceAll(s, L"action=allow", L"动作=放行");
         ReplaceAll(s, L"action=block", L"动作=拦截");
-        ReplaceAll(s, L"action=kill", L"动作=强杀");
         ReplaceAll(s, L"ev=SHOW", L"事件=出现");
         ReplaceAll(s, L"ev=FG", L"事件=焦点");
         ReplaceAll(s, L"reason=heuristic(", L"原因=启发式(");
@@ -399,11 +398,9 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::UpdateRowUi(RowUi& ui, LogGroup const& g)
     {
-        ui.actionText.Text((g.action == L"block") ? L"拦截" : (g.action == L"allow") ? L"放行"
-            : (g.action == L"kill") ? L"强杀" : L"监控");
+        ui.actionText.Text((g.action == L"block") ? L"拦截" : (g.action == L"allow") ? L"放行" : L"监控");
         ui.chip.Background((g.action == L"block") ? BrushBad()
-            : (g.action == L"allow") ? BrushOk()
-            : (g.action == L"kill") ? MakeBrush(0x8B, 0x00, 0x00) : MakeBrush(0x61, 0x61, 0x61));
+            : (g.action == L"allow") ? BrushOk() : MakeBrush(0x61, 0x61, 0x61));
 
         bool many = g.count > 1;
         // 箭头始终可见，允许展开查看单次拦截的详细特征/ML 结果
