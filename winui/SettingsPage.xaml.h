@@ -14,6 +14,9 @@ namespace winrt::winui::implementation
         void LicenseLink_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
+        void PrivacyLink_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+
         bool m_initialized{ false };
 
         void ForceBlockToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,

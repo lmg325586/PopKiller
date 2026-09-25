@@ -163,6 +163,10 @@
       <DependentUpon>LicensePage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClInclude>
+    <ClInclude Include="PrivacyPage.xaml.h">
+      <DependentUpon>PrivacyPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClInclude>
     <ClInclude Include="pch.h" />
     <ClInclude Include="App.xaml.h">
       <DependentUpon>App.xaml</DependentUpon>
@@ -199,6 +203,9 @@
     <Page Include="LicensePage.xaml">
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="PrivacyPage.xaml">
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="MainWindow.xaml" />
     <Page Include="PopupBlockerPage.xaml">
       <SubType>Designer</SubType>
@@ -221,6 +228,10 @@
     </ClCompile>
     <ClCompile Include="LicensePage.xaml.cpp">
       <DependentUpon>LicensePage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClCompile>
+    <ClCompile Include="PrivacyPage.xaml.cpp">
+      <DependentUpon>PrivacyPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </ClCompile>
     <ClCompile Include="pch.cpp">
@@ -257,6 +268,10 @@
     </Midl>
     <Midl Include="LicensePage.idl">
       <DependentUpon>LicensePage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Midl>
+    <Midl Include="PrivacyPage.idl">
+      <DependentUpon>PrivacyPage.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Midl>
     <Midl Include="MainWindow.idl">
