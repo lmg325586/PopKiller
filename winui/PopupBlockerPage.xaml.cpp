@@ -122,14 +122,6 @@ namespace winrt::winui::implementation
             setupCallbacks();
             });
 
-        this->Unloaded([this](auto&&, auto&&)
-            {
-                if (m_statusTimer) m_statusTimer.Stop();
-                std::lock_guard lock(PopupBlocker::CallbackMutex);
-                PopupBlocker::EnabledChangedCallback = nullptr;
-                PopupBlocker::CommunityRulesFetchCallback = nullptr;
-            });
-
         m_initialized = true;
 
         PopupBlocker::SyncFromSettings();
@@ -490,14 +482,6 @@ namespace winrt::winui::implementation
     {
         ReloadRulesFromEngine();
         RefreshList();
-    }
-
-    void PopupBlockerPage::OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&)
-    {
-        if (m_statusTimer) m_statusTimer.Stop();
-        std::lock_guard lock(PopupBlocker::CallbackMutex);
-        PopupBlocker::EnabledChangedCallback = nullptr;
-        PopupBlocker::CommunityRulesFetchCallback = nullptr;
     }
 
     void PopupBlockerPage::RuleItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,
