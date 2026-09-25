@@ -155,10 +155,10 @@ namespace winrt::winui::implementation
         }
 
         PopupBlocker::EnsureDefaultRules();
-        if (AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1)
+        bool blockerEnabled = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
+        if (blockerEnabled)
         {
             PopupBlocker::SyncFromSettings();
-            PopupBlocker::Start();
         }
 
         auto menuItems = NavView().MenuItems();
@@ -296,6 +296,13 @@ namespace winrt::winui::implementation
                 ::OutputDebugStringW(L"[PopKiller] Toast 未知异常\n");
             }
             };
+
+        // 引擎必须在 BlockOccurredCallback 注册完成后再启动，避免引擎线程
+        // 与 UI 线程并发读写同一回调槽（未加锁写 vs SafeInvoke 加锁读）。
+        if (blockerEnabled)
+        {
+            PopupBlocker::Start();
+        }
     }
 
     void MainWindow::BeginShutdown()
