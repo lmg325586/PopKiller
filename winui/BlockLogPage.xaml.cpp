@@ -168,14 +168,12 @@ namespace winrt::winui::implementation
 
         this->Unloaded([this](auto&&, auto&&) {
             if (m_timer) m_timer.Stop();
-            PopupBlocker::BlockOccurredCallback = nullptr;
             });
     }
 
     BlockLogPage::~BlockLogPage()
     {
         if (m_timer) m_timer.Stop();
-        PopupBlocker::BlockOccurredCallback = nullptr;
     }
 
     void BlockLogPage::OnLogListLoaded(IInspectable const&, RoutedEventArgs const&)
@@ -840,7 +838,6 @@ namespace winrt::winui::implementation
     void BlockLogPage::OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&) { Load(); }
     void BlockLogPage::OnNavigatedFrom(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&) {
         if (m_timer) m_timer.Stop();
-        PopupBlocker::BlockOccurredCallback = nullptr;
     }
 
     void BlockLogPage::NewLogJumpButton_Click(IInspectable const&, RoutedEventArgs const&)
