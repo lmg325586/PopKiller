@@ -75,6 +75,8 @@
 | `VerboseLog` | `bool` | 详细日志开关 |
 | `MLHeuristic` | `bool` | 机器学习识别开关（仅记录） |
 | `ToastNotify` | `bool` | 拦截通知开关（默认开） |
+| `FullscreenGame` | `std::atomic<bool>` | 全屏游戏/应用检测缓存 |
+| `GameMode` | `bool` | 游戏模式开关（全屏时拦截焦点窃取，默认关） |
 | `kMLArbLow` | `constexpr int` | ML 仲裁下限分数（35） |
 | `kMLArbHigh` | `constexpr int` | ML 仲裁上限分数（90） |
 | `EnabledChangedCallback` | `std::function<void()>` | 拦截状态变更回调 |
@@ -121,7 +123,8 @@ SaveRules(rules); // 安全调用
 | `Stop()` | 无 | `void` | `WM_QUIT` + join 线程 |
 | `PauseForMinutes(minutes)` | 分钟数 | `void` | 暂停拦截指定分钟，后台线程自动恢复 |
 | `ResumeNow()` | 无 | `void` | 立即恢复拦截（取消暂停） |
-| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→评估→执行→日志→通知 |
+| `InFullscreenGame()` | 无 | `bool` | `SHQueryUserNotificationState` 检测是否全屏游戏/应用（最多每 2 秒查询一次，缓存于 `FullscreenGame`） |
+| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤 →（游戏模式下全屏时的焦点窃取判定）→ 评估 → 执行 → 日志 → 通知 |
 
 ### detail 命名空间
 
@@ -138,7 +141,10 @@ SaveRules(rules); // 安全调用
 | `PassEventFilter(hwnd, idObject, idChild)` | 句柄、对象、子ID | `bool` | 事件预过滤（跳过自身/非窗口/对象） |
 | `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 综合评估：规则匹配+启发式+ML+raw |
 | `WriteEventLog(hwnd, idEvent, v)` | 句柄、事件、评估结果 | `void` | 写日志（含启发式明细+raw+ml） |
-| `EnforceBlock(hwnd)` | 句柄 | `void` | 关闭/隐藏窗口（黑名单与启发式命中一致），随后触发通知回调 |
+| `EnforceBlock(hwnd)` | 句柄 | `void` | 关闭/隐藏窗口（黑名单与启发式命中一致） |
+| `IsNewlyCreated(hwnd, withinMs)` | 句柄、阈值(默认 5000ms) | `bool` | 进程创建时间是否在阈值内 |
+| `EnforceFocusSteal(hwnd)` | 句柄 | `void` | 焦点窃取：去置顶 + `WM_CLOSE` + 隐藏 |
+| `MakeFocusStealVerdict()` | 无 | `EventVerdict` | 构造 `reason=focus_steal`、`action=block` 的评估结果 |
 | `ThreadMain(lp)` | 无 | `DWORD` | 挂 SHOW/FOREGROUND 双钩子 + 消息循环 |
 | `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→评估→执行→日志→通知 |
 
@@ -238,10 +244,11 @@ SaveRules(rules); // 安全调用
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
-| `IsEnabled()` | 无 | `bool` | 检查注册表 Run 键是否存在 |
-| `Enable()` | 无 | `bool` | 写入注册表 Run 键（当前用户） |
-| `Disable()` | 无 | `bool` | 删除注册表 Run 键 |
-| `SetEnabled(enable)` | bool | `bool` | 统一开关接口 |
+| `IsEnabled()` | 无 | `bool` | 检查注册表 Run 键是否存在（含 StartupApproved） |
+| `EnableAutoStartup()` | 无 | `bool` | 写入注册表 Run 键（当前用户） |
+| `DisableAutoStartup()` | 无 | `bool` | 删除注册表 Run 键 |
+| `GetExePathQuoted()` | 无 | `std::wstring` | 生成带引号的 exe 路径（附 `--autostart`） |
+| `SyncPath()` | 无 | `void` | 已启用时用当前路径刷新注册表 |
 
 全局常量：`RunKeyPath`、`ApprovedPath`（StartupApproved 兼容）。
 
@@ -280,10 +287,14 @@ SaveRules(rules); // 安全调用
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
-| `RootPointerMoved(sender, e)` | 指针移动 | `void` | 更新辉光效果位置（5 层椭圆渐变） |
+| `RootPointerMoved(sender, e)` | 指针移动 | `void` | 更新 4 张卡片的辉光位置 |
 | `RootPointerExited(sender, e)` | 指针离开 | `void` | 隐藏辉光 |
 | `GoToBlocker_Tapped(sender, e)` | 卡片点击 | `void` | 导航到弹窗拦截页 |
 | `GoToSettings_Tapped(sender, e)` | 卡片点击 | `void` | 导航到设置页 |
+| `EnableEngine_Click(sender, e)` | 按钮 | `void` | 快捷开启拦截：写 `Enabled` + `SyncFromSettings` + ML Init + `Start` |
+| `RefreshEngineStatus()` | 无 | `void` | 刷新引擎状态文本（运行中/已暂停/已关闭）与快捷按钮可见性 |
+| `StatusTimer_Tick(sender, e)` | 定时器 | `void` | 每秒刷新引擎状态 |
+| `~HomePage()` | 无 | - | 停止状态定时器 |
 
 ## PopupBlockerPage.xaml.cpp（规则页）
 
@@ -296,8 +307,10 @@ SaveRules(rules); // 安全调用
 | `CommunityRulesToggle_Toggled(sender, args)` | 开关 | `void` | 写社区规则开关，触发拉取 |
 | `UpdateCommunityStatus(ok, msg)` | 成功标志、消息 | `void` | 更新社区规则状态文本与重试按钮 |
 | `RetryFetchButton_Click(sender, args)` | 按钮 | `void` | 重新拉取社区规则 |
-| `EditRule_Click(sender, args)` | 按钮 | `void` | 选中规则回填到输入框，切换为保存模式 |
-| `AddRule_Click(sender, args)` | 按钮 | `void` | 冲突检测→加规则→Save→Sync→刷新；冲突时橙色提示 |
+| `EditRule_Click(sender, args)` | 按钮 | `void` | 打开「编辑规则」对话框（选中 / 右键 / 双击三个入口） |
+| `AddRule_Click(sender, args)` | 按钮 | `void` | 冲突检测：有冲突则不新增，弹确认框询问是否编辑冲突规则；否则插入→`Save`→刷新 |
+| `SelectRuleByRealIndex(real)` | 真实索引 | `void` | 选中并滚动到该规则（必要时清空搜索以显示） |
+| `PromptConflictEdit(real)` | 真实索引 | `IAsyncAction` | 弹「规则冲突」确认框；确认后重置添加栏并打开冲突规则的编辑框 |
 | `DeleteRule_Click(sender, args)` | 按钮 | `void` | 经 `m_visibleIndex` 映射删除 |
 | `Pick_Click(sender, args)` | 按钮 | `void` | 启动拾取器，回填输入框与 PickInfo |
 | `SearchInput_TextChanged(sender, args)` | 文本 | `void` | 更新 `m_searchText`→RefreshList |
@@ -324,6 +337,15 @@ SaveRules(rules); // 安全调用
 | `AutoStartToggle_Toggled(sender, args)` | 开关 | `void` | 调用 AutoStart::SetEnabled |
 | `MLHeuristicToggle_Toggled(sender, args)` | 开关 | `void` | 写 `MLHeuristic` + Sync |
 | `ToastNotifyToggle_Toggled(sender, args)` | 开关 | `void` | 写 `ToastNotify` + 同步引擎变量 |
+| `GameModeToggle_Toggled(sender, args)` | 开关 | `void` | 写 `GameMode` + 同步引擎变量（默认关） |
+
+## PrivacyPage.xaml.cpp（隐私声明页）
+
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `BackButton_Click(sender, args)` | 按钮 | `void` | 返回上一页 |
+
+正文在构造函数中以 `PrivacyText().Text(...)` 写入（本地数据 / 网络请求 / 不收集 / 你的控制 四节）。由设置页「关于 → 隐私声明」进入。
 
 ## BlockLogPage.xaml.cpp（日志页）
 
@@ -334,7 +356,7 @@ SaveRules(rules); // 安全调用
 | `Load()` | 无 | `void` | 读文件→应用过滤→刷新列表 |
 | `Filter_Changed(sender, args)` | 下拉 | `void` | 切换过滤标签→ApplyFilter |
 | `Search_Changed(sender, args)` | 文本 | `void` | 更新搜索词→ApplyFilter |
-| `Timer_Tick(sender, args)` | 定时器 | `void` | 自动刷新日志（默认 2 秒间隔） |
+| `Timer_Tick(sender, args)` | 定时器 | `void` | 自动刷新日志（1 秒间隔；日志含焦点窃取等事件） |
 | `Refresh_Click(sender, args)` | 按钮 | `void` | 手动刷新 |
 | `Clear_Click(sender, args)` | 按钮 | `void` | 清空日志文件 |
 | `LogItem_RightTapped(sender, args)` | 列表项右键 | `void` | 弹出标注/加规则上下文菜单 |
@@ -360,3 +382,4 @@ SaveRules(rules); // 安全调用
 | 版本 | 日期 | 变更说明 |
 |---|---|---|
 | Beta 0.7 | - | 初始版本 |
+| Beta 0.8 | 2026-09-26 | 隐私声明页；游戏模式（全屏游戏焦点窃取拦截）；主页改版（引擎状态/并排入口）；日志页排版；规则冲突改为确认框并定位选中、新增规则默认匹配模式改精确；移除黑名单强杀；改为自包含分发 |
