@@ -282,8 +282,9 @@ SaveRules(rules); // 安全调用
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
-| `ApplyTheme(hwnd, material)` | 句柄、材质(0普通/1Mica) | `void` | 应用背景材质与标题栏颜色 |
-| `SetTitleBarColor(hwnd)` | 句柄 | `void` | 设置标题栏暗色（DwmSetWindowAttribute） |
+| `ApplyTitleBar(titleBar)` | `AppWindowTitleBar` | `void` | 依 `Index`（1=Mica）与 `TitleBarElement.ActualTheme()` 应用标题栏背景、前景与按钮颜色 |
+
+全局状态：`Index`（材质，0 普通/1 Mica）、`TitleBarElement`（标题栏容器，用于取 `ActualTheme`）。
 
 ## MainWindow.xaml.cpp（主窗口）
 
