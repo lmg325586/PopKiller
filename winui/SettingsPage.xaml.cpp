@@ -49,6 +49,7 @@ namespace winrt::winui::implementation
     {
         InitializeComponent();
         VerboseLogToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1);
+        GameModeToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"GameMode", 0) == 1);
         int mode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
         HeuristicModeCombo().SelectedIndex(ModeToIndex(mode));
         AutoStartToggle().IsOn(AutoStart::IsEnabled());
@@ -128,6 +129,15 @@ namespace winrt::winui::implementation
         AppSettings::WriteInt(L"Blocker", L"VerboseLog", on ? 1 : 0);
 
         PopupBlocker::SyncFromSettings();
+    }
+
+    void SettingsPage::GameModeToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_initialized) return;
+
+        bool on = GameModeToggle().IsOn();
+        AppSettings::WriteInt(L"Blocker", L"GameMode", on ? 1 : 0);
+        PopupBlocker::GameMode = on;
     }
 
     void SettingsPage::AutoStartToggle_Toggled(IInspectable const& sender, RoutedEventArgs const&)

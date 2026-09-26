@@ -16,6 +16,8 @@
 #include "HeuristicScorer.h"
 #include "RuleTypes.h"
 #include "RuleStorage.h"
+#include <shellapi.h>
+#pragma comment(lib, "shell32.lib")
 #include <winrt/Windows.Web.Http.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Security.Cryptography.h>
@@ -139,6 +141,7 @@ namespace PopupBlocker
     inline std::atomic<bool> Running{ false };
     inline std::function<void()> EnabledChangedCallback;
     inline bool ForceBlock = false;
+    inline bool GameMode = false;   // 游戏模式：全屏游戏时拦截焦点窃取
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;
 
@@ -147,6 +150,7 @@ namespace PopupBlocker
 
     inline std::atomic<bool> Paused{ false };
     inline std::atomic<bool> ShuttingDown{ false };
+    inline std::atomic<bool> FullscreenGame{ false };   // 是否处于全屏游戏/全屏应用（轮询缓存）
     inline std::atomic<long long> PauseDeadlineMs{ 0 };
     inline std::atomic<int> PauseGen{ 0 };
 
@@ -161,6 +165,22 @@ namespace PopupBlocker
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
+    // 是否处于全屏游戏/全屏应用：SHQueryUserNotificationState，最多每 2 秒查询一次并缓存
+    inline bool InFullscreenGame()
+    {
+        static std::atomic<long long> s_lastCheck{ 0 };
+        long long now = NowMs();
+        long long prev = s_lastCheck.load();
+        if (now - prev >= 2000 && s_lastCheck.compare_exchange_strong(prev, now))
+        {
+            QUERY_USER_NOTIFICATION_STATE q{};
+            bool fs = SUCCEEDED(::SHQueryUserNotificationState(&q))
+                && (q == QUNS_RUNNING_D3D_FULL_SCREEN || q == QUNS_APP);
+            FullscreenGame.store(fs);
+        }
+        return FullscreenGame.load();
     }
 
     inline std::wstring LogPath()
@@ -248,6 +268,7 @@ namespace PopupBlocker
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
         MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
         ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
+        GameMode = AppSettings::ReadInt(L"Blocker", L"GameMode", 0) == 1;
 
         EnsureDefaultRules();
         std::vector<Rule> rules;
@@ -609,6 +630,47 @@ namespace PopupBlocker
             ::ShowWindowAsync(hwnd, SW_HIDE);
         }
 
+        // 目标窗口进程是否刚创建（默认 5 秒内）
+        inline bool IsNewlyCreated(HWND hwnd, unsigned long long withinMs = 5000)
+        {
+            DWORD pid = 0;
+            ::GetWindowThreadProcessId(hwnd, &pid);
+            if (!pid) return false;
+            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (!h) return false;
+            FILETIME creation{}, exitT{}, kernel{}, user{};
+            BOOL ok = ::GetProcessTimes(h, &creation, &exitT, &kernel, &user);
+            ::CloseHandle(h);
+            if (!ok) return false;
+
+            FILETIME nowFt{};
+            ::GetSystemTimeAsFileTime(&nowFt);
+            ULARGE_INTEGER now{}, cre{};
+            now.LowPart = nowFt.dwLowDateTime; now.HighPart = nowFt.dwHighDateTime;
+            cre.LowPart = creation.dwLowDateTime; cre.HighPart = creation.dwHighDateTime;
+            if (now.QuadPart <= cre.QuadPart) return false;
+            return ((now.QuadPart - cre.QuadPart) / 10000ULL) <= withinMs;
+        }
+
+        // 焦点窃取：阻止置顶 + 关闭并隐藏
+        inline void EnforceFocusSteal(HWND hwnd)
+        {
+            ::SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            ::ShowWindowAsync(hwnd, SW_HIDE);
+        }
+
+        inline EventVerdict MakeFocusStealVerdict()
+        {
+            EventVerdict v;
+            v.reason = L"focus_steal";
+            v.action = L"block";
+            v.shouldBlock = true;
+            v.shouldLog = true;
+            v.matchResult = 0;
+            return v;
+        }
+
         inline DWORD WINAPI ThreadMain(LPVOID) {
             // 先强制建立本线程消息队列，再通知就绪：保证 Stop() 的
             // PostThreadMessageW(WM_QUIT) 不会因队列尚未建立而静默丢失。
@@ -629,6 +691,20 @@ namespace PopupBlocker
     {
         if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
+
+        // 全屏游戏期间：刚创建、非白名单的进程抢夺前台 → 焦点窃取，直接拦截（静默，不弹通知）
+        if (GameMode
+            && idEvent == EVENT_SYSTEM_FOREGROUND
+            && InFullscreenGame()
+            && detail::Match(hwnd) != 1
+            && detail::IsNewlyCreated(hwnd))
+        {
+            detail::EventVerdict fs = detail::MakeFocusStealVerdict();
+            detail::WriteEventLog(hwnd, idEvent, fs);
+            detail::EnforceFocusSteal(hwnd);
+            return;
+        }
+
         detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime);
         if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
         if (v.shouldBlock) {

@@ -104,6 +104,7 @@ namespace
         ReplaceAll(s, L"reason=blacklist", L"原因=黑名单");
         ReplaceAll(s, L"reason=heuristic", L"原因=启发式");
         ReplaceAll(s, L"reason=heuristic_off", L"原因=启发式关闭");
+        ReplaceAll(s, L"reason=focus_steal", L"原因=焦点窃取");
         ReplaceAll(s, L"raw=", L"特征=");
         ReplaceAll(s, L"ml=Y", L"ML=是");
         ReplaceAll(s, L"ml=N", L"ML=否");
