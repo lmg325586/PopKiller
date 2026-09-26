@@ -78,7 +78,7 @@ namespace
                 {
                     if (PopupBlocker::AddWhitelistExe(exe))
                     {
-                        std::wstring xml = L"<toast><visual><binding template=\"ToastGeneric\">"
+                        std::wstring xml = L"<toast duration=\"short\"><visual><binding template=\"ToastGeneric\">"
                             L"<text>已加入白名单</text><text>进程 " + exe + L" 的弹窗将被放行。</text>"
                             L"</binding></visual></toast>";
                         try
@@ -283,7 +283,7 @@ namespace winrt::winui::implementation
                         L"</actions>";
                 }
 
-                std::wstring xml = L"<toast launch=\"action=log\">"
+                std::wstring xml = L"<toast duration=\"short\" launch=\"action=log\">"
                     L"<visual><binding template=\"ToastGeneric\">"
                     L"<text>" + toastTitle + L"</text>"
                     L"<text>进程：" + XmlEscape(exe) + L"</text>";
@@ -293,9 +293,6 @@ namespace winrt::winui::implementation
                 xml += L"</binding></visual>" + actionsXml + L"</toast>";
 
                 winrt::Microsoft::Windows::AppNotifications::AppNotification notification{ winrt::hstring(xml) };
-                try { notification.Expiration(winrt::clock::now() + std::chrono::minutes(5)); }
-                catch (...) {}
-
                 winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().Show(notification);
             }
             catch (winrt::hresult_error const& e) {
