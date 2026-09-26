@@ -142,6 +142,8 @@ namespace winrt::winui::implementation
 
     void SettingsPage::AutoStartToggle_Toggled(IInspectable const& sender, RoutedEventArgs const&)
     {
+        if (!m_initialized) return;
+
         auto toggle = sender.as<winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch>();
         bool on = toggle.IsOn();
         bool ok = on ? AutoStart::EnableAutoStartup() : AutoStart::DisableAutoStartup();
