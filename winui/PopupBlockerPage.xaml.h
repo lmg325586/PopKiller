@@ -56,6 +56,7 @@ namespace winrt::winui::implementation
         void RefreshList();
         void Save();
         void ReloadRulesFromEngine();
+        void SelectRuleByRealIndex(size_t real);
 
         struct RuleItem {
             int listType{ 0 };
@@ -68,6 +69,7 @@ namespace winrt::winui::implementation
         PopupBlocker::Rule ToEngineRule(RuleItem const& it);
 
         winrt::fire_and_forget OpenEditDialog(size_t real);
+        winrt::fire_and_forget PromptConflictEdit(size_t real);
 
         bool m_initialized{ false };
 

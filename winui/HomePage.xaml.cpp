@@ -2,12 +2,15 @@
 #include "HomePage.xaml.h"
 #include "App.xaml.h"
 #include "MainWindow.xaml.h"
+#include "AppSettings.h"
+#include "PopupBlocker.h"
 #include <winrt/Windows.System.Profile.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Microsoft.UI.Input.h>
 #include <string>
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #if __has_include("HomePage.g.cpp")
 #include "HomePage.g.cpp"
 #endif
@@ -65,6 +68,8 @@ namespace winrt::winui::implementation
     {
         InitializeComponent();
 
+        EngineCard().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
+            { ClipToSelf(EngineCanvas()); });
         GlowCard().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
             { ClipToSelf(GlowCanvas()); });
         GlowCard2().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
@@ -100,6 +105,58 @@ namespace winrt::winui::implementation
 
         OwnerText().Text(hstring(owner));
         OrgText().Text(hstring(org));
+
+        m_statusTimer = DispatcherTimer();
+        m_statusTimer.Interval(std::chrono::milliseconds{ 1000 });
+        m_statusTimer.Tick({ get_weak(), &HomePage::StatusTimer_Tick });
+        m_statusTimer.Start();
+        RefreshEngineStatus();
+    }
+
+    HomePage::~HomePage()
+    {
+        if (m_statusTimer) m_statusTimer.Stop();
+    }
+
+    void HomePage::RefreshEngineStatus()
+    {
+        bool enabled = AppSettings::ReadInt(L"Blocker", L"Enabled", 0) == 1;
+        bool paused = PopupBlocker::Paused.load();
+
+        if (!enabled)
+        {
+            EngineStatusText().Text(L"已关闭");
+            EnableEngineButton().Visibility(Visibility::Visible);
+        }
+        else if (paused)
+        {
+            EngineStatusText().Text(L"已暂停");
+            EnableEngineButton().Visibility(Visibility::Collapsed);
+        }
+        else
+        {
+            EngineStatusText().Text(L"运行中");
+            EnableEngineButton().Visibility(Visibility::Collapsed);
+        }
+    }
+
+    void HomePage::EnableEngine_Click(winrt::Windows::Foundation::IInspectable const&,
+        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&)
+    {
+        AppSettings::WriteInt(L"Blocker", L"Enabled", 1);
+        PopupBlocker::SyncFromSettings();
+        HeuristicML::GetInstance().Init();
+        PopupBlocker::Start();
+        RefreshEngineStatus();
+    }
+
+    void HomePage::StatusTimer_Tick(winrt::Windows::Foundation::IInspectable const&,
+        winrt::Windows::Foundation::IInspectable const&)
+    {
+        if (PopupBlocker::ShuttingDown.load()) return;
+        auto self = get_strong();
+        if (!self) return;
+        RefreshEngineStatus();
     }
 
     void HomePage::UpdateGlow(Controls::Border const& card, Controls::Canvas const& canvas,
@@ -130,6 +187,7 @@ namespace winrt::winui::implementation
 
     void HomePage::RootPointerMoved(IInspectable const&, PointerRoutedEventArgs const& e)
     {
+        UpdateGlow(EngineCard(), EngineCanvas(), EngineGlow(), e);
         UpdateGlow(GlowCard(), GlowCanvas(), GlowLayer(), e);
         UpdateGlow(GlowCard2(), GlowCanvas2(), Glow2Layer(), e);
         UpdateGlow(GlowCard3(), GlowCanvas3(), Glow3Layer(), e);
@@ -137,6 +195,7 @@ namespace winrt::winui::implementation
 
     void HomePage::RootPointerExited(IInspectable const&, PointerRoutedEventArgs const&)
     {
+        EngineCanvas().Opacity(0.0);
         GlowCanvas().Opacity(0.0);
         GlowCanvas2().Opacity(0.0);
         GlowCanvas3().Opacity(0.0);

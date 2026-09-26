@@ -91,7 +91,7 @@
                                 <ComboBoxItem Content="标题"/>
                                 <ComboBoxItem Content="类名"/>
                             </ComboBox>
-                            <ComboBox x:Name="MatchModeCombo" SelectedIndex="0" MinWidth="80">
+                            <ComboBox x:Name="MatchModeCombo" SelectedIndex="1" MinWidth="80">
                                 <ComboBoxItem Content="包含"/>
                                 <ComboBoxItem Content="精确"/>
                                 <ComboBoxItem Content="通配符"/>
@@ -202,6 +202,15 @@
                            TextWrapping="Wrap"
                            Visibility="Collapsed"/>
             </StackPanel>
+        </ContentDialog>
+
+        <ContentDialog x:Name="ConflictDialog"
+                       Title="规则冲突"
+                       PrimaryButtonText="编辑该规则"
+                       CloseButtonText="取消"
+                       DefaultButton="Primary">
+            <TextBlock x:Name="ConflictText" TextWrapping="Wrap"
+                       Text="已存在相同内容的相反名单规则。是否打开该规则进行编辑？"/>
         </ContentDialog>
     </Grid>
 </Page>

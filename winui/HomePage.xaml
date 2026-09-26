@@ -13,6 +13,37 @@
 
             <StackPanel HorizontalAlignment="Left" MaxWidth="800" Spacing="8">
 
+                <Border x:Name="EngineCard"
+                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <Grid>
+                        <Canvas x:Name="EngineCanvas" Opacity="0" IsHitTestVisible="False">
+                            <Ellipse x:Name="EngineGlow" Width="300" Height="300">
+                                <Ellipse.Fill>
+                                    <RadialGradientBrush>
+                                        <GradientStop Offset="0" Color="#B3D9D9D9"/>
+                                        <GradientStop Offset="1" Color="#00D9D9D9"/>
+                                    </RadialGradientBrush>
+                                </Ellipse.Fill>
+                            </Ellipse>
+                        </Canvas>
+                        <Border Margin="2" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"/>
+                        <Grid Padding="16" ColumnDefinitions="*,Auto">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="拦截引擎" FontSize="15" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="EngineStatusText" Text="检测中..."
+                                           FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                            <Button x:Name="EnableEngineButton" Grid.Column="1" Content="开启拦截"
+                                    Visibility="Collapsed" Click="EnableEngine_Click"
+                                    Style="{ThemeResource AccentButtonStyle}"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+
                 <Border x:Name="GlowCard"
                         Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
