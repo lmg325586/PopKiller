@@ -696,7 +696,7 @@ namespace PopupBlocker
         if (GameMode
             && idEvent == EVENT_SYSTEM_FOREGROUND
             && InFullscreenGame()
-            && Match(hwnd) != 1
+            && detail::Match(hwnd) != 1
             && detail::IsNewlyCreated(hwnd))
         {
             detail::EventVerdict fs = detail::MakeFocusStealVerdict();
