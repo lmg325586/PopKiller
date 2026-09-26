@@ -68,6 +68,8 @@ namespace winrt::winui::implementation
     {
         InitializeComponent();
 
+        EngineCard().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
+            { ClipToSelf(EngineCanvas()); });
         GlowCard().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
             { ClipToSelf(GlowCanvas()); });
         GlowCard2().SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&)
@@ -185,6 +187,7 @@ namespace winrt::winui::implementation
 
     void HomePage::RootPointerMoved(IInspectable const&, PointerRoutedEventArgs const& e)
     {
+        UpdateGlow(EngineCard(), EngineCanvas(), EngineGlow(), e);
         UpdateGlow(GlowCard(), GlowCanvas(), GlowLayer(), e);
         UpdateGlow(GlowCard2(), GlowCanvas2(), Glow2Layer(), e);
         UpdateGlow(GlowCard3(), GlowCanvas3(), Glow3Layer(), e);
@@ -192,6 +195,7 @@ namespace winrt::winui::implementation
 
     void HomePage::RootPointerExited(IInspectable const&, PointerRoutedEventArgs const&)
     {
+        EngineCanvas().Opacity(0.0);
         GlowCanvas().Opacity(0.0);
         GlowCanvas2().Opacity(0.0);
         GlowCanvas3().Opacity(0.0);
