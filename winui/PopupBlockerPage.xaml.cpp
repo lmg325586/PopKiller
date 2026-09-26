@@ -258,6 +258,14 @@ namespace winrt::winui::implementation
         auto result = co_await ConflictDialog().ShowAsync();
         if (result != Controls::ContentDialogResult::Primary) co_return;
 
+        // 重置"添加规则"栏目
+        PatternInput().Text(L"");
+        ListTypeCombo().SelectedIndex(0);
+        RuleTypeCombo().SelectedIndex(0);
+        MatchModeCombo().SelectedIndex(0);
+        PickInfo().Text(L"");
+        PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
+
         SelectRuleByRealIndex(real);
         OpenEditDialog(real);
     }
