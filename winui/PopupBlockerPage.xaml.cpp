@@ -215,6 +215,30 @@ namespace winrt::winui::implementation
         PopupBlocker::SaveRules(newRules);
     }
 
+    void PopupBlockerPage::SelectRuleByRealIndex(size_t real)
+    {
+        if (real >= m_rules.size()) return;
+
+        // 若该规则被搜索过滤掉，先清空搜索以便显示
+        if (!m_searchText.empty())
+        {
+            SearchInput().Text(L"");
+            m_searchText.clear();
+            RefreshList();
+        }
+
+        for (size_t v = 0; v < m_visibleIndex.size(); ++v)
+        {
+            if (m_visibleIndex[v] == real)
+            {
+                RulesList().SelectedIndex(static_cast<int>(v));
+                if (auto item = RulesList().Items().GetAt(static_cast<uint32_t>(v)))
+                    RulesList().ScrollIntoView(item);
+                return;
+            }
+        }
+    }
+
     void PopupBlockerPage::EnableToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
     {
         auto self = get_strong();
@@ -321,6 +345,7 @@ namespace winrt::winui::implementation
         std::wstring patternLower = PopupBlocker::Lower(pattern);
 
         bool conflict = false;
+        size_t conflictReal = (size_t)-1;
         for (size_t i = 0; i < m_rules.size(); ++i)
         {
             auto const& r = m_rules[i];
@@ -330,11 +355,13 @@ namespace winrt::winui::implementation
                 PopupBlocker::Lower(r.pattern) == patternLower)
             {
                 conflict = true;
+                conflictReal = i;
                 break;
             }
         }
 
         m_rules.insert(m_rules.begin(), { listType, fieldType, matchMode, pattern, false });
+        if (conflict) conflictReal += 1;   // 新规则插入最前，冲突规则索引后移
 
         PatternInput().Text(L"");
         Save();
@@ -342,7 +369,8 @@ namespace winrt::winui::implementation
 
         if (conflict)
         {
-            PickInfo().Text(L"⚠ 注意：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
+            SelectRuleByRealIndex(conflictReal);
+            PickInfo().Text(L"⚠ 已选中冲突规则：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
             PickInfo().Foreground(Media::SolidColorBrush(
                 winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
         }
@@ -545,6 +573,7 @@ namespace winrt::winui::implementation
         std::wstring patternLower = PopupBlocker::Lower(pattern);
 
         bool conflict = false;
+        size_t conflictReal = (size_t)-1;
         for (size_t i = 0; i < m_rules.size(); ++i)
         {
             if (i == real) continue;
@@ -552,7 +581,7 @@ namespace winrt::winui::implementation
             if (r.listType != listType && r.fieldType == fieldType &&
                 r.matchMode == matchMode && PopupBlocker::Lower(r.pattern) == patternLower)
             {
-                conflict = true; break;
+                conflict = true; conflictReal = i; break;
             }
         }
 
@@ -567,7 +596,8 @@ namespace winrt::winui::implementation
         RefreshList();
 
         if (conflict) {
-            PickInfo().Text(L"⚠ 注意：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
+            SelectRuleByRealIndex(conflictReal);
+            PickInfo().Text(L"⚠ 已选中冲突规则：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
             PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
         }
         else {

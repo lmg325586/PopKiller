@@ -56,6 +56,7 @@ namespace winrt::winui::implementation
         void RefreshList();
         void Save();
         void ReloadRulesFromEngine();
+        void SelectRuleByRealIndex(size_t real);
 
         struct RuleItem {
             int listType{ 0 };
