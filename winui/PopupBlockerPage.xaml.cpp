@@ -360,26 +360,26 @@ namespace winrt::winui::implementation
             }
         }
 
+        if (conflict)
+        {
+            // 有冲突：不添加新规则，定位到冲突规则并自动进入编辑
+            SelectRuleByRealIndex(conflictReal);
+            PickInfo().Text(L"⚠ 检测到冲突，未添加新规则；已定位到冲突规则并进入编辑。");
+            PickInfo().Foreground(Media::SolidColorBrush(
+                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+            OpenEditDialog(conflictReal);
+            return;
+        }
+
         m_rules.insert(m_rules.begin(), { listType, fieldType, matchMode, pattern, false });
-        if (conflict) conflictReal += 1;   // 新规则插入最前，冲突规则索引后移
 
         PatternInput().Text(L"");
         Save();
         RefreshList();
 
-        if (conflict)
-        {
-            SelectRuleByRealIndex(conflictReal);
-            PickInfo().Text(L"⚠ 已选中冲突规则：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
-            PickInfo().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
-        }
-        else
-        {
-            PickInfo().Text(L"");
-            PickInfo().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
-        }
+        PickInfo().Text(L"");
+        PickInfo().Foreground(Media::SolidColorBrush(
+            winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
     }
 
     void PopupBlockerPage::DeleteRule_Click(IInspectable const&, RoutedEventArgs const&)
