@@ -91,7 +91,7 @@
                                 <ComboBoxItem Content="标题"/>
                                 <ComboBoxItem Content="类名"/>
                             </ComboBox>
-                            <ComboBox x:Name="MatchModeCombo" SelectedIndex="0" MinWidth="80">
+                            <ComboBox x:Name="MatchModeCombo" SelectedIndex="1" MinWidth="80">
                                 <ComboBoxItem Content="包含"/>
                                 <ComboBoxItem Content="精确"/>
                                 <ComboBoxItem Content="通配符"/>

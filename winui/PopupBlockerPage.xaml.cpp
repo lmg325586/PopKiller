@@ -262,7 +262,7 @@ namespace winrt::winui::implementation
         PatternInput().Text(L"");
         ListTypeCombo().SelectedIndex(0);
         RuleTypeCombo().SelectedIndex(0);
-        MatchModeCombo().SelectedIndex(0);
+        MatchModeCombo().SelectedIndex(1);
         PickInfo().Text(L"");
         PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
 
