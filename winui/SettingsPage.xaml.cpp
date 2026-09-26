@@ -105,6 +105,8 @@ namespace winrt::winui::implementation
 
     void SettingsPage::ForceBlockToggle_Toggled(IInspectable const& sender, RoutedEventArgs const&)
     {
+        if (!m_initialized) return;
+
         bool on = sender.as<Controls::ToggleSwitch>().IsOn();
         AppSettings::WriteInt(L"Blocker", L"ForceBlock", on ? 1 : 0);
         PopupBlocker::ForceBlock = on;
@@ -164,6 +166,8 @@ namespace winrt::winui::implementation
 
     void SettingsPage::MLHeuristicToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
     {
+        if (!m_initialized) return;
+
         bool on = MLHeuristicToggle().IsOn();
         AppSettings::WriteInt(L"Blocker", L"MLHeuristic", on ? 1 : 0);
         PopupBlocker::MLHeuristic = on;
