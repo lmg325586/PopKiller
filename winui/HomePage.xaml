@@ -9,7 +9,7 @@
                     PointerMoved="RootPointerMoved"
                     PointerExited="RootPointerExited">
 
-            <TextBlock Text="Home" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,8"/>
+            <TextBlock Text="主页" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,8"/>
 
             <StackPanel HorizontalAlignment="Left" MaxWidth="800" Spacing="8">
 
@@ -44,6 +44,81 @@
                     </Grid>
                 </Border>
 
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border x:Name="GlowCard2" Grid.Column="0"
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            Tapped="GoToBlocker_Tapped">
+                        <Grid>
+                            <Canvas x:Name="GlowCanvas2" Opacity="0" IsHitTestVisible="False">
+                                <Ellipse x:Name="Glow2Layer" Width="300" Height="300">
+                                    <Ellipse.Fill>
+                                        <RadialGradientBrush>
+                                            <GradientStop Offset="0" Color="#B3D9D9D9"/>
+                                            <GradientStop Offset="1" Color="#00D9D9D9"/>
+                                        </RadialGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Canvas>
+                            <Border Margin="2" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"/>
+                            <Grid Padding="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <FontIcon Glyph="&#xEA18;" FontSize="28" Margin="0,0,16,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="弹窗拦截" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock Text="配置拦截规则 自动关闭广告与干扰弹窗"
+                                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="GlowCard3" Grid.Column="1"
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            Tapped="GoToSettings_Tapped">
+                        <Grid>
+                            <Canvas x:Name="GlowCanvas3" Opacity="0" IsHitTestVisible="False">
+                                <Ellipse x:Name="Glow3Layer" Width="300" Height="300">
+                                    <Ellipse.Fill>
+                                        <RadialGradientBrush>
+                                            <GradientStop Offset="0" Color="#B3D9D9D9"/>
+                                            <GradientStop Offset="1" Color="#00D9D9D9"/>
+                                        </RadialGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Canvas>
+                            <Border Margin="2" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"/>
+                            <Grid Padding="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <FontIcon Glyph="&#xE713;" FontSize="28" Margin="0,0,16,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="应用设置" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock Text="管理静态 ML 启发、拦截阈值、开机自启与外观主题"
+                                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
                 <Border x:Name="GlowCard"
                         Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -67,74 +142,6 @@
                             <TextBlock x:Name="OwnerText" FontSize="13" Margin="20,0,0,4"/>
                             <TextBlock x:Name="OrgText" FontSize="13" Margin="20,0,0,0"/>
                         </StackPanel>
-                    </Grid>
-                </Border>
-
-                <Border x:Name="GlowCard2"
-                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        Tapped="GoToBlocker_Tapped">
-                    <Grid>
-                        <Canvas x:Name="GlowCanvas2" Opacity="0" IsHitTestVisible="False">
-                            <Ellipse x:Name="Glow2Layer" Width="300" Height="300">
-                                <Ellipse.Fill>
-                                    <RadialGradientBrush>
-                                        <GradientStop Offset="0" Color="#B3D9D9D9"/>
-                                        <GradientStop Offset="1" Color="#00D9D9D9"/>
-                                    </RadialGradientBrush>
-                                </Ellipse.Fill>
-                            </Ellipse>
-                        </Canvas>
-                        <Border Margin="2" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"/>
-                        <Grid Padding="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <FontIcon Glyph="&#xEA18;" FontSize="28" Margin="0,0,16,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Text="弹窗拦截" FontSize="15" FontWeight="SemiBold"/>
-                                <TextBlock Text="配置拦截规则 自动关闭广告与干扰弹窗"
-                                           FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Grid>
-                    </Grid>
-                </Border>
-
-                <Border x:Name="GlowCard3"
-                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        Tapped="GoToSettings_Tapped">
-                    <Grid>
-                        <Canvas x:Name="GlowCanvas3" Opacity="0" IsHitTestVisible="False">
-                            <Ellipse x:Name="Glow3Layer" Width="300" Height="300">
-                                <Ellipse.Fill>
-                                    <RadialGradientBrush>
-                                        <GradientStop Offset="0" Color="#B3D9D9D9"/>
-                                        <GradientStop Offset="1" Color="#00D9D9D9"/>
-                                    </RadialGradientBrush>
-                                </Ellipse.Fill>
-                            </Ellipse>
-                        </Canvas>
-                        <Border Margin="2" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"/>
-                        <Grid Padding="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <FontIcon Glyph="&#xE713;" FontSize="28" Margin="0,0,16,0" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Text="应用设置" FontSize="15" FontWeight="SemiBold"/>
-                                <TextBlock Text="管理静态 ML 启发、拦截阈值、开机自启与外观主题"
-                                           FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Grid>
                     </Grid>
                 </Border>
 
