@@ -141,6 +141,7 @@ namespace PopupBlocker
     inline std::atomic<bool> Running{ false };
     inline std::function<void()> EnabledChangedCallback;
     inline bool ForceBlock = false;
+    inline bool GameMode = false;   // 游戏模式：全屏游戏时拦截焦点窃取
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;
 
@@ -267,6 +268,7 @@ namespace PopupBlocker
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
         MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
         ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
+        GameMode = AppSettings::ReadInt(L"Blocker", L"GameMode", 0) == 1;
 
         EnsureDefaultRules();
         std::vector<Rule> rules;
@@ -691,7 +693,8 @@ namespace PopupBlocker
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
 
         // 全屏游戏期间：刚创建、非白名单的进程抢夺前台 → 焦点窃取，直接拦截（静默，不弹通知）
-        if (idEvent == EVENT_SYSTEM_FOREGROUND
+        if (GameMode
+            && idEvent == EVENT_SYSTEM_FOREGROUND
             && InFullscreenGame()
             && Match(hwnd) != 1
             && detail::IsNewlyCreated(hwnd))

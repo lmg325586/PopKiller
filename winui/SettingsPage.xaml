@@ -131,6 +131,19 @@
                         <ToggleSwitch x:Name="VerboseLogToggle" Grid.Column="1" VerticalAlignment="Center"
                                       OnContent="开" OffContent="关" Toggled="VerboseLogToggle_Toggled"/>
                     </Grid>
+
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="游戏模式" Style="{StaticResource BodyTextBlockStyle}"/>
+                            <TextBlock Text="全屏游戏时，拦截新建且不在白名单的进程抢夺前台（阻止置顶并关闭），日志标记为“焦点窃取”。"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="GameModeToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="开" OffContent="关" Toggled="GameModeToggle_Toggled"/>
+                    </Grid>
                 </StackPanel>
             </Border>
 
