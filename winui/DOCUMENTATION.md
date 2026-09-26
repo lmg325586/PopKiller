@@ -278,6 +278,15 @@ SaveRules(rules); // 安全调用
 
 动态加载 `uxtheme.dll` 序号导出：135（SetPreferredAppMode）、133/145（AllowDarkModeForWindow[WithParentFallback]）、136（FlushMenuThemes）。
 
+## CrashHandler.h（崩溃转储与全局异常）
+
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `Init()` | 无 | `void` | 安装 `SetUnhandledExceptionFilter`、`std::set_terminate`、CRT 无效参数/纯虚处理器 |
+| `Report(reason, ep)` | 原因文本、可选异常指针 | `void` | 在 exe 目录写 `PopKiller_crash_<时间>.dmp` 并追加 `crash.log`，弹出提示框；带防重入 |
+
+转储用 `MiniDumpWriteDump`（`dbghelp.lib`），类型 `MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithDataSegs`。`App::App()` 调用 `Init()`，并把 XAML `UnhandledException` 接到 `Report()`（Release 亦生效）。
+
 ## AppTheme.h（主题与标题栏）
 
 | 函数 | 输入 | 输出 | 说明/副作用 |

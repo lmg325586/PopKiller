@@ -5,6 +5,7 @@
 #include "PopupBlocker.h"
 #include "AutoStart.h"
 #include "DarkMode.h"
+#include "CrashHandler.h"
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
 #include <winrt/Microsoft.Windows.AppNotifications.h>
 #include <shellapi.h>
@@ -125,19 +126,21 @@ namespace winrt::winui::implementation
 {
     App::App()
     {
+        // 尽早在进程级安装崩溃转储与全局异常处理
+        CrashHandler::Init();
+
         // 必须在创建任何窗口之前调用，原生弹出菜单（托盘右键菜单）才会跟随系统主题
         DarkMode::Init();
 
-#if defined _DEBUG && !defined DISABLE_XAML_GENERATED_BREAK_ON_UNHANDLED_EXCEPTION
+        // XAML 未处理异常（含 Release）：生成转储并提示用户；调试时先中断到调试器
         UnhandledException([](IInspectable const&, UnhandledExceptionEventArgs const& e)
             {
-                if (IsDebuggerPresent())
-                {
-                    auto errorMessage = e.Message();
-                    __debugbreak();
-                }
-            });
+                auto message = e.Message();
+#if defined _DEBUG && !defined DISABLE_XAML_GENERATED_BREAK_ON_UNHANDLED_EXCEPTION
+                if (IsDebuggerPresent()) __debugbreak();
 #endif
+                CrashHandler::Report(message.empty() ? L"XAML 未处理异常" : message.c_str());
+            });
     }
 
     void App::OnLaunched([[maybe_unused]] LaunchActivatedEventArgs const& e)

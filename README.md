@@ -449,6 +449,7 @@ PopKiller/
     ├── WindowPicker.h              # 窗口拾取器
     ├── TrayIcon.h                  # 系统托盘
     ├── DarkMode.h                  # 原生弹出菜单深色模式（uxtheme）
+    ├── CrashHandler.h              # 崩溃转储与全局异常处理
     ├── AppSettings.h               # 配置读写（ini）
     ├── AppTheme.h                  # 主题与标题栏
     ├── VersionInfo.h               # 自动生成的版本号（预构建脚本生成）
