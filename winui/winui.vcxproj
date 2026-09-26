@@ -147,6 +147,7 @@
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="AppTheme.h" />
     <ClInclude Include="AutoStart.h" />
+    <ClInclude Include="CrashHandler.h" />
     <ClInclude Include="DarkMode.h" />
     <ClInclude Include="BlockLogPage.xaml.h">
       <DependentUpon>BlockLogPage.xaml</DependentUpon>

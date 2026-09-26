@@ -31,6 +31,7 @@
     <ClInclude Include="RuleTypes.h" />
     <ClInclude Include="RuleStorage.h" />
     <ClInclude Include="AutoStart.h" />
+    <ClInclude Include="CrashHandler.h" />
     <ClInclude Include="DarkMode.h" />
     <ClInclude Include="FilePicker.h" />
     <ClInclude Include="LabelStorage.h" />
