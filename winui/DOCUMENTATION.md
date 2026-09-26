@@ -268,6 +268,16 @@ SaveRules(rules); // 安全调用
 全局常量：`WM_TRAYICON`, `IDM_SHOW`, `IDM_EXIT`, `IDM_TOGGLE`, `IDM_PAUSE_*`, `IDM_RESUME`。
 全局状态：`Hwnd`, `Visible`, `OnHideToTray`, `OnRestoreFromTray`, `OnExitRequested`, `IconNormal`, `IconGray`。
 
+## DarkMode.h（原生深色菜单）
+
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `Init()` | 无 | `void` | 创建窗口前调用，`SetPreferredAppMode(AllowDark)` 让原生弹出菜单跟随系统主题 |
+| `ApplyToWindow(hwnd)` | 窗口句柄 | `void` | 让该窗口的原生控件启用深色 |
+| `RefreshMenus()` | 无 | `void` | 系统主题变化时刷新菜单主题缓存 |
+
+动态加载 `uxtheme.dll` 序号导出：135（SetPreferredAppMode）、133/145（AllowDarkModeForWindow[WithParentFallback]）、136（FlushMenuThemes）。
+
 ## AppTheme.h（主题与标题栏）
 
 | 函数 | 输入 | 输出 | 说明/副作用 |

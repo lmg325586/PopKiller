@@ -9,6 +9,7 @@
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include "TrayIcon.h"
+#include "DarkMode.h"
 #include <commctrl.h>
 #pragma comment(lib, "comctl32.lib")
 #include <microsoft.ui.xaml.window.h>
@@ -33,6 +34,14 @@ namespace
         UINT_PTR, DWORD_PTR)
     {
         if (TrayIcon::Handle(msg, wp, lp)) return 0;
+
+        // 系统浅/深主题切换：刷新原生菜单主题
+        if (msg == WM_THEMECHANGED ||
+            (msg == WM_SETTINGCHANGE && lp &&
+                ::lstrcmpW(reinterpret_cast<LPCWSTR>(lp), L"ImmersiveColorSet") == 0))
+        {
+            DarkMode::RefreshMenus();
+        }
 
         if (msg == WM_GETMINMAXINFO)
         {
@@ -182,6 +191,7 @@ namespace winrt::winui::implementation
 
                 ::SetWindowSubclass(hwnd, MinSizeSubclass, 0, 0);
                 TrayIcon::Init(hwnd);
+                DarkMode::ApplyToWindow(hwnd);
 
                 auto weakThis = get_weak();
 

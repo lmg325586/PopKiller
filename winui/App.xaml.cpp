@@ -3,6 +3,8 @@
 #include "MainWindow.xaml.h"
 #include "TrayIcon.h"
 #include "PopupBlocker.h"
+#include "AutoStart.h"
+#include "DarkMode.h"
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
 #include <winrt/Microsoft.Windows.AppNotifications.h>
 #include <shellapi.h>
@@ -123,6 +125,9 @@ namespace winrt::winui::implementation
 {
     App::App()
     {
+        // 必须在创建任何窗口之前调用，原生弹出菜单（托盘右键菜单）才会跟随系统主题
+        DarkMode::Init();
+
 #if defined _DEBUG && !defined DISABLE_XAML_GENERATED_BREAK_ON_UNHANDLED_EXCEPTION
         UnhandledException([](IInspectable const&, UnhandledExceptionEventArgs const& e)
             {
@@ -178,6 +183,9 @@ namespace winrt::winui::implementation
             Exit();
             return;
         }
+
+        // 已启用自启时刷新注册表中的可执行文件路径（程序移动后自愈）
+        AutoStart::SyncPath();
 
         RegisterToastProtocol();
 
