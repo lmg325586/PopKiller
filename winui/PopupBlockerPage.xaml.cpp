@@ -239,6 +239,29 @@ namespace winrt::winui::implementation
         }
     }
 
+    winrt::fire_and_forget PopupBlockerPage::PromptConflictEdit(size_t real)
+    {
+        auto lifetime = get_strong();
+        if (real >= m_rules.size()) co_return;
+
+        auto xamlRoot = this->XamlRoot();
+        if (!xamlRoot) co_return;
+
+        auto const& r = m_rules[real];
+        std::wstring display = std::wstring(ListTypeLabel(r.listType)) + L" | " +
+            FieldLabel(r.fieldType) + L" | " + MatchModeLabel(r.matchMode) + L"：" + r.pattern;
+        ConflictText().Text(hstring(
+            L"已存在相同内容的相反名单规则：\n" + display +
+            L"\n\n是否打开该规则进行编辑？（白名单优先，不处理则该窗口将被放行。）"));
+
+        ConflictDialog().XamlRoot(xamlRoot);
+        auto result = co_await ConflictDialog().ShowAsync();
+        if (result != Controls::ContentDialogResult::Primary) co_return;
+
+        SelectRuleByRealIndex(real);
+        OpenEditDialog(real);
+    }
+
     void PopupBlockerPage::EnableToggle_Toggled(IInspectable const&, RoutedEventArgs const&)
     {
         auto self = get_strong();
@@ -362,12 +385,11 @@ namespace winrt::winui::implementation
 
         if (conflict)
         {
-            // 有冲突：不添加新规则，定位到冲突规则并自动进入编辑
-            SelectRuleByRealIndex(conflictReal);
-            PickInfo().Text(L"⚠ 检测到冲突，未添加新规则；已定位到冲突规则并进入编辑。");
+            // 有冲突：不添加新规则，弹确认框询问是否编辑冲突规则
+            PickInfo().Text(L"⚠ 检测到冲突：已存在相同内容的相反名单规则。");
             PickInfo().Foreground(Media::SolidColorBrush(
                 winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
-            OpenEditDialog(conflictReal);
+            PromptConflictEdit(conflictReal);
             return;
         }
 

@@ -203,5 +203,14 @@
                            Visibility="Collapsed"/>
             </StackPanel>
         </ContentDialog>
+
+        <ContentDialog x:Name="ConflictDialog"
+                       Title="规则冲突"
+                       PrimaryButtonText="编辑该规则"
+                       CloseButtonText="取消"
+                       DefaultButton="Primary">
+            <TextBlock x:Name="ConflictText" TextWrapping="Wrap"
+                       Text="已存在相同内容的相反名单规则。是否打开该规则进行编辑？"/>
+        </ContentDialog>
     </Grid>
 </Page>
