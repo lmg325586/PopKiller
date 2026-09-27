@@ -663,14 +663,45 @@ namespace PopupBlocker
             return v;
         }
 
+        inline HWND LastFullscreenHwnd = nullptr;   // 抢前台前记录的全屏前台窗口（用于事后把前台还回去）
+
+        // 把前台还给游戏（若仍在且已不是前台）：附加输入队列以绕过前台锁
+        inline void RestoreFullscreenForeground()
+        {
+            HWND game = LastFullscreenHwnd;
+            if (!game || !::IsWindow(game)) return;
+
+            HWND fg = ::GetForegroundWindow();
+            if (fg == game) return;
+
+            DWORD fgTid = fg ? ::GetWindowThreadProcessId(fg, nullptr) : 0;
+            DWORD ourTid = ::GetCurrentThreadId();
+            bool attached = false;
+            if (fgTid && fgTid != ourTid)
+                attached = ::AttachThreadInput(ourTid, fgTid, TRUE) != 0;
+            ::SetForegroundWindow(game);
+            if (attached) ::AttachThreadInput(ourTid, fgTid, FALSE);
+        }
+
         // 刷新全屏状态缓存：独占全屏(3)、无边框全屏/演示(2)、Store 应用(7) 均视为全屏。
-        // out-of-context 钩子回调在“前台已切换”后才送达，故必须由轮询持续采样。
+        // out-of-context 钩子回调在“前台已切换”后才送达，故必须由轮询持续采样；
+        // 同时记录当时的全屏前台窗口，供拦截后恢复前台。
         inline void UpdateFullscreenState()
         {
             QUERY_USER_NOTIFICATION_STATE q{};
             bool fs = SUCCEEDED(::SHQueryUserNotificationState(&q))
                 && (q == QUNS_RUNNING_D3D_FULL_SCREEN || q == QUNS_BUSY || q == QUNS_APP);
             FullscreenGame.store(fs);
+
+            if (fs) {
+                HWND fg = ::GetForegroundWindow();
+                if (fg && fg != ::GetDesktopWindow() && fg != ::GetShellWindow()) {
+                    DWORD pid = 0;
+                    ::GetWindowThreadProcessId(fg, &pid);
+                    if (pid && pid != ::GetCurrentProcessId())
+                        LastFullscreenHwnd = fg;
+                }
+            }
         }
 
         inline DWORD WINAPI ThreadMain(LPVOID) {
@@ -703,17 +734,21 @@ namespace PopupBlocker
         if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
 
-        // 全屏游戏期间：仅当拦截引擎运行时，刚创建、非白名单的进程抢夺前台 → 焦点窃取，直接拦截（静默，不弹通知）
+        // 全屏游戏期间：仅当拦截引擎运行时，刚创建、非白名单的进程抢夺前台/新建可见顶层窗
+        // → 焦点窃取，直接拦截（静默，不弹通知）。SHOW 分支抢在激活前隐藏，降低游戏退出全屏概率；
+        // 拦截后尝试把前台还给游戏。
         if (Running.load()
             && GameMode
-            && idEvent == EVENT_SYSTEM_FOREGROUND
             && InFullscreenGame()
+            && (idEvent == EVENT_SYSTEM_FOREGROUND || idEvent == EVENT_OBJECT_SHOW)
             && detail::Match(hwnd) != 1
-            && detail::IsNewlyCreated(hwnd))
+            && detail::IsNewlyCreated(hwnd)
+            && hwnd != detail::LastFullscreenHwnd)
         {
             detail::EventVerdict fs = detail::MakeFocusStealVerdict();
             detail::WriteEventLog(hwnd, idEvent, fs);
             detail::EnforceFocusSteal(hwnd);
+            detail::RestoreFullscreenForeground();
             return;
         }
 
