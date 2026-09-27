@@ -21,9 +21,7 @@ namespace SampleLabels
 
     inline std::wstring LabelsPath()
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        std::wstring p(path);
+        std::wstring p = GetSelfPath();
         auto pos = p.find_last_of(L"\\/");
         return p.substr(0, pos + 1) + L"labels.json";
     }

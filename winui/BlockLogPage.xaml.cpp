@@ -30,10 +30,11 @@ namespace
         ::fclose(f);
         if (data.size() >= 3 && (unsigned char)data[0] == 0xEF && (unsigned char)data[1] == 0xBB && (unsigned char)data[2] == 0xBF)
             data.erase(0, 3);
-        int need = ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), -1, nullptr, 0);
+        int len = static_cast<int>(data.size());
+        int need = ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), len, nullptr, 0);
         if (need <= 0) return {};
-        std::wstring wide(static_cast<size_t>(need) - 1, 0);
-        ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), -1, wide.data(), need);
+        std::wstring wide(static_cast<size_t>(need), 0);
+        ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), len, wide.data(), need);
         return wide;
     }
 
@@ -54,10 +55,11 @@ namespace
         if (lastNl == std::string::npos) return {};
         buf.resize(lastNl + 1);
         consumed = offset + buf.size();
-        int need = ::MultiByteToWideChar(CP_UTF8, 0, buf.c_str(), -1, nullptr, 0);
+        int len = static_cast<int>(buf.size());
+        int need = ::MultiByteToWideChar(CP_UTF8, 0, buf.c_str(), len, nullptr, 0);
         if (need <= 0) return {};
-        std::wstring wide(static_cast<size_t>(need) - 1, 0);
-        ::MultiByteToWideChar(CP_UTF8, 0, buf.c_str(), -1, wide.data(), need);
+        std::wstring wide(static_cast<size_t>(need), 0);
+        ::MultiByteToWideChar(CP_UTF8, 0, buf.c_str(), len, wide.data(), need);
         if (!wide.empty() && wide[0] == 0xFEFF) wide.erase(0, 1);
         return wide;
     }

@@ -61,7 +61,8 @@ namespace HeuristicML
         void WarnOnce(const wchar_t* msg) {
             if (m_warned) return;
             m_warned = true;
-            MessageBoxW(nullptr, msg, L"PopKiller ML", MB_OK | MB_ICONWARNING);
+            ::OutputDebugStringW(msg);
+            ::OutputDebugStringW(L"\n");
         }
 
         bool Init() {
@@ -75,9 +76,7 @@ namespace HeuristicML
 
             if (!env) env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PopKillerML");
 
-            WCHAR path[MAX_PATH]{};
-            ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-            std::wstring dir(path);
+            std::wstring dir = GetSelfPath();
             auto pos = dir.find_last_of(L"\\/");
             dir = dir.substr(0, pos + 1) + L"StaticML\\";
 

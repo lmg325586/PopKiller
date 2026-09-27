@@ -6,9 +6,7 @@ namespace AppSettings
 {
     inline std::wstring IniPath()
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        std::wstring dir(path);
+        std::wstring dir = GetSelfPath();
         auto pos = dir.find_last_of(L"\\/");
         if (pos != std::wstring::npos) dir = dir.substr(0, pos);
         return dir + L"\\winui.ini";

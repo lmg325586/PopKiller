@@ -29,10 +29,9 @@ namespace TrayIcon
 
     inline HICON GetIcon()
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
+        std::wstring path = GetSelfPath();
         HMODULE hm = ::GetModuleHandleW(nullptr);
-        HICON ic = hm ? ::ExtractIconW(hm, path, 0) : nullptr;
+        HICON ic = hm ? ::ExtractIconW(hm, path.c_str(), 0) : nullptr;
         if (!ic) ic = ::LoadIconW(nullptr, IDI_APPLICATION);
         return ic;
     }
@@ -179,7 +178,7 @@ namespace TrayIcon
     {
         Remove();
         ::ShowWindow(Hwnd, SW_SHOW);
-        if (OnRestoreFromTray) OnRestoreFromTray();
+        try { if (OnRestoreFromTray) OnRestoreFromTray(); } catch (...) {}
         ::SetForegroundWindow(Hwnd);
     }
 
