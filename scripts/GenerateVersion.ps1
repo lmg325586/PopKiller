@@ -9,7 +9,7 @@ $baseVersion = "0.8"
 # Edition suffix for the lite branch (built from code points to keep this script ASCII)
 $edition = ""
 try { $branch = (git rev-parse --abbrev-ref HEAD) 2>$null } catch {}
-if ($branch -eq "lite-en") { $edition = " " + [char]0x7CBE + [char]0x7B80 + [char]0x7248 }
+if ($branch -eq "Lite") { $edition = " " + [char]0x7CBE + [char]0x7B80 + [char]0x7248 }
 $displayString = "Beta $baseVersion$edition ($date.$gitHash)"
 $headerPath = Join-Path $root "winui\VersionInfo.h"
 $content = "#pragma once`r`n#define APP_VERSION_STRING L`"$displayString`"`r`n"
