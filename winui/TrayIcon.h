@@ -14,7 +14,6 @@ namespace TrayIcon
     constexpr UINT IDM_EXIT = 2;
     constexpr UINT IDM_TOGGLE = 3;
 
-    // 暂停菜单 ID
     constexpr UINT IDM_PAUSE_5 = 10;
     constexpr UINT IDM_PAUSE_10 = 11;
     constexpr UINT IDM_PAUSE_20 = 12;
@@ -204,7 +203,7 @@ namespace TrayIcon
             AppSettings::WriteInt(L"Blocker", L"Enabled", 1);
         }
 
-        // Check ShuttingDown before invoking callback；经 SafeInvoke 取槽，避免无锁读
+        // 调用前检查 ShuttingDown；经 SafeInvoke 取槽，避免无锁读
         if (!PopupBlocker::ShuttingDown.load())
             PopupBlocker::SafeInvoke(PopupBlocker::EnabledChangedCallback);
 

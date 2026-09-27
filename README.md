@@ -221,7 +221,7 @@
 - 点击窗口最小化按钮，程序自动隐藏到系统托盘；
 - 左键单击托盘图标恢复主窗口；
 - 右键单击托盘图标弹出菜单，可快速切换拦截状态、跳转页面或退出程序；
-- 右键菜单随 Windows 深/浅色模式自动切换（`DarkMode.h`）。
+- 右键菜单随 Windows 深/浅色模式自动切换（`AppTheme.h` 内 `DarkMode`）。
 
 ---
 
@@ -448,10 +448,9 @@ PopKiller/
     ├── AutoStart.h                 # 开机自启动管理
     ├── WindowPicker.h              # 窗口拾取器
     ├── TrayIcon.h                  # 系统托盘
-    ├── DarkMode.h                  # 原生弹出菜单深色模式（uxtheme）
     ├── CrashHandler.h              # 崩溃转储与全局异常处理
     ├── AppSettings.h               # 配置读写（ini）
-    ├── AppTheme.h                  # 主题与标题栏
+    ├── AppTheme.h                  # 主题与标题栏（含原生菜单深色模式）
     ├── VersionInfo.h               # 自动生成的版本号（预构建脚本生成）
     ├── winui.rc                    # 版本资源文件
     ├── vendor/json.hpp             # nlohmann/json 库

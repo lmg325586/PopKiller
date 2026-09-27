@@ -437,7 +437,7 @@ namespace PopupBlocker
                 L"screensketch.exe", L"mspaint.exe", L"calc.exe",L"svchost.exe", L"services.exe", L"lsass.exe", L"csrss.exe",
                 // Win11 小组件
                 L"widgets.exe", L"widgetservice.exe",
-                //常见软件
+                // 常见软件
                 L"msedge.exe",L"windowsterminal.exe",L"chrome.exe",L"firefox.exe",
             };
             for (auto p : list) if (exe == p) return true;

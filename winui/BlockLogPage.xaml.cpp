@@ -314,7 +314,6 @@ namespace winrt::winui::implementation
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
         grid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(20, GridUnitType::Pixel));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
-        // reason 列改为自适应
         grid.ColumnDefinitions().GetAt(3).Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
         grid.ColumnDefinitions().GetAt(4).Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
@@ -366,7 +365,6 @@ namespace winrt::winui::implementation
         tbDetail.FontFamily(Media::FontFamily(L"Consolas"));
         tbDetail.FontSize(11);
         tbDetail.Foreground(BrushLineStrong());
-        // 去截断，改自动换行
         tbDetail.TextWrapping(TextWrapping::Wrap);
         Controls::Grid::SetColumn(tbDetail, 4);
         grid.Children().Append(tbDetail);
@@ -383,10 +381,9 @@ namespace winrt::winui::implementation
         Controls::Grid::SetColumn(menuBtn, 5);
         grid.Children().Append(menuBtn);
 
-        // 右键：ContextFlyout（不引入 Input 委托）
+        // 右键：ContextFlyout
         grid.ContextFlyout(BuildMenu(box_value(hstring(raw))));
 
-        // 子行顶部细线
         auto line = Shapes::Rectangle();
         line.Height(1);
         line.Opacity(0.4);
@@ -406,7 +403,6 @@ namespace winrt::winui::implementation
         bool many = g.count > 1;
         // 箭头始终可见，允许展开查看单次拦截的详细特征/ML 结果
         ui.chevronBtn.Visibility(Visibility::Visible);
-        // 只有多次触发才显示次数徽章
         ui.badgeBox.Visibility(many ? Visibility::Visible : Visibility::Collapsed);
         if (many) ui.badgeText.Text(std::to_wstring(g.count));
         ui.rot.Angle(g.expanded ? 90 : 0);

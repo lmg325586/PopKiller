@@ -268,16 +268,6 @@ SaveRules(rules); // 安全调用
 全局常量：`WM_TRAYICON`, `IDM_SHOW`, `IDM_EXIT`, `IDM_TOGGLE`, `IDM_PAUSE_*`, `IDM_RESUME`。
 全局状态：`Hwnd`, `Visible`, `OnHideToTray`, `OnRestoreFromTray`, `OnExitRequested`, `IconNormal`, `IconGray`。
 
-## DarkMode.h（原生深色菜单）
-
-| 函数 | 输入 | 输出 | 说明/副作用 |
-|---|---|---|---|
-| `Init()` | 无 | `void` | 创建窗口前调用，`SetPreferredAppMode(AllowDark)` 让原生弹出菜单跟随系统主题 |
-| `ApplyToWindow(hwnd)` | 窗口句柄 | `void` | 让该窗口的原生控件启用深色 |
-| `RefreshMenus()` | 无 | `void` | 系统主题变化时刷新菜单主题缓存 |
-
-动态加载 `uxtheme.dll` 序号导出：135（SetPreferredAppMode）、133/145（AllowDarkModeForWindow[WithParentFallback]）、136（FlushMenuThemes）。
-
 ## CrashHandler.h（崩溃转储与全局异常）
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
@@ -294,6 +284,16 @@ SaveRules(rules); // 安全调用
 | `ApplyTitleBar(titleBar)` | `AppWindowTitleBar` | `void` | 依 `Index`（1=Mica）与 `TitleBarElement.ActualTheme()` 应用标题栏背景、前景与按钮颜色 |
 
 全局状态：`Index`（材质，0 普通/1 Mica）、`TitleBarElement`（标题栏容器，用于取 `ActualTheme`）。
+
+### 同文件 namespace DarkMode（原生深色菜单）
+
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `Init()` | 无 | `void` | 创建窗口前调用，`SetPreferredAppMode(AllowDark)` 让原生弹出菜单跟随系统主题 |
+| `ApplyToWindow(hwnd)` | 窗口句柄 | `void` | 让该窗口的原生控件启用深色 |
+| `RefreshMenus()` | 无 | `void` | 系统主题变化时刷新菜单主题缓存 |
+
+动态加载 `uxtheme.dll` 序号导出：135（SetPreferredAppMode）、133/145（AllowDarkModeForWindow[WithParentFallback]）、136（FlushMenuThemes）。
 
 ## MainWindow.xaml.cpp（主窗口）
 

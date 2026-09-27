@@ -8,7 +8,6 @@
 #pragma comment(lib, "dbghelp.lib")
 
 // 全局崩溃处理：捕获未处理异常，在 exe 目录生成 minidump（.dmp）与崩溃日志（crash.log），
-// 并弹出提示告知用户文件位置。覆盖 SEH 未处理异常、std::terminate、CRT 无效参数/纯虚调用。
 namespace CrashHandler
 {
     inline volatile LONG Handling = 0; // 防重入：崩溃处理中再次崩溃直接跳过
@@ -50,7 +49,6 @@ namespace CrashHandler
         std::wstring dmpPath = dir + L"PopKiller_crash_" + stamp + L".dmp";
         std::wstring logPath = dir + L"crash.log";
 
-        // 1) minidump
         HANDLE hFile = ::CreateFileW(dmpPath.c_str(), GENERIC_WRITE, 0, nullptr,
             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (hFile != INVALID_HANDLE_VALUE)
@@ -70,7 +68,6 @@ namespace CrashHandler
             ::CloseHandle(hFile);
         }
 
-        // 2) 崩溃日志（追加）
         HANDLE hLog = ::CreateFileW(logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ,
             nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (hLog != INVALID_HANDLE_VALUE)
@@ -88,7 +85,6 @@ namespace CrashHandler
             ::CloseHandle(hLog);
         }
 
-        // 3) 用户提示
         std::wstring msg = L"PopKiller 遇到问题需要关闭。\n\n已生成诊断文件：\n";
         msg += dmpPath + L"\n" + logPath;
         msg += L"\n\n请将 .dmp 文件反馈给开发者以帮助定位问题。";
