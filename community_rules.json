@@ -4,19 +4,35 @@
         { "list": "B", "field": "exe",   "mode": "contains", "pattern": "flashcenter.exe" },
         { "list": "B", "field": "exe",   "mode": "contains", "pattern": "minipage.exe" },
         { "list": "B", "field": "exe",   "mode": "contains", "pattern": "flashhelperservice.exe" },
+        { "list": "B", "field": "exe",   "mode": "contains", "pattern": "kwallpaper.exe" },
         { "list": "B", "field": "title", "mode": "contains", "pattern": "迷你首页" },
         { "list": "B", "field": "title", "mode": "contains", "pattern": "热点" },
-        { "list": "B", "field": "exe",   "mode": "contains", "pattern": "kwallpaper.exe" },
-        {"field": "exe","list": "W","mode": "exact","pattern": "cs2.exe"},
-        {"field": "exe","list": "W","mode": "exact","pattern": "geek.exe"},
+        { "list": "B", "field": "title", "mode": "contains", "pattern": "今日热点" },
+        { "list": "B", "field": "title", "mode": "contains", "pattern": "弹窗" },
+        { "list": "B", "field": "title", "mode": "contains", "pattern": "优惠券" },
+        { "list": "B", "field": "title", "mode": "contains", "pattern": "领券" },
+        { "list": "B", "field": "title", "mode": "contains", "pattern": "抽奖" },
+        { "list": "B", "conditions": [
+            { "field": "title", "mode": "contains", "pattern": "广告" },
+            { "field": "class", "mode": "random" }
+        ] },
 
+        { "list": "W", "field": "exe", "mode": "exact",    "pattern": "cs2.exe" },
+        { "list": "W", "field": "exe", "mode": "exact",    "pattern": "geek.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "explorer.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "dataexchangehost.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "msedge.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "chrome.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "firefox.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "windowsterminal.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "code.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "wechat.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "weixin.exe" },
-        { "list": "W", "field": "exe", "mode": "contains", "pattern": "QQ.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "qq.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "tim.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "dingtalk.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "wxwork.exe" },
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "telegram.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "snipaste.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "everything.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "listary.exe" },
@@ -24,6 +40,6 @@
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "utools.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "quicker.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "ditto.exe" },
-        { "list": "W", "field": "exe",   "mode": "contains", "pattern": "dataexchangehost.exe" }
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "steam.exe" }
     ]
 }
