@@ -251,6 +251,7 @@ namespace winrt::winui::implementation
         PopupBlocker::BlockOccurredCallback = [](std::wstring const& exe, std::wstring const& title, int matchResult) {
             if (!PopupBlocker::ToastNotify) return;
 
+            // 节流：全局最快 3s 一条、同一进程 60s 一条，避免弹窗风暴刷屏
             {
                 static std::mutex s_mtx;
                 static std::map<std::wstring, std::chrono::steady_clock::time_point> s_lastPerExe;
@@ -291,6 +292,8 @@ namespace winrt::winui::implementation
                 }
                 xml += L"</binding></visual>" + actionsXml + L"</toast>";
 
+                // duration="short" 让横幅按系统短时长（默认约 5s）自动消失；
+                // 勿设 AppNotification.Expiration——未来过期时间会让通知长时间停留
                 winrt::Microsoft::Windows::AppNotifications::AppNotification notification{ winrt::hstring(xml) };
                 winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().Show(notification);
             }

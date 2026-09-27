@@ -285,7 +285,7 @@ SaveRules(rules); // 安全调用
 
 全局状态：`Index`（材质，0 普通/1 Mica）、`TitleBarElement`（标题栏容器，用于取 `ActualTheme`）。
 
-### 同文件 namespace DarkMode（原生深色菜单，原 DarkMode.h）
+### 同文件 namespace DarkMode（原生深色菜单）
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
