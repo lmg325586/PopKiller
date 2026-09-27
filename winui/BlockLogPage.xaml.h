@@ -1,8 +1,6 @@
 #pragma once
 
 #include "BlockLogPage.g.h"
-#include "LabelStorage.h"
-#include <map>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -18,8 +16,6 @@ namespace winrt::winui::implementation
         std::wstring lastRaw;
         std::vector<std::wstring> raws;
         bool expanded = false;
-        bool mlY = false;
-        int score = 0;
         uint64_t seq = 0;
     };
 
@@ -37,7 +33,6 @@ namespace winrt::winui::implementation
         winrt::Microsoft::UI::Xaml::Controls::TextBlock titleText{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::TextBlock timeText{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::TextBlock reasonText{ nullptr };
-        winrt::Microsoft::UI::Xaml::Controls::FontIcon labelIcon{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::StackPanel subPanel{ nullptr };
     };
 
@@ -48,9 +43,6 @@ namespace winrt::winui::implementation
 
         void Refresh_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void Clear_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-        void MarkPopup_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-        void MarkNotPopup_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-        void ExportSamples_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AddToBlacklist_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AddToWhitelist_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void Filter_Changed(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& e);
@@ -69,7 +61,7 @@ namespace winrt::winui::implementation
 
         void AppendNewLines();
         std::wstring ExtractKey(std::wstring const& raw, LogGroup& g);
-        bool GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& searchText, int threshold);
+        bool GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& searchText);
         std::wstring CurrentFilterTag();
         std::wstring CurrentSearchText();
         void SyncJumpButton();
@@ -79,7 +71,6 @@ namespace winrt::winui::implementation
         void UpdateRowUi(RowUi& ui, LogGroup const& g);
         winrt::Microsoft::UI::Xaml::Controls::StackPanel BuildSubRow(std::wstring const& raw);
         void ToggleExpand(size_t gidx);
-        void SetLabelIcon(winrt::Microsoft::UI::Xaml::Controls::FontIcon const& icon, std::wstring const& raw);
         winrt::Microsoft::UI::Xaml::Controls::MenuFlyout BuildMenu(winrt::Windows::Foundation::IInspectable const& tagValue);
         std::wstring ResolveRawFromTag(winrt::Windows::Foundation::IInspectable const& tag);
 
@@ -88,7 +79,6 @@ namespace winrt::winui::implementation
         std::vector<size_t> m_visibleGroups;
         std::vector<RowUi> m_rows;
 
-        std::map<std::wstring, SampleLabels::Sample> m_labels;
         std::wstring m_selectedRaw;
 
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_timer{ nullptr };

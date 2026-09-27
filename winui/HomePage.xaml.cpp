@@ -145,7 +145,6 @@ namespace winrt::winui::implementation
     {
         AppSettings::WriteInt(L"Blocker", L"Enabled", 1);
         PopupBlocker::SyncFromSettings();
-        HeuristicML::GetInstance().Init();
         PopupBlocker::Start();
         RefreshEngineStatus();
     }

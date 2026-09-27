@@ -2,8 +2,6 @@
 #include "pch.h"
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
-#include "LabelStorage.h"
-#include "FilePicker.h"
 #include <sstream>
 #include <vector>
 #include <algorithm>
@@ -81,19 +79,6 @@ namespace
         while ((p = s.find(f, p)) != std::wstring::npos) { s.replace(p, f.size(), t); p += t.size(); }
     }
 
-    inline void TranslateTokenName(std::wstring& s, const wchar_t* en, const wchar_t* zh)
-    {
-        std::wstring f = en, t = zh;
-        size_t p = 0;
-        while ((p = s.find(f, p)) != std::wstring::npos) {
-            bool leftOk = (p == 0) || s[p - 1] == L' ';
-            size_t e = p + f.size();
-            bool rightOk = e < s.size() && (s[e] == L'+' || s[e] == L'-');
-            if (leftOk && rightOk) { s.replace(p, f.size(), t); p += t.size(); }
-            else p = e;
-        }
-    }
-
     inline std::wstring FormatLogLineChinese(std::wstring s)
     {
         ReplaceAll(s, L"action=monitor", L"动作=监控");
@@ -101,37 +86,9 @@ namespace
         ReplaceAll(s, L"action=block", L"动作=拦截");
         ReplaceAll(s, L"ev=SHOW", L"事件=出现");
         ReplaceAll(s, L"ev=FG", L"事件=焦点");
-        ReplaceAll(s, L"reason=heuristic(", L"原因=启发式(");
         ReplaceAll(s, L"reason=whitelist", L"原因=白名单");
         ReplaceAll(s, L"reason=blacklist", L"原因=黑名单");
-        ReplaceAll(s, L"reason=heuristic", L"原因=启发式");
-        ReplaceAll(s, L"reason=heuristic_off", L"原因=启发式关闭");
         ReplaceAll(s, L"reason=focus_steal", L"原因=焦点窃取");
-        ReplaceAll(s, L"raw=", L"特征=");
-        ReplaceAll(s, L"ml=Y", L"ML=是");
-        ReplaceAll(s, L"ml=N", L"ML=否");
-        ReplaceAll(s, L"ml=-", L"ML=跳过");
-        TranslateTokenName(s, L"mouse_close", L"靠近鼠标");
-        TranslateTokenName(s, L"idle", L"用户空闲");
-        TranslateTokenName(s, L"far_mouse", L"远离鼠标");
-        TranslateTokenName(s, L"notresizable", L"不可调");
-        TranslateTokenName(s, L"nominmax", L"无最小最大化");
-        TranslateTokenName(s, L"unsigned", L"无签名");
-        TranslateTokenName(s, L"resizable", L"可调");
-        TranslateTokenName(s, L"minmax", L"最小最大化");
-        TranslateTokenName(s, L"capsys", L"标题栏");
-        TranslateTokenName(s, L"notitle", L"无标题");
-        TranslateTokenName(s, L"toolwin", L"工具窗");
-        TranslateTokenName(s, L"topmost", L"置顶");
-        TranslateTokenName(s, L"noact", L"不激活");
-        TranslateTokenName(s, L"hexclass", L"十六进制类名");
-        TranslateTokenName(s, L"signed", L"有签名");
-        TranslateTokenName(s, L"young", L"新进程");
-        TranslateTokenName(s, L"roaming", L"漫游目录");
-        TranslateTokenName(s, L"owner", L"有属主");
-        TranslateTokenName(s, L"small", L"小窗");
-        TranslateTokenName(s, L"large", L"大窗");
-        TranslateTokenName(s, L"temp", L"临时目录");
         return s;
     }
 
@@ -234,33 +191,12 @@ namespace winrt::winui::implementation
         g.exe = ExtractVal(raw, L"exe");
         g.title = ExtractVal(raw, L"title");
         g.cls = ExtractVal(raw, L"class");
-        if (g.reason.find(L"heuristic") == 0) g.reason = L"heuristic";
-
-        g.mlY = raw.find(L" ml=Y") != std::wstring::npos;
-        auto heurPos = raw.find(L"heuristic(");
-        if (heurPos != std::wstring::npos) {
-            size_t endPos = raw.find(L')', heurPos);
-            if (endPos != std::wstring::npos) {
-                try { g.score = std::stoi(raw.substr(heurPos + 10, endPos - heurPos - 10)); }
-                catch (...) {}
-            }
-        }
 
         std::wstring timeStr = raw.substr(0, 19);
         g.lastTime = timeStr.size() >= 19 ? timeStr.substr(11, 8) : L"??:??:??";
         if (g.firstTime.empty()) g.firstTime = g.lastTime;
 
         return g.action + L"|" + g.reason + L"|" + g.exe + L"|" + g.title;
-    }
-
-    void BlockLogPage::SetLabelIcon(Controls::FontIcon const& icon, std::wstring const& raw)
-    {
-        if (auto it = m_labels.find(raw); it != m_labels.end()) {
-            if (it->second.label == L"popup") { icon.Glyph(L"\xE73E"); icon.Foreground(BrushOk()); }
-            else if (it->second.label == L"notpopup") { icon.Glyph(L"\xE711"); icon.Foreground(BrushBad()); }
-            else { icon.Glyph(L""); icon.Foreground(BrushDim()); }
-        }
-        else { icon.Glyph(L""); icon.Foreground(BrushDim()); }
     }
 
     std::wstring BlockLogPage::ResolveRawFromTag(IInspectable const& tag)
@@ -286,9 +222,6 @@ namespace winrt::winui::implementation
             item.Click(h);
             fly.Items().Append(item);
             };
-        mk(L"标记为弹窗（拦截正确）", { this, &BlockLogPage::MarkPopup_Click });
-        mk(L"标记为误关（非弹窗）", { this, &BlockLogPage::MarkNotPopup_Click });
-        fly.Items().Append(Controls::MenuFlyoutSeparator());
         mk(L"添加到黑名单", { this, &BlockLogPage::AddToBlacklist_Click });
         mk(L"添加到白名单", { this, &BlockLogPage::AddToWhitelist_Click });
         return fly;
@@ -314,13 +247,11 @@ namespace winrt::winui::implementation
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
         grid.ColumnDefinitions().GetAt(1).Width(GridLengthHelper::FromValueAndType(44, GridUnitType::Pixel));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
-        grid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(20, GridUnitType::Pixel));
+        grid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
-        grid.ColumnDefinitions().GetAt(3).Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
+        grid.ColumnDefinitions().GetAt(3).Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
-        grid.ColumnDefinitions().GetAt(4).Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
-        grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
-        grid.ColumnDefinitions().GetAt(5).Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
+        grid.ColumnDefinitions().GetAt(4).Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
         grid.Margin(ThicknessHelper::FromUniformLength(0));
         grid.Margin(ThicknessHelper::FromLengths(28, 0, 0, 0));
         grid.Padding(ThicknessHelper::FromLengths(0, 2, 0, 2));
@@ -342,16 +273,10 @@ namespace winrt::winui::implementation
         Controls::Grid::SetColumn(tbEv, 1);
         grid.Children().Append(tbEv);
 
-        auto icon = Controls::FontIcon();
-        icon.FontSize(11);
-        SetLabelIcon(icon, raw);
-        Controls::Grid::SetColumn(icon, 2);
-        grid.Children().Append(icon);
-
         auto tbReason = Controls::TextBlock();
         tbReason.Text(FormatLogLineChinese(L"reason=" + ExtractVal(raw, L"reason")));
         tbReason.FontSize(11);
-        Controls::Grid::SetColumn(tbReason, 3);
+        Controls::Grid::SetColumn(tbReason, 2);
         grid.Children().Append(tbReason);
 
         size_t p1 = raw.find(L"reason=");
@@ -368,7 +293,7 @@ namespace winrt::winui::implementation
         tbDetail.FontSize(11);
         tbDetail.Foreground(BrushLineStrong());
         tbDetail.TextWrapping(TextWrapping::Wrap);
-        Controls::Grid::SetColumn(tbDetail, 4);
+        Controls::Grid::SetColumn(tbDetail, 3);
         grid.Children().Append(tbDetail);
 
         auto menuBtn = Controls::Button();
@@ -380,7 +305,7 @@ namespace winrt::winui::implementation
         menuBtn.Background(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 }));
         menuBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
         menuBtn.Flyout(BuildMenu(box_value(hstring(raw))));
-        Controls::Grid::SetColumn(menuBtn, 5);
+        Controls::Grid::SetColumn(menuBtn, 4);
         grid.Children().Append(menuBtn);
 
         // 右键：ContextFlyout
@@ -403,7 +328,7 @@ namespace winrt::winui::implementation
             : (g.action == L"allow") ? BrushOk() : MakeBrush(0x61, 0x61, 0x61));
 
         bool many = g.count > 1;
-        // 箭头始终可见，允许展开查看单次拦截的详细特征/ML 结果
+        // 箭头始终可见，允许展开查看单次拦截的详细记录
         ui.chevronBtn.Visibility(Visibility::Visible);
         ui.badgeBox.Visibility(many ? Visibility::Visible : Visibility::Collapsed);
         if (many) ui.badgeText.Text(std::to_wstring(g.count));
@@ -414,7 +339,6 @@ namespace winrt::winui::implementation
         ui.reasonText.Text(FormatLogLineChinese(L"reason=" + g.reason));
         ui.exeText.Text(g.exe);
         ui.titleText.Text(g.title);
-        SetLabelIcon(ui.labelIcon, g.lastRaw);
     }
 
     RowUi BlockLogPage::BuildRow(size_t gidx)
@@ -429,12 +353,11 @@ namespace winrt::winui::implementation
         ui.body = Controls::StackPanel();
 
         auto head = Controls::Grid();
-        for (int i = 0; i < 9; ++i) {
+        for (int i = 0; i < 8; ++i) {
             auto cd = Controls::ColumnDefinition();
             if (i == 0) cd.Width(GridLengthHelper::FromValueAndType(24, GridUnitType::Pixel));
             else if (i == 3) cd.Width(GridLengthHelper::FromValueAndType(150, GridUnitType::Pixel));
             else if (i == 4) cd.Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
-            else if (i == 7) cd.Width(GridLengthHelper::FromValueAndType(20, GridUnitType::Pixel));
             else cd.Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
             head.ColumnDefinitions().Append(cd);
         }
@@ -495,11 +418,6 @@ namespace winrt::winui::implementation
         Controls::Grid::SetColumn(ui.reasonText, 6);
         head.Children().Append(ui.reasonText);
 
-        ui.labelIcon = Controls::FontIcon();
-        ui.labelIcon.FontSize(12);
-        Controls::Grid::SetColumn(ui.labelIcon, 7);
-        head.Children().Append(ui.labelIcon);
-
         ui.body.Children().Append(head);
 
         ui.subPanel = Controls::StackPanel();
@@ -538,7 +456,7 @@ namespace winrt::winui::implementation
         menuBtn.Background(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 }));
         menuBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
         menuBtn.Flyout(BuildMenu(box_value(static_cast<uint64_t>(gidx))));
-        Controls::Grid::SetColumn(menuBtn, 8);
+        Controls::Grid::SetColumn(menuBtn, 7);
         head.Children().Append(menuBtn);
 
         // 聚合行右键：ContextFlyout，Tag 存 gidx
@@ -575,7 +493,7 @@ namespace winrt::winui::implementation
         UpdateRowUi(*ui, g);
     }
 
-    bool BlockLogPage::GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& searchText, int threshold)
+    bool BlockLogPage::GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& searchText)
     {
         if (!searchText.empty()) {
             std::wstring lowerExe = g.exe, lowerTitle = g.title, lowerCls = g.cls, lowerSearch = searchText;
@@ -592,15 +510,6 @@ namespace winrt::winui::implementation
         if (filterTag == L"action_allow")   return g.action == L"allow";
         if (filterTag == L"action_monitor") return g.action == L"monitor";
         if (filterTag == L"list") return (g.reason == L"whitelist" || g.reason == L"blacklist");
-        if (filterTag == L"ml_heur") {
-            if (g.reason == L"heuristic") return (g.score >= threshold) != g.mlY;
-            return false;
-        }
-        if (filterTag == L"ml_list") {
-            if (g.reason == L"whitelist") return g.mlY;
-            if (g.reason == L"blacklist") return !g.mlY;
-            return false;
-        }
         return true;
     }
 
@@ -667,11 +576,10 @@ namespace winrt::winui::implementation
 
         std::wstring filterTag = CurrentFilterTag();
         std::wstring searchText = CurrentSearchText();
-        int threshold = PopupBlocker::HeuristicThreshold;
 
         std::vector<size_t> passIdx;
         for (size_t i = 0; i < m_groups.size(); ++i)
-            if (GroupPassFilter(m_groups[i], filterTag, searchText, threshold)) passIdx.push_back(i);
+            if (GroupPassFilter(m_groups[i], filterTag, searchText)) passIdx.push_back(i);
         std::stable_sort(passIdx.begin(), passIdx.end(),
             [this](size_t a, size_t b) { return m_groups[a].seq > m_groups[b].seq; });
 
@@ -716,7 +624,6 @@ namespace winrt::winui::implementation
 
         std::wstring filterTag = CurrentFilterTag();
         std::wstring searchText = CurrentSearchText();
-        int threshold = PopupBlocker::HeuristicThreshold;
 
         for (auto& line : newLines) {
             LogGroup g;
@@ -746,7 +653,7 @@ namespace winrt::winui::implementation
             }
 
             auto& grp = m_groups[gidx];
-            bool pass = GroupPassFilter(grp, filterTag, searchText, threshold);
+            bool pass = GroupPassFilter(grp, filterTag, searchText);
 
             if (m_pinnedToTop) {
                 if (isNewGroup && pass) {
@@ -798,7 +705,6 @@ namespace winrt::winui::implementation
         if (t != m_lastWrite) {
             m_lastWrite = t;
             ReloadFromFile();
-            SampleLabels::Load(m_labels);
             ApplyFilter();
         }
         WIN32_FILE_ATTRIBUTE_DATA fad{};
@@ -849,46 +755,6 @@ namespace winrt::winui::implementation
         Load();
     }
 
-    void BlockLogPage::MarkPopup_Click(IInspectable const& sender, RoutedEventArgs const&)
-    {
-        if (auto item = sender.try_as<Controls::MenuFlyoutItem>())
-            m_selectedRaw = ResolveRawFromTag(item.Tag());
-        if (m_selectedRaw.empty()) return;
-        auto s = SampleLabels::ParseLine(m_selectedRaw);
-        s.label = L"popup";
-        m_labels[m_selectedRaw] = s;
-        SampleLabels::Save(m_labels);
-        m_lastWrite = 0;
-        Load();
-    }
-
-    void BlockLogPage::MarkNotPopup_Click(IInspectable const& sender, RoutedEventArgs const&)
-    {
-        if (auto item = sender.try_as<Controls::MenuFlyoutItem>())
-            m_selectedRaw = ResolveRawFromTag(item.Tag());
-        if (m_selectedRaw.empty()) return;
-        auto s = SampleLabels::ParseLine(m_selectedRaw);
-        s.label = L"notpopup";
-        m_labels[m_selectedRaw] = s;
-        SampleLabels::Save(m_labels);
-        m_lastWrite = 0;
-        Load();
-    }
-
-    void BlockLogPage::ExportSamples_Click(IInspectable const&, RoutedEventArgs const&)
-    {
-        std::wstring path = FilePicker::PickJsonFile(true);
-        if (path.empty()) return;
-        std::string json = SampleLabels::ExportJson(m_labels);
-        if (PopupBlocker::WriteUtf8StringToFile(path, json)) {
-            SampleLabels::Clear(m_labels);
-            m_lastWrite = 0;
-            Load();
-            MessageBoxW(nullptr, L"训练数据导出成功，本地缓存已清空", L"提示", MB_OK | MB_ICONINFORMATION);
-        }
-        else MessageBoxW(nullptr, L"导出失败", L"提示", MB_OK | MB_ICONERROR);
-    }
-
     void BlockLogPage::AddToBlacklist_Click(IInspectable const& sender, RoutedEventArgs const&)
     {
         if (auto item = sender.try_as<Controls::MenuFlyoutItem>())
@@ -906,8 +772,8 @@ namespace winrt::winui::implementation
     void BlockLogPage::AddRuleFromSelection(bool whitelist)
     {
         if (m_selectedRaw.empty()) return;
-        auto s = SampleLabels::ParseLine(m_selectedRaw);
-        if (s.exe.empty()) {
+        std::wstring exe = ExtractVal(m_selectedRaw, L"exe");
+        if (exe.empty()) {
             MessageBoxW(nullptr, L"该日志缺少进程信息，无法生成规则。", L"提示", MB_OK | MB_ICONWARNING);
             return;
         }
@@ -916,7 +782,7 @@ namespace winrt::winui::implementation
         PopupBlocker::RuleCondition c;
         c.field = PopupBlocker::RuleField::Exe;
         c.mode = PopupBlocker::MatchMode::Exact;
-        c.pattern = PopupBlocker::Lower(s.exe);
+        c.pattern = PopupBlocker::Lower(exe);
         r.conditions.push_back(std::move(c));
         r.fromCommunity = false;
 
@@ -929,7 +795,7 @@ namespace winrt::winui::implementation
         });
         if (exists) { MessageBoxW(nullptr, L"相同规则已存在。", L"提示", MB_OK | MB_ICONINFORMATION); return; }
 
-        MessageBoxW(nullptr, ((whitelist ? L"已添加白名单规则：进程 " : L"已添加黑名单规则：进程 ") + s.exe).c_str(),
+        MessageBoxW(nullptr, ((whitelist ? L"已添加白名单规则：进程 " : L"已添加黑名单规则：进程 ") + exe).c_str(),
             L"提示", MB_OK | MB_ICONINFORMATION);
     }
 }

@@ -6,9 +6,6 @@ namespace winui
         BlockLogPage();
         void Refresh_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void Clear_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
-        void MarkPopup_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
-        void MarkNotPopup_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
-        void ExportSamples_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void AddToBlacklist_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void AddToWhitelist_Click(Object sender, Microsoft.UI.Xaml.RoutedEventArgs args);
         void Filter_Changed(Object sender, Microsoft.UI.Xaml.Controls.SelectionChangedEventArgs args);

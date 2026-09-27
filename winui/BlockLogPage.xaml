@@ -7,7 +7,7 @@
 
         <StackPanel Grid.Row="0" Padding="0,24,0,0" Spacing="2">
             <TextBlock Text="拦截日志" Style="{StaticResource TitleTextBlockStyle}"/>
-            <TextBlock Text="实时查看拦截 / 放行 / 监控记录；可筛选、搜索，并对样本进行标注。"
+            <TextBlock Text="实时查看拦截 / 放行 / 监控记录；可筛选、搜索。"
                        Style="{StaticResource CaptionTextBlockStyle}"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        TextWrapping="Wrap"/>
@@ -22,7 +22,6 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="刷新" Click="Refresh_Click" Padding="12,4"/>
                     <Button Content="清空" Click="Clear_Click" Padding="12,4"/>
-                    <Button Content="导出训练数据" Click="ExportSamples_Click" Padding="12,4"/>
                 </StackPanel>
 
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
@@ -33,8 +32,6 @@
                         <ComboBoxItem Content="仅放行" Tag="action_allow"/>
                         <ComboBoxItem Content="仅监控" Tag="action_monitor"/>
                         <ComboBoxItem Content="命中黑/白名单" Tag="list"/>
-                        <ComboBoxItem Content="ML与启发冲突" Tag="ml_heur"/>
-                        <ComboBoxItem Content="ML与名单冲突" Tag="ml_list"/>
                     </ComboBox>
                     <TextBox Grid.Column="1" x:Name="SearchBox"
                              PlaceholderText="搜索 (exe / 标题 / 类名)"

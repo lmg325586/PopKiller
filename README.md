@@ -1,7 +1,7 @@
 # PopKiller
 
 > 基于 WinUI 3 (C++/WinRT) 的 Windows 弹窗拦截工具。
-> 通过黑白名单规则、共享规则库、启发式特征打分与静态机器学习模型，自动识别并关闭广告及流氓软件弹窗。
+> 通过黑白名单规则与共享规则库，自动识别并关闭广告及流氓软件弹窗。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 [![Release](https://img.shields.io/github/v/release/lmg325586/PopKiller?include_prereleases)]()
@@ -45,8 +45,6 @@
 | **规则导入导出** | 一键导出规则为 JSON 文件备份或分享，导入时自动去重合并；可选择是否包含社区规则与墓碑记录 |
 | **社区规则库** | 启动时联网拉取仓库 `community_rules.json`，**SHA256 完整性校验**，合并到本地规则，可编辑可删除，删除偏好自动记忆 |
 | **墓碑恢复** | 一键恢复所有已移除的社区规则，无需手动编辑 JSON |
-| **启发式打分** | 对 20 余项特征（窗口样式、进程路径、数字签名、进程年龄等）加权评分 |
-| **机器学习识别** | 内置随机森林与逻辑回归双 ONNX 模型，基于 23 维特征联合预测弹窗概率，当前为仅记录模式 |
 | **拦截通知** | 拦截到弹窗时在系统右下角弹出 Toast 通知，显示被拦截进程与窗口标题，通知内可一键「查看日志 / 加入白名单」，可在设置中开关 |
 | **窗口拾取** | 点选目标窗口，提取进程 / 路径 / 类名 / 标题，一键生成规则 |
 | **游戏模式** | 全屏游戏时，拦截「新建且不在白名单的进程抢夺前台」（阻止置顶并关闭），日志标记为「焦点窃取」；设置中开关，默认关 |
@@ -78,7 +76,7 @@
 2. 程序会自动从 GitHub 拉取最新社区规则库（首次启动需联网）；
 3. 点击「选取窗口」，点选目标弹窗，自动填充窗口信息；
 4. 选择 **名单类型 / 匹配字段 / 匹配模式**，输入模式后点击「添加」；
-5. 在「设置」页可开启开机自启、拦截通知、调整启发式模式、启用机器学习识别与详细日志开关。
+5. 在「设置」页可开启开机自启、拦截通知与详细日志开关。
 
 ---
 
@@ -159,28 +157,6 @@
 - 点击「恢复已移除规则」可一键恢复所有被删除的社区规则；
 - 离线启动时使用上次缓存的规则；
 - 拉取失败时状态文本显示错误信息并出现「重试」按钮。
-
-### 启发式与机器学习
-
-在「设置」页面可切换启发式引擎工作模式与机器学习识别开关：
-
-**启发式模式：**
-
-| 模式 | 说明 |
-| :--- | :--- |
-| **关闭** | 仅按黑白名单规则拦截，不进行启发式评估 |
-| **仅记录** | 对所有窗口打分并写入日志，但不自动拦截（用于调参和观察） |
-| **自动拦截** | 分数达到阈值（默认 70）的窗口自动关闭 |
-
-**静态机器学习识别：**
-
-- 内置两个 ONNX 模型：**随机森林**（`popup_rf.onnx`）与**逻辑回归**（`popup_lr.onnx`）；
-- 基于 23 维特征联合预测：17 项窗口二值特征（含用户空闲>5秒 / 窗口离鼠标>300px）+ 标题长度 + 广告关键词命中数 + 白名单进程标记 + Chromium 类名标记 + 对话框类名标记 + exe 数字占比；
-- 两个模型**同时预测为弹窗**时才判定为弹窗（双模型投票，降低误报）；
-- 当前为**仅记录模式**：预测结果以 `ml=Y`（弹窗）/ `ml=N`（非弹窗）写入日志明细，不执行拦截；
-- 启用后首次评估时自动加载模型，模型文件位于程序同目录 `StaticML\` 下。
-
-> 机器学习模型基于社区贡献的标注样本训练，仍在持续优化中。欢迎贡献标注数据帮助提升准确率（见「贡献规则」）。
 
 ### 拦截通知
 
@@ -330,16 +306,13 @@
 | Blocker | Enabled | 0 | 拦截总开关（0=关，1=开） |
 | Blocker | CommunityRulesEnabled | 1 | 社区规则库开关（0=关，1=开） |
 | Blocker | ForceBlock | 0 | 强制拦截（忽略弹窗形态判断，命中黑名单即关） |
-| Blocker | HeuristicMode | 0 | 启发式模式（0=关闭，1=仅记录，2=自动拦截） |
-| Blocker | HeuristicThreshold | 70 | 启发式拦截分数阈值 |
-| Blocker | MLHeuristic | 0 | 静态机器学习识别（0=关，1=开，仅记录模式） |
 | Blocker | VerboseLog | 0 | 详细日志（0=仅记录拦截，1=记录所有窗口） |
 | Blocker | ToastNotify | 1 | 拦截通知（0=关，1=开） |
 | Blocker | GameMode | 0 | 游戏模式：全屏游戏时拦截焦点窃取（0=关，1=开） |
 | UI | Material | 0 | 界面材质（0=普通，1=Mica） |
 | UI | CloseBehavior | -1 | 关闭行为（-1=每次询问，1=完全退出，2=最小化到托盘） |
 
-本地规则保存在同目录的 `rules.json`，拦截日志保存在 `blocklog.txt`，标注数据保存在 `labels.json`。
+本地规则保存在同目录的 `rules.json`，拦截日志保存在 `blocklog.txt`。
 
 ---
 
@@ -350,7 +323,7 @@
 **示例：**
 
 ```text
-2026-08-21 14:30:15 action=block | ev=SHOW | reason=heuristic(75) | owner+15 toolwin+12 topmost+20 notresizable+12 nominmax+12 small+28 notitle+20 young+5 unsigned+12 idle+5 nearmouse+8 raw=FTTFFFFTFTFFTFFTFF ml=Y | title= | class=WindowsForms10.Window.8.app.0.1234567 | exe=adpopup.exe
+2026-08-21 14:30:15 action=block | ev=SHOW | reason=blacklist | title= | class=WindowsForms10.Window.8.app.0.1234567 | exe=adpopup.exe
 2026-08-21 14:30:20 action=allow | ev=FG | reason=whitelist | title=文件资源管理器 | class=CabinetWClass | exe=explorer.exe
 ```
 
@@ -359,10 +332,7 @@
 | 时间戳 | `YYYY-MM-DD HH:MM:SS` 格式的本地时间 |
 | `action` | `block`（拦截）/ `monitor`（观察）/ `allow`（白名单放行） |
 | `ev` | 触发事件：`SHOW`（窗口显示）/ `FG`（切换到前台） |
-| `reason` | `blacklist` / `whitelist` / `community` / `heuristic(分数)` / `focus_steal`（全屏游戏时新建进程抢夺前台） |
-| 明细 | 启发式各项得分，如 `toolwin+12`、`signed-5`（仅启发式命中时出现） |
-| `raw` | 17 位窗口特征串（T/F），启用启发式时输出 |
-| `ml` | 机器学习预测结果（`Y`=弹窗 / `N`=非弹窗），启用 ML 时输出 |
+| `reason` | `blacklist` / `whitelist` / `community` / `focus_steal`（全屏游戏时新建进程抢夺前台） |
 | `title` | 窗口标题（小写） |
 | `class` | 窗口类名（小写） |
 | `exe` | 进程名（小写） |
@@ -387,7 +357,6 @@
 ### 第三方依赖
 
 - [nlohmann/json](https://github.com/nlohmann/json) — JSON 解析（已包含在 `vendor/` 目录）
-- [Microsoft.ML.OnnxRuntime](https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime) — ONNX 模型推理引擎（NuGet 自动还原，用于机器学习识别）
 - Windows App SDK — WinUI 3 框架（NuGet 自动还原）
 
 ### 编译步骤
@@ -400,10 +369,9 @@ cd PopKiller
 
 1. 双击 `winui.slnx` 打开解决方案；
 2. 选择 `x64 / Release` 配置；
-3. 生成解决方案（首次生成会自动还原 NuGet 包，包括 Windows App SDK 与 ONNX Runtime）；
+3. 生成解决方案（首次生成会自动还原 NuGet 包，包括 Windows App SDK）；
 4. 预构建事件会自动运行 `scripts/GenerateVersion.ps1`，根据 git 提交哈希与日期生成 `VersionInfo.h`；
-5. 输出目录下的 `winui.exe` 即为可执行文件；
-6. 确保 `StaticML\` 目录下的两个 `.onnx` 模型文件与 `winui.exe` 在同一目录层级。
+5. 输出目录下的 `winui.exe` 即为可执行文件。
 
 > 说明：本项目为**自包含（self-contained）**部署，Release 包内已含 Windows App SDK 运行时，**目标机无需单独安装**；建议目标机具备 VC++ 2015–2022 x64 运行库。
 > 构建时 `winui.vcxproj` 会从本机已安装的 WinAppSDK 框架包复制 `Microsoft.WindowsAppRuntime.Insights.Resource.dll` 到输出目录（`AppNotificationManager.Register()` 需要该文件，见 WindowsAppSDK #6774）；请确保**构建机**已安装对应的 WinAppSDK Runtime。
@@ -424,15 +392,6 @@ PopKiller/
 ├── scripts/                      # 构建脚本
 │   ├── GenerateVersion.ps1      # 预构建版本号生成（日期 + git 哈希）
 │   └── Update-CommunitySha.ps1   # 更新 community_rules_sha256 的 PowerShell 脚本
-├── StaticML/                     # 机器学习模型文件
-│   ├── popup_rf.onnx              # 随机森林模型
-│   └── popup_lr.onnx              # 逻辑回归模型
-├── ML/                           # 模型训练脚本
-│   ├── train.py                   # 训练主脚本（5折交叉验证 + 多模型对比 + ONNX导出）
-│   ├── start.bat                  # 训练启动脚本
-│   └── cache/                     # 样本缓存与去重
-│       ├── dedup.py               # 样本去重脚本
-│       └── start.bat
 └── winui/                         # 主项目
     ├── App.xaml(.cpp/.h)          # 应用入口（含单实例逻辑）
     ├── MainWindow.xaml(.cpp/.h)   # 主窗口（导航框架、托盘、最小尺寸、关闭行为）
@@ -444,11 +403,8 @@ PopKiller/
     ├── LicensePage.xaml(.cpp/.h/.idl) # 许可证页
     ├── PrivacyPage.xaml(.cpp/.h/.idl) # 隐私声明页
     ├── PopupBlocker.h              # 拦截引擎核心（钩子、匹配、日志、社区规则拉取、SHA256校验、通知回调、焦点窃取）
-    ├── HeuristicScorer.h           # 启发式打分引擎
-    ├── HeuristicML.h               # 静态机器学习识别（ONNX 双模型推理）
     ├── RuleTypes.h                 # 规则类型定义与工具函数
     ├── RuleStorage.h               # 规则 JSON 读写存储与序列化
-    ├── LabelStorage.h              # 日志标注数据存储与训练样本导出
     ├── FilePicker.h                # 公共文件选择器
     ├── AutoStart.h                 # 开机自启动管理
     ├── WindowPicker.h              # 窗口拾取器
@@ -469,7 +425,6 @@ PopKiller/
 - [x] 黑白名单规则引擎
 - [x] 通配符与路径匹配
 - [x] 窗口拾取工具
-- [x] 启发式特征打分
 - [x] 数字签名校验
 - [x] 详细日志开关
 - [x] 系统托盘支持
@@ -481,8 +436,6 @@ PopKiller/
 - [x] 规则编辑
 - [x] 规则导入/导出
 - [x] 日志大小限制与轮转
-- [x] 日志标注与训练样本导出
-- [x] 静态机器学习识别（当前:仅记录模式）
 - [x] 拦截通知（Toast）
 - [x] 主页卡片导航
 - [x] 预构建版本标记
@@ -501,8 +454,7 @@ PopKiller/
 欢迎贡献代码、规则和反馈：
 
 1. **社区规则**：提交 PR 修改 `community_rules.json`，**提交前务必运行 `community_rules_sha256_updata.bat` 更新校验文件**，请在描述中说明规则对应的弹窗来源；
-2. **训练样本**：在日志页右键标注弹窗/误关，点击「导出训练数据」保存为 JSON，提交 PR 帮助优化机器学习模型；
-3. **功能建议**：欢迎在 Issue 中讨论新功能想法。
+2. **功能建议**：欢迎在 Issue 中讨论新功能想法。
 
 ---
 
@@ -510,7 +462,7 @@ PopKiller/
 
 > 本工具仅供学习与研究使用。
 >
-> 启发式打分基于经验权重，机器学习模型基于有限样本训练，均存在误判可能；社区规则由用户贡献，未经逐一验证。
+> 社区规则由用户贡献，未经逐一验证。
 >
 > 使用本工具造成的任何直接或间接损失，作者不承担责任。
 >

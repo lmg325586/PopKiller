@@ -43,20 +43,6 @@
 | `SaveRulesJson(rules, removed)` | 规则列表、墓碑列表 | `bool` | 写入 `rules.json` |
 | `EnsureDefaultRules()` | 无 | `void` | 首运行写默认规则（`Initialized` 标志） |
 
-## LabelStorage.h（标注数据存储）
-
-| 函数 | 输入 | 输出 | 说明/副作用 |
-|---|---|---|---|
-| `LabelsPath()` | 无 | `std::wstring` | exe 同目录 `labels.json` 路径 |
-| `ExtractField(s, key)` | 日志行、字段名 | `std::wstring` | 从 `key=value` 格式提取字段 |
-| `ParseLine(line)` | 日志行 | `Sample` | 解析日志行为训练样本 |
-| `Load(out)` | out map | `void` | 从 `labels.json` 加载标注（异常时静默） |
-| `Save(m)` | 标注 map | `bool` | 保存标注到 `labels.json` |
-| `ExportJson(m)` | 标注 map | `std::string` | 导出为训练样本 JSON |
-| `Clear(m)` | 标注 map | `void` | 清空标注缓存 |
-
-全局类型：`Sample{ exe, title, class, raw, score, label, action, reason }`。
-
 ## PopupBlocker.h（拦截引擎核心）
 
 ### 全局状态
@@ -73,15 +59,10 @@
 | `PauseGen` | `std::atomic<int>` | 暂停代数（用于取消过期暂停） |
 | `ForceBlock` | `bool` | 强制拦截（命中即关） |
 | `SelfExe` | `std::wstring` | 自身 exe 小写名 |
-| `HeuristicMode` | `int` | 启发式模式（0关/1仅记录/2自动拦截） |
-| `HeuristicThreshold` | `int` | 启发式拦截阈值（默认 70） |
 | `VerboseLog` | `bool` | 详细日志开关 |
-| `MLHeuristic` | `bool` | 机器学习识别开关（仅记录） |
 | `ToastNotify` | `bool` | 拦截通知开关（默认开） |
 | `FullscreenGame` | `std::atomic<bool>` | 全屏游戏/应用检测缓存 |
 | `GameMode` | `bool` | 游戏模式开关（全屏时拦截焦点窃取，默认关） |
-| `kMLArbLow` | `constexpr int` | ML 仲裁下限分数（35） |
-| `kMLArbHigh` | `constexpr int` | ML 仲裁上限分数（90） |
 | `EnabledChangedCallback` | `std::function<void()>` | 拦截状态变更回调 |
 | `CommunityRulesFetchCallback` | `std::function<void(bool, std::wstring)>` | 社区规则拉取完成回调 |
 | `BlockOccurredCallback` | `std::function<void(exeName, windowTitle, matchResult)>` | 拦截发生回调（用于 Toast 通知） |
@@ -142,9 +123,9 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `Match(hwnd)` | 句柄 | `int` | 0=未命中 1=白 2=黑；多条件/类名随机规则线性 AND 扫描 |
 | `Log(s)` | 日志行 | `void` | 写入内存缓冲，达 64KB 或 `FlushLog` 时落盘；新文件/空文件/超 1MB 时截断并写 BOM |
 | `PassEventFilter(hwnd, idObject, idChild)` | 句柄、对象、子ID | `bool` | 事件预过滤（跳过自身/非窗口/对象） |
-| `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 综合评估：规则匹配+启发式+ML+raw |
-| `WriteEventLog(hwnd, idEvent, v)` | 句柄、事件、评估结果 | `void` | 写日志（含启发式明细+raw+ml） |
-| `EnforceBlock(hwnd)` | 句柄 | `void` | 关闭/隐藏窗口（黑名单与启发式命中一致） |
+| `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 规则匹配（黑白名单 / 多条件 / 类名随机）→ 判定 |
+| `WriteEventLog(hwnd, idEvent, v)` | 句柄、事件、评估结果 | `void` | 写日志 |
+| `EnforceBlock(hwnd)` | 句柄 | `void` | 关闭/隐藏窗口（黑名单命中） |
 | `IsNewlyCreated(hwnd, withinMs)` | 句柄、阈值(默认 5000ms) | `bool` | 进程创建时间是否在阈值内 |
 | `EnforceFocusSteal(hwnd)` | 句柄 | `void` | 焦点窃取：去置顶 + `WM_CLOSE` + 隐藏 |
 | `MakeFocusStealVerdict()` | 无 | `EventVerdict` | 构造 `reason=focus_steal`、`action=block` 的评估结果 |
@@ -152,66 +133,6 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→评估→执行→日志→通知 |
 
 输出结构：`EventVerdict{ action, reason, detail, shouldBlock, shouldLog, matchResult }`。
-
-## HeuristicScorer.h（启发式打分）
-
-### detail 命名空间
-
-| 函数 | 输入 | 输出 | 说明/副作用 |
-|---|---|---|---|
-| `Lower(s)` | 原串 | `std::wstring` | 小写化（独立副本） |
-| `GetProcessPath(hwnd)` | 句柄 | `std::wstring` | 小写完整路径 |
-| `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题 |
-| `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
-| `CalcUserIdle(evTime)` | 事件时间 | `float` | 计算用户空闲秒数 |
-| `CalcFarFromMouse(rc, scale)` | 窗口矩形、DPI 缩放(DPI/96) | `float` | 判断窗口距鼠标是否超过 300 *逻辑*像素（按 DPI 归一） |
-
-### 公共结构
-
-| 结构 | 说明 |
-|---|---|
-| `Weights` | 21 项权重配置表（`g_w` 全局实例） |
-| `Features` | 21 项特征结构（含 `path`、`cls` 等 wstring 字段） |
-
-### 公共函数
-
-| 函数 | 输入 | 输出 | 说明/副作用 |
-|---|---|---|---|
-| `DigitRatio(s)` | 串 | `float` | 数字占比 |
-| `HexRatio(s)` | 串 | `float` | 十六进制字符占比 |
-| `ProcessAgeSeconds(hwnd)` | 句柄 | `float` | 进程年龄秒，失败 -1 |
-| `IsFileSigned(path)` | 路径 | `bool` | WinVerifyTrust；有签名即 true |
-| `IsFileSignedCached(path)` | 路径 | `bool` | 带 `SigCache`+互斥锁缓存 |
-| `ExtractFeatures(hwnd, evTime)` | 句柄、事件时间 | `Features` | 21 项特征（含 `path`、`cls`） |
-| `BuildRawBits(f, rc, evTime)` | 特征、窗口矩形、事件时间 | `std::wstring` | 17 位 T/F 特征串（含空闲/鼠标距离） |
-| `ScoreWindow(f, detail&)` | 特征、明细串(out) | `int` | ≥0 分数；硬过滤时返回 0 且 detail 为 skip 标记 |
-
-全局状态：`g_w`（权重表）、`SigCache`。
-输出结构：`Features{ hasOwner, toolWin, topmost, noActivate, resizable, hasMinMax, captionSysmenu, wDip, hDip, dpiScale, titleLen, titleEmpty, titleDigitRatio, titleKwHits, clsLen, clsHexRatio, pathTemp, pathRoaming, pathDepth, exeDigitRatio, procAgeSec, userIdle, farFromMouse, path, cls }`（均为 float + 2 个 wstring；`wDip/hDip` 为按窗口 DPI（`GetDpiForWindow`）归一的逻辑像素，`farFromMouse` 亦按 DPI 归一）。
-
-## HeuristicML.h（静态机器学习）
-
-### detail 命名空间
-
-| 函数 | 输入 | 输出 | 说明/副作用 |
-|---|---|---|---|
-| `Lower(s)` | 原串 | `std::wstring` | 小写化（独立副本） |
-| `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题 |
-| `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
-| `GetProcessName(hwnd)` | 句柄 | `std::wstring` | 小写 exe 名 |
-
-### MLEngine 类
-
-| 函数 | 输入 | 输出 | 说明/副作用 |
-|---|---|---|---|
-| `GetInstance()` | 无 | `MLEngine&` | 单例 |
-| `IsEnabled()` | 无 | `bool` | 模型是否加载成功 |
-| `EnsureLoaded()` | 无 | `bool` | 首次调用时加载两个 ONNX 模型 |
-| `Predict(hwnd)` | 句柄 | `int` | 1=弹窗 0=非弹窗 -1=失败（双模型 AND 投票） |
-| `ExtractFeatures(hwnd, features&)` | 句柄、特征数组(out) | `bool` | 提取 23 维特征到 float 数组 |
-
-全局状态：`GOOD_EXES`（27 个正常软件白名单数组）。
-模型文件：`popup_rf.onnx`（随机森林）、`popup_lr.onnx`（逻辑回归），位于 `StaticML\` 目录。
 
 ## FilePicker.h（公共文件选择器）
 
@@ -314,7 +235,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `RootPointerExited(sender, e)` | 指针离开 | `void` | 隐藏辉光 |
 | `GoToBlocker_Tapped(sender, e)` | 卡片点击 | `void` | 导航到弹窗拦截页 |
 | `GoToSettings_Tapped(sender, e)` | 卡片点击 | `void` | 导航到设置页 |
-| `EnableEngine_Click(sender, e)` | 按钮 | `void` | 快捷开启拦截：写 `Enabled` + `SyncFromSettings` + ML Init + `Start` |
+| `EnableEngine_Click(sender, e)` | 按钮 | `void` | 快捷开启拦截：写 `Enabled` + `SyncFromSettings` + `Start` |
 | `RefreshEngineStatus()` | 无 | `void` | 刷新引擎状态文本（运行中/已暂停/已关闭）与快捷按钮可见性 |
 | `StatusTimer_Tick(sender, e)` | 定时器 | `void` | 每秒刷新引擎状态 |
 | `~HomePage()` | 无 | - | 停止状态定时器 |
@@ -355,10 +276,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `PrivacyLink_Click(sender, args)` | 链接 | `void` | 导航到隐私声明页 |
 | `ThemeComboBox_SelectionChanged(sender, args)` | 下拉 | `void` | 写主题、应用背景与标题栏 |
 | `ForceBlockToggle_Toggled(sender, args)` | 开关 | `void` | 写 `ForceBlock` 并同步引擎 |
-| `HeuristicModeCombo_SelectionChanged(sender, args)` | 下拉 | `void` | 下标↔模式映射（0/2/1）写 ini + Sync |
 | `VerboseLogToggle_Toggled(sender, args)` | 开关 | `void` | 写 `VerboseLog` + Sync |
 | `AutoStartToggle_Toggled(sender, args)` | 开关 | `void` | 调用 AutoStart::SetEnabled |
-| `MLHeuristicToggle_Toggled(sender, args)` | 开关 | `void` | 写 `MLHeuristic` + Sync |
 | `ToastNotifyToggle_Toggled(sender, args)` | 开关 | `void` | 写 `ToastNotify` + 同步引擎变量 |
 | `GameModeToggle_Toggled(sender, args)` | 开关 | `void` | 写 `GameMode` + 同步引擎变量（默认关） |
 
@@ -382,10 +301,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `Timer_Tick(sender, args)` | 定时器 | `void` | 自动刷新日志（1 秒间隔；日志含焦点窃取等事件） |
 | `Refresh_Click(sender, args)` | 按钮 | `void` | 手动刷新 |
 | `Clear_Click(sender, args)` | 按钮 | `void` | 清空日志文件 |
-| `LogItem_RightTapped(sender, args)` | 列表项右键 | `void` | 弹出标注/加规则上下文菜单 |
-| `MarkPopup_Click(sender, args)` | 菜单 | `void` | 标记选中行为弹窗（label=popup） |
-| `MarkNotPopup_Click(sender, args)` | 菜单 | `void` | 标记选中行为非弹窗（label=notpopup） |
-| `ExportSamples_Click(sender, args)` | 菜单 | `void` | 导出标注样本为 JSON，清空标注缓存 |
+| `LogItem_RightTapped(sender, args)` | 列表项右键 | `void` | 弹出快捷操作菜单 |
 | `AddToBlacklist_Click(sender, args)` | 菜单 | `void` | 将选中行 exe 加入黑名单 |
 | `AddToWhitelist_Click(sender, args)` | 菜单 | `void` | 将选中行 exe 加入白名单 |
 | `AddRuleFromSelection(whitelist)` | bool | `void` | 内部：从选中日志行提取 exe 并加规则 |
@@ -397,7 +313,6 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `ReadAllText(path)` | 文件路径 | `std::wstring` | 读整个文件为宽串 |
 | `GetFileTime(path)` | 文件路径 | `uint64_t` | 获取文件最后修改时间（FILETIME→uint64） |
 | `ReplaceAll(s, from, to)` | 串、from、to | `void` | 全局替换（in-place） |
-| `TranslateTokenName(s, en, zh)` | 串、英文、中文 | `void` | 替换启发式得分项名为中文 |
 | `TranslateLogLine(raw)` | 原始日志行 | `std::wstring` | 整行翻译为中文显示 |
 
 ## 更新日志

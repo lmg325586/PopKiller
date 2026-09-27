@@ -11,9 +11,7 @@
 #include <queue>
 #include <map>
 #include <unordered_map>
-#include "HeuristicML.h"
 #include "AppSettings.h"
-#include "HeuristicScorer.h"
 #include "RuleTypes.h"
 #include "RuleStorage.h"
 #include <shellapi.h>
@@ -154,19 +152,13 @@ namespace PopupBlocker
     inline std::wstring SelfExe;
     inline bool ToastNotify = true;
 
-    inline constexpr int kMLArbLow = 35;
-    inline constexpr int kMLArbHigh = 90;
-
     inline std::atomic<bool> Paused{ false };
     inline std::atomic<bool> ShuttingDown{ false };
     inline std::atomic<bool> FullscreenGame{ false };   // 是否处于全屏游戏/全屏应用（轮询缓存）
     inline std::atomic<long long> PauseDeadlineMs{ 0 };
     inline std::atomic<int> PauseGen{ 0 };
 
-    inline int HeuristicMode = 0;
-    inline int HeuristicThreshold = 70;
     inline bool VerboseLog = false;
-    inline bool MLHeuristic = false;
 
     inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
 
@@ -258,6 +250,11 @@ namespace PopupBlocker
         return *p == L'\0';
     }
 
+    // 类名是否“看起来随机”：长度>=6 且十六进制/数字占比高
+    inline float HexRatio(std::wstring const& s) { if (s.empty()) return 0.f; int h = 0; for (wchar_t c : s) if ((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f')) ++h; return float(h) / float(s.size()); }
+    inline float DigitRatio(std::wstring const& s) { if (s.empty()) return 0.f; int d = 0; for (wchar_t c : s) if (c >= L'0' && c <= L'9') ++d; return float(d) / float(s.size()); }
+    inline bool LooksLikeRandomClass(std::wstring const& cls) { if (cls.size() < 6) return false; return HexRatio(cls) >= 0.8f || DigitRatio(cls) >= 0.6f; }
+
     inline void InitSelfExe()
     {
         std::wstring p = GetSelfPath();
@@ -319,10 +316,7 @@ namespace PopupBlocker
     inline void SyncFromSettings()
     {
         ForceBlock = AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1;
-        HeuristicMode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
-        HeuristicThreshold = std::clamp(AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70), 0, 100);
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
-        MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
         ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
         GameMode = AppSettings::ReadInt(L"Blocker", L"GameMode", 0) == 1;
 
@@ -533,7 +527,7 @@ namespace PopupBlocker
         inline bool EvalCondition(RuleCondition const& c, std::wstring const& target)
         {
             switch (c.mode) {
-            case MatchMode::RandomClass: return HeuristicScorer::LooksLikeRandomClass(target);
+            case MatchMode::RandomClass: return LooksLikeRandomClass(target);
             case MatchMode::Exact:       return target == c.pattern;
             case MatchMode::Contains:    return target.find(c.pattern) != std::wstring::npos;
             case MatchMode::Wildcard:    return WildcardMatch(target.c_str(), c.pattern.c_str());
@@ -632,6 +626,7 @@ namespace PopupBlocker
 
         inline EventVerdict EvaluateWindow(HWND hwnd, DWORD idEventTime)
         {
+            (void)idEventTime;   // 规则拦截不再使用事件时间（启发式已移除）
             EventVerdict v;
             bool isPopup = LooksLikePopup(hwnd);
             v.matchResult = Match(hwnd);
@@ -643,35 +638,6 @@ namespace PopupBlocker
             else if (v.matchResult == 2) {
                 v.reason = L"blacklist";
                 if (ForceBlock || isPopup) { v.shouldBlock = true; v.action = L"block"; }
-            }
-            else if (HeuristicMode > 0) {
-
-                HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd, idEventTime);
-                int score = HeuristicScorer::ScoreWindow(f, v.detail);
-
-                v.detail += L" raw=" + HeuristicScorer::BuildRawBits(f);
-
-                bool mlYes = false;
-                if (MLHeuristic) {
-                    if (score >= kMLArbLow && score <= kMLArbHigh) {
-                        mlYes = HeuristicML::GetInstance().Predict(hwnd, idEventTime);
-                        v.detail += mlYes ? L" ml=Y" : L" ml=N";
-                    }
-                    else {
-                        v.detail += L" ml=-";
-                    }
-                }
-                v.reason = L"heuristic(" + std::to_wstring(score) + L")";
-                if (HeuristicMode == 2) {
-                    bool block;
-                    if (score > kMLArbHigh) block = true;
-                    else if (score < kMLArbLow) block = false;
-                    else block = MLHeuristic ? mlYes : (score >= HeuristicThreshold);
-                    if (block) { v.shouldBlock = true; v.action = L"block"; }
-                }
-            }
-            else {
-                v.reason = L"heuristic_off";
             }
 
             v.shouldLog = VerboseLog || v.shouldBlock || v.matchResult == 1 || v.matchResult == 2;
