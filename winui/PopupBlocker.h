@@ -270,14 +270,21 @@ namespace PopupBlocker
         return false;
     }
 
+    // 唯一允许改 Rules / CommunityRemoved 的入口：持锁内读-改-写 + 重建索引 + 落盘，
+    // 保证 Rules 与 RulesIndexView 原子一致，避免各处锁外「读-改-写」互相覆盖。
+    inline void MutateRules(std::function<void(std::vector<Rule>&, std::vector<std::wstring>&)> mutate)
+    {
+        std::lock_guard<std::mutex> lock(RulesMutex);
+        mutate(Rules, CommunityRemoved);
+        auto idx = BuildRuleIndex(Rules);
+        SaveRulesJson(Rules, CommunityRemoved);
+        RulesView = std::make_shared<const std::vector<Rule>>(Rules);
+        RulesIndexView = idx;
+    }
+
     inline void SaveRules(std::vector<Rule> const& newRules)
     {
-        auto idx = BuildRuleIndex(newRules); // 锁外构建索引
-        std::lock_guard lock(RulesMutex);//不得在持有 RulesMutex 时调用 SaveRules
-        SaveRulesJson(newRules, CommunityRemoved);
-        Rules = newRules;
-        RulesView = std::make_shared<const std::vector<Rule>>(newRules);
-        RulesIndexView = idx;
+        MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) { rules = newRules; });
     }
 
     inline bool AddWhitelistExe(std::wstring const& exe)
@@ -288,16 +295,14 @@ namespace PopupBlocker
         r.mode = MatchMode::Exact;
         r.pattern = Lower(exe);
 
-        std::vector<Rule> rules;
-        { std::lock_guard lock(RulesMutex); rules = Rules; }
-
         std::wstring k = RuleKey(r);
-        if (std::any_of(rules.begin(), rules.end(),
-            [&](Rule const& e) { return RuleKey(e) == k; })) return false;
-
-        rules.push_back(r);
-        SaveRules(rules);
-        return true;
+        bool added = false;
+        MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
+            bool exists = std::any_of(rules.begin(), rules.end(),
+                [&](Rule const& e) { return RuleKey(e) == k; });
+            if (!exists) { rules.push_back(r); added = true; }
+        });
+        return added;
     }
 
     inline void SyncFromSettings()
@@ -314,12 +319,10 @@ namespace PopupBlocker
         std::vector<Rule> rules;
         std::vector<std::wstring> removed;
         LoadRulesJson(rules, removed);
-        auto idx = BuildRuleIndex(rules); // 锁外构建索引
-        std::lock_guard lock(RulesMutex);
-        Rules = std::move(rules);
-        CommunityRemoved = std::move(removed);
-        RulesView = std::make_shared<const std::vector<Rule>>(Rules);
-        RulesIndexView = idx;
+        MutateRules([&](std::vector<Rule>& curRules, std::vector<std::wstring>& curRemoved) {
+            curRules = std::move(rules);
+            curRemoved = std::move(removed);
+        });
     }
 
     inline std::wstring Sha256Hex(winrt::Windows::Storage::Streams::IBuffer const& buf)
@@ -379,26 +382,25 @@ namespace PopupBlocker
                 if (ParseRulesFromJsonString(body, fetched)) {
                     for (auto& r : fetched) r.fromCommunity = true;
 
-                    std::vector<Rule> merged;
-                    std::vector<std::wstring> removed;
-                    {
-                        std::lock_guard lock(RulesMutex);
-                        merged = Rules;
-                        removed = CommunityRemoved;
+                    if (AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) != 1) {
+                        // 拉取期间开关被关闭：视为关闭，不合并
+                        ok = true;
+                        msg = L"0";
                     }
-
-                    size_t added = 0;
-                    for (auto& cr : fetched) {
-                        std::wstring k = RuleKey(cr);
-                        bool gone = std::find(removed.begin(), removed.end(), k) != removed.end();
-                        bool exists = std::any_of(merged.begin(), merged.end(),
-                            [&](Rule const& r) { return RuleKey(r) == k; });
-                        if (!gone && !exists) { merged.push_back(cr); ++added; }
+                    else {
+                        size_t added = 0;
+                        MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>& removed) {
+                            for (auto const& cr : fetched) {
+                                std::wstring k = RuleKey(cr);
+                                bool gone = std::find(removed.begin(), removed.end(), k) != removed.end();
+                                bool exists = std::any_of(rules.begin(), rules.end(),
+                                    [&](Rule const& r) { return RuleKey(r) == k; });
+                                if (!gone && !exists) { rules.push_back(cr); ++added; }
+                            }
+                        });
+                        ok = true;
+                        msg = std::to_wstring(added);
                     }
-
-                    if (added > 0) SaveRules(merged);
-                    ok = true;
-                    msg = std::to_wstring(added);
                 }
                 else {
                     msg = L"JSON 解析失败";

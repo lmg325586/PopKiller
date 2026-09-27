@@ -206,15 +206,6 @@ namespace winrt::winui::implementation
         UpdateCommunityRestoreButtonVisibility();
     }
 
-    void PopupBlockerPage::Save()
-    {
-        std::vector<PopupBlocker::Rule> newRules;
-        for (auto const& r : m_rules) {
-            newRules.push_back(ToEngineRule(r));
-        }
-        PopupBlocker::SaveRules(newRules);
-    }
-
     void PopupBlockerPage::SelectRuleByRealIndex(size_t real)
     {
         if (real >= m_rules.size()) return;
@@ -308,6 +299,12 @@ namespace winrt::winui::implementation
         else {
             CommunityStatusText().Text(L"");
             RetryFetchButton().Visibility(Visibility::Collapsed);
+
+            PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>&) {
+                rules.erase(std::remove_if(rules.begin(), rules.end(),
+                    [](PopupBlocker::Rule const& r) { return r.fromCommunity; }), rules.end());
+            });
+            ReloadRulesFromEngine();
         }
     }
 
@@ -401,11 +398,24 @@ namespace winrt::winui::implementation
             return;
         }
 
-        m_rules.insert(m_rules.begin(), { listType, fieldType, matchMode, pattern, false });
+        PopupBlocker::Rule nr = ToEngineRule(RuleItem{ listType, fieldType, matchMode, pattern, false });
+        bool added = false;
+        PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>&) {
+            std::wstring k = PopupBlocker::RuleKey(nr);
+            bool exists = std::any_of(rules.begin(), rules.end(),
+                [&](PopupBlocker::Rule const& e) { return PopupBlocker::RuleKey(e) == k; });
+            if (!exists) { rules.push_back(nr); added = true; }
+        });
 
         PatternInput().Text(L"");
-        Save();
-        RefreshList();
+        ReloadRulesFromEngine();
+
+        if (!added) {
+            PickInfo().Text(L"⚠ 相同规则已存在，未重复添加。");
+            PickInfo().Foreground(Media::SolidColorBrush(
+                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+            return;
+        }
 
         PickInfo().Text(L"");
         PickInfo().Foreground(Media::SolidColorBrush(
@@ -427,14 +437,15 @@ namespace winrt::winui::implementation
             real = m_visibleIndex[static_cast<size_t>(idx)];
         }
 
-        if (m_rules[real].fromCommunity) {
-            std::lock_guard lock(PopupBlocker::RulesMutex);
-            PopupBlocker::CommunityRemoved.push_back(PopupBlocker::RuleKey(ToEngineRule(m_rules[real])));
-        }
+        std::wstring key = PopupBlocker::RuleKey(ToEngineRule(m_rules[real]));
+        bool fromCommunity = m_rules[real].fromCommunity;
+        PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>& removed) {
+            if (fromCommunity) removed.push_back(key);
+            rules.erase(std::remove_if(rules.begin(), rules.end(),
+                [&](PopupBlocker::Rule const& r) { return PopupBlocker::RuleKey(r) == key; }), rules.end());
+        });
 
-        m_rules.erase(m_rules.begin() + real);
-        Save();
-        RefreshList();
+        ReloadRulesFromEngine();
     }
 
     void PopupBlockerPage::Pick_Click(IInspectable const&, RoutedEventArgs const&)
@@ -615,18 +626,26 @@ namespace winrt::winui::implementation
             }
         }
 
-        auto& old = m_rules[real];
-        if (old.fromCommunity) {
-            std::lock_guard lock(PopupBlocker::RulesMutex);
-            PopupBlocker::CommunityRemoved.push_back(PopupBlocker::RuleKey(ToEngineRule(old)));
-        }
-        old = { listType, fieldType, matchMode, pattern, false };
+        std::wstring oldKey = PopupBlocker::RuleKey(ToEngineRule(m_rules[real]));
+        bool oldCommunity = m_rules[real].fromCommunity;
+        std::wstring conflictKey;
+        if (conflict) conflictKey = PopupBlocker::RuleKey(ToEngineRule(m_rules[conflictReal]));
+        PopupBlocker::Rule updated = ToEngineRule(RuleItem{ listType, fieldType, matchMode, pattern, false });
+        PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>& removed) {
+            if (oldCommunity) removed.push_back(oldKey);
+            auto it = std::find_if(rules.begin(), rules.end(),
+                [&](PopupBlocker::Rule const& r) { return PopupBlocker::RuleKey(r) == oldKey; });
+            if (it != rules.end()) *it = updated;
+            else rules.push_back(updated);
+        });
 
-        Save();
-        RefreshList();
+        ReloadRulesFromEngine();
 
         if (conflict) {
-            SelectRuleByRealIndex(conflictReal);
+            size_t conflictRealAfter = (size_t)-1;
+            for (size_t i = 0; i < m_rules.size(); ++i)
+                if (PopupBlocker::RuleKey(ToEngineRule(m_rules[i])) == conflictKey) { conflictRealAfter = i; break; }
+            if (conflictRealAfter != (size_t)-1) SelectRuleByRealIndex(conflictRealAfter);
             PickInfo().Text(L"⚠ 已选中冲突规则：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
             PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
         }
@@ -637,20 +656,13 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::RestoreCommunity_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        bool changed = false;
-        std::vector<PopupBlocker::Rule> cur;
-        {
-            std::lock_guard lock(PopupBlocker::RulesMutex);
-            if (!PopupBlocker::CommunityRemoved.empty()) {
-                PopupBlocker::CommunityRemoved.clear();
-                changed = true;
-                cur = PopupBlocker::Rules;
-            }
-        }
+        bool had = false;
+        PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>&, std::vector<std::wstring>& removed) {
+            had = !removed.empty();
+            removed.clear();
+        });
 
-        if (changed) {
-            PopupBlocker::SaveRules(cur);
-
+        if (had) {
             UpdateCommunityRestoreButtonVisibility();
             CommunityStatusText().Text(L"正在重新合并社区规则…");
             RetryFetchButton().Visibility(Visibility::Collapsed);
