@@ -123,8 +123,8 @@ SaveRules(rules); // 安全调用
 | `Stop()` | 无 | `void` | `WM_QUIT` + join 线程 |
 | `PauseForMinutes(minutes)` | 分钟数 | `void` | 暂停拦截指定分钟，后台线程自动恢复 |
 | `ResumeNow()` | 无 | `void` | 立即恢复拦截（取消暂停） |
-| `InFullscreenGame()` | 无 | `bool` | `SHQueryUserNotificationState` 检测是否全屏游戏/应用（最多每 2 秒查询一次，缓存于 `FullscreenGame`） |
-| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤 →（游戏模式下全屏时的焦点窃取判定）→ 评估 → 执行 → 日志 → 通知 |
+| `InFullscreenGame()` | 无 | `bool` | 只读全屏缓存；缓存由工作线程约每 1s 调 `SHQueryUserNotificationState` 刷新（接受 `QUNS_BUSY`/`QUNS_RUNNING_D3D_FULL_SCREEN`/`QUNS_APP`），避免 out-of-context 回调读到弹窗切换后的前台状态 |
+| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤 →（引擎运行且游戏模式下全屏时的焦点窃取判定）→ 评估 → 执行 → 日志 → 通知 |
 
 ### detail 命名空间
 
