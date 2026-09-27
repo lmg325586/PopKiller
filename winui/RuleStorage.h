@@ -137,6 +137,13 @@ namespace PopupBlocker
         catch (...) { return false; }
     }
 
+    // 解析失败时把损坏的 rules.json 备份为 .bak，避免后续保存静默覆盖导致规则永久丢失
+    inline void BackupCorruptRules()
+    {
+        std::wstring src = RulesPath();
+        ::CopyFileW(src.c_str(), (src + L".bak").c_str(), FALSE);
+    }
+
     inline bool LoadRulesJson(std::vector<Rule>& out, std::vector<std::wstring>& removedOut)
     {
         std::string utf8_text;
@@ -144,14 +151,14 @@ namespace PopupBlocker
         if (utf8_text.empty()) return false;
         try {
             auto j = nlohmann::json::parse(utf8_text);
-            if (!ParseRulesFromJsonString(utf8_text, out)) return false;
+            if (!ParseRulesFromJsonString(utf8_text, out)) { BackupCorruptRules(); return false; }
             if (j.contains("communityRemoved") && j["communityRemoved"].is_array()) {
                 for (auto& s : j["communityRemoved"])
                     removedOut.push_back(Utf8ToWString(s.get<std::string>()));
             }
             return true;
         }
-        catch (...) { return false; }
+        catch (...) { BackupCorruptRules(); return false; }
     }
 
     inline std::string SerializeRules(std::vector<Rule> const& rules, std::vector<std::wstring> const& removed)
