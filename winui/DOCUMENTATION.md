@@ -161,7 +161,7 @@ SaveRules(rules); // 安全调用
 | `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题 |
 | `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
 | `CalcUserIdle(evTime)` | 事件时间 | `float` | 计算用户空闲秒数 |
-| `CalcFarFromMouse(rc)` | 窗口矩形 | `float` | 计算窗口距鼠标的归一化距离 |
+| `CalcFarFromMouse(rc, scale)` | 窗口矩形、DPI 缩放(DPI/96) | `float` | 判断窗口距鼠标是否超过 300 *逻辑*像素（按 DPI 归一） |
 
 ### 公共结构
 
@@ -184,7 +184,7 @@ SaveRules(rules); // 安全调用
 | `ScoreWindow(f, detail&)` | 特征、明细串(out) | `int` | ≥0 分数；硬过滤时返回 0 且 detail 为 skip 标记 |
 
 全局状态：`g_w`（权重表）、`SigCache`。
-输出结构：`Features{ hasOwner, toolWin, topmost, noActivate, resizable, hasMinMax, captionSysmenu, wNorm, hNorm, titleLen, titleEmpty, titleDigitRatio, titleKwHits, clsLen, clsHexRatio, pathTemp, pathRoaming, pathDepth, exeDigitRatio, procAgeSec, path, cls }`（均为 float + 2 个 wstring）。
+输出结构：`Features{ hasOwner, toolWin, topmost, noActivate, resizable, hasMinMax, captionSysmenu, wDip, hDip, dpiScale, titleLen, titleEmpty, titleDigitRatio, titleKwHits, clsLen, clsHexRatio, pathTemp, pathRoaming, pathDepth, exeDigitRatio, procAgeSec, userIdle, farFromMouse, path, cls }`（均为 float + 2 个 wstring；`wDip/hDip` 为按窗口 DPI（`GetDpiForWindow`）归一的逻辑像素，`farFromMouse` 亦按 DPI 归一）。
 
 ## HeuristicML.h（静态机器学习）
 
