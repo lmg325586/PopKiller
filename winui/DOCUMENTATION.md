@@ -109,7 +109,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `LogPath()` | 无 | `std::wstring` | `blocklog.txt` 路径 |
 | `FlushLog()` | 无 | `void` | 把日志缓冲立即落盘 |
 | `ClearLog()` | 无 | `void` | 丢弃日志缓冲并截断 `blocklog.txt` |
-| `WildcardMatch(str, pat)` | 目标串、模式 | `bool` | 大小写不敏感，支持 `*`/`?` |
+| `WildcardMatch(str, pat)` | 目标串、模式 | `bool` | 大小写不敏感，支持 `*`/`?`；超长或多 `*` 的 pattern 退化为精确比较 |
 | `InitSelfExe()` | 无 | `void` | 置 `SelfExe`（自身 exe 小写名） |
 | `LooksLikePopup(hwnd)` | 窗口句柄 | `bool` | owner/toolwin/不可调且无最小化 |
 | `MutateRules(mutate)` | `fn(vector<Rule>&, vector<wstring>&)` | `void` | 唯一写入口：持锁读-改-写 + 重建索引 + 落盘 |
@@ -133,7 +133,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `GetProcessName(hwnd)` | 句柄 | `std::wstring` | 小写 exe 名 |
 | `GetProcessPath(hwnd)` | 句柄 | `std::wstring` | 小写完整路径 |
 | `IsProtected(hwnd)` | 句柄 | `bool` | 自身 + 系统进程 + 浏览器白名单 |
-| `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题（截断 256） |
+| `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题（动态长度） |
 | `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
 | `MatchRule(hwnd, r, exe&, path&, title&, cls&)` | 句柄、规则、4 缓存串(in/out) | `bool` | 单规则匹配 |
 | `Match(hwnd)` | 句柄 | `int` | 0=未命中 1=白 2=黑 |

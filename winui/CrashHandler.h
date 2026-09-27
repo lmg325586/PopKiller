@@ -14,9 +14,7 @@ namespace CrashHandler
 
     inline std::wstring ExeDir()
     {
-        WCHAR path[MAX_PATH]{};
-        DWORD n = ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        std::wstring p(path, n);
+        std::wstring p = GetSelfPath();
         auto pos = p.find_last_of(L"\\/");
         if (pos != std::wstring::npos) p.resize(pos + 1);
         return p;

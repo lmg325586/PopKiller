@@ -9,9 +9,7 @@ namespace PopupBlocker
 {
     inline std::wstring RulesPath()
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        std::wstring p(path);
+        std::wstring p = GetSelfPath();
         auto pos = p.find_last_of(L"\\/");
         return p.substr(0, pos + 1) + L"rules.json";
     }
@@ -94,7 +92,7 @@ namespace PopupBlocker
 
             if (m_str == L"exact") r.mode = MatchMode::Exact;
             else if (m_str == L"wildcard") r.mode = MatchMode::Wildcard;
-            else r.mode = MatchMode::Contains;
+            else r.mode = MatchMode::Exact;
             r.pattern = Lower(p_str);
         }
         else {

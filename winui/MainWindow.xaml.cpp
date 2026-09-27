@@ -127,13 +127,6 @@ namespace winrt::winui::implementation
                 try { winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().UnregisterAll(); }
                 catch (...) {}
 
-                if (auto frame = ContentFrame())
-                {
-                    if (auto page = frame.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Page>())
-                    {
-                    }
-                }
-
                 PopupBlocker::BlockOccurredCallback = nullptr;
 
                 TrayIcon::OnExitRequested = nullptr;
@@ -151,8 +144,6 @@ namespace winrt::winui::implementation
         ExtendsContentIntoTitleBar(true);
         SetTitleBar(AppTitleBar());
         AppTheme::TitleBarElement = AppTitleBar();
-        AppTheme::TitleBarElement = AppTitleBar();
-        AppTheme::ApplyTitleBar(titleBar);
         AppTheme::ApplyTitleBar(titleBar);
 
         AppTitleBar().ActualThemeChanged([titleBar](auto&&, auto&&) {

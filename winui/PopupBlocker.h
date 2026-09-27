@@ -43,9 +43,6 @@ namespace PopupBlocker
         if (f) f(std::forward<Args>(args)...);
     }
 
-    inline std::shared_ptr<const std::vector<Rule>> RulesView =
-        std::make_shared<const std::vector<Rule>>();
-
     struct AcAutomaton
     {
         struct Node { std::map<wchar_t, int> next; int fail = 0; int out = 0; };
@@ -177,9 +174,7 @@ namespace PopupBlocker
 
     inline std::wstring LogPath()
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        std::wstring p(path);
+        std::wstring p = GetSelfPath();
         auto pos = p.find_last_of(L"\\/");
         p = p.substr(0, pos + 1) + L"blocklog.txt";
         return p;
@@ -234,6 +229,11 @@ namespace PopupBlocker
     }
 
     inline bool WildcardMatch(const wchar_t* str, const wchar_t* pat) {
+        // pattern 来自远端，病态 * 密集会反复回溯：过长或 * 过多时退化为精确比较，避免高开销重复求值
+        size_t patLen = 0, starCount = 0;
+        for (const wchar_t* q = pat; *q; ++q) { ++patLen; if (*q == L'*') ++starCount; }
+        if (patLen > 128 || starCount > 16) return ::wcscmp(str, pat) == 0;
+
         const wchar_t* s = str, * p = pat;
         const wchar_t* star_s = nullptr, * star_p = nullptr;
         while (*s) {
@@ -248,9 +248,7 @@ namespace PopupBlocker
 
     inline void InitSelfExe()
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        std::wstring p(path);
+        std::wstring p = GetSelfPath();
         auto pos = p.find_last_of(L"\\/");
         SelfExe = Lower((pos == std::wstring::npos) ? p : p.substr(pos + 1));
     }
@@ -278,7 +276,6 @@ namespace PopupBlocker
         mutate(Rules, CommunityRemoved);
         auto idx = BuildRuleIndex(Rules);
         SaveRulesJson(Rules, CommunityRemoved);
-        RulesView = std::make_shared<const std::vector<Rule>>(Rules);
         RulesIndexView = idx;
     }
 
@@ -309,7 +306,7 @@ namespace PopupBlocker
     {
         ForceBlock = AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1;
         HeuristicMode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
-        HeuristicThreshold = AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70);
+        HeuristicThreshold = std::clamp(AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70), 0, 100);
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
         MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
         ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
@@ -494,8 +491,29 @@ namespace PopupBlocker
             return false;
         }
 
-        inline std::wstring GetTitle(HWND hwnd) { WCHAR buf[256]{}; ::GetWindowTextW(hwnd, buf, 256); return Lower(buf); }
-        inline std::wstring GetClass(HWND hwnd) { WCHAR buf[256]{}; ::GetClassNameW(hwnd, buf, 256); return Lower(buf); }
+        inline std::wstring GetTitle(HWND hwnd)
+        {
+            int len = ::GetWindowTextLengthW(hwnd);
+            if (len <= 0) return {};
+            std::wstring buf(static_cast<size_t>(len) + 1, L'\0');
+            int written = ::GetWindowTextW(hwnd, buf.data(), len + 1);
+            if (written <= 0) return {};
+            buf.resize(static_cast<size_t>(written));
+            return Lower(buf);
+        }
+        inline std::wstring GetClass(HWND hwnd)
+        {
+            int len = ::GetClassNameW(hwnd, nullptr, 0);   // 两遍法：先取所需长度
+            if (len > 0) {
+                std::wstring buf(static_cast<size_t>(len) + 1, L'\0');
+                int written = ::GetClassNameW(hwnd, buf.data(), len + 1);
+                if (written > 0) { buf.resize(static_cast<size_t>(written)); return Lower(buf); }
+            }
+            WCHAR stack[256]{};   // 兜底：长度查询失败时退回固定缓冲
+            int written = ::GetClassNameW(hwnd, stack, 256);
+            if (written <= 0) return {};
+            return Lower(std::wstring(stack, static_cast<size_t>(written)));
+        }
 
         inline bool MatchRule(HWND hwnd, const Rule& r, std::wstring& exe, std::wstring& path, std::wstring& title, std::wstring& cls) {
             std::wstring target;

@@ -11,8 +11,7 @@ namespace AutoStart
 
     inline std::wstring GetExePathQuoted()
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
+        std::wstring path = GetSelfPath();
         return std::wstring(L"\"") + path + L"\" --autostart";
     }
 
@@ -44,7 +43,8 @@ namespace AutoStart
     inline bool EnableAutoStartup()
     {
         HKEY hKey{};
-        if (::RegOpenKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
+        if (::RegCreateKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, nullptr, 0, KEY_SET_VALUE,
+            nullptr, &hKey, nullptr) != ERROR_SUCCESS)
         {
             return false;
         }

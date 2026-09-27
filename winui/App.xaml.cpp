@@ -22,9 +22,9 @@ namespace
 
     void RegisterToastProtocol()
     {
-        WCHAR exePath[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        std::wstring cmd = L"\"" + std::wstring(exePath) + L"\" \"%1\"";
+        std::wstring exePath = GetSelfPath();
+        if (exePath.empty()) return;
+        std::wstring cmd = L"\"" + exePath + L"\" \"%1\"";
         const wchar_t* protoName = L"URL:PopKiller Protocol";
 
         HKEY root{};
@@ -48,9 +48,7 @@ namespace
 
     void ActivateFirstInstance(std::wstring const* toastPayload = nullptr, bool bringToFront = true)
     {
-        WCHAR path[MAX_PATH]{};
-        ::GetModuleFileNameW(nullptr, path, MAX_PATH);
-        std::wstring self(path);
+        std::wstring self = GetSelfPath();
         auto pos = self.find_last_of(L"\\/");
         if (pos != std::wstring::npos) self = self.substr(pos + 1);
 
