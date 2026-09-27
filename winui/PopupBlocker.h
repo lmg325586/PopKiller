@@ -185,6 +185,54 @@ namespace PopupBlocker
         return p;
     }
 
+    // 日志内存缓冲：按行累积，达阈值或显式 Flush 才落盘，减少高频拦截时的磁盘抖动。
+    inline std::mutex LogMutex;
+    inline std::string LogBuffer;
+    inline constexpr size_t kLogFlushBytes = 64 * 1024;   // 64KB
+
+    // 调用方需持 LogMutex
+    inline void FlushLogLocked()
+    {
+        if (LogBuffer.empty()) return;
+        std::wstring p = LogPath();
+        constexpr long long Limit = 1024 * 1024;
+
+        WIN32_FILE_ATTRIBUTE_DATA fad{};
+        bool exists = (::GetFileAttributesExW(p.c_str(), GetFileExInfoStandard, &fad) != FALSE);
+        long long size = exists
+            ? ((static_cast<long long>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow) : 0;
+        bool fresh = !exists || size == 0 || size > Limit;   // 新文件/空文件/超过上限 → 截断重写并写 BOM
+
+        FILE* f{};
+        if (_wfopen_s(&f, p.c_str(), fresh ? L"wb" : L"ab") == 0 && f)
+        {
+            if (fresh) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
+            ::fwrite(LogBuffer.data(), 1, LogBuffer.size(), f);
+            ::fclose(f);
+            LogBuffer.clear();
+        }
+        else if (LogBuffer.size() > kLogFlushBytes * 16)
+        {
+            LogBuffer.clear();   // 写失败：保留以便重试，但设上限（约 1MB）防内存膨胀
+        }
+    }
+
+    // 供 UI/退出路径调用：立即落盘
+    inline void FlushLog()
+    {
+        std::lock_guard<std::mutex> lock(LogMutex);
+        FlushLogLocked();
+    }
+
+    // 清空日志：丢弃缓冲并截断文件（避免清空后旧缓冲又被写回）
+    inline void ClearLog()
+    {
+        std::lock_guard<std::mutex> lock(LogMutex);
+        LogBuffer.clear();
+        FILE* f{};
+        if (_wfopen_s(&f, LogPath().c_str(), L"wb") == 0 && f) ::fclose(f);
+    }
+
     inline bool WildcardMatch(const wchar_t* str, const wchar_t* pat) {
         const wchar_t* s = str, * p = pat;
         const wchar_t* star_s = nullptr, * star_p = nullptr;
@@ -506,37 +554,21 @@ namespace PopupBlocker
 
         inline void Log(std::wstring const& s)
         {
-            std::wstring p = LogPath();
-            constexpr long long Limit = 1024 * 1024;
+            SYSTEMTIME st{}; ::GetLocalTime(&st);
+            WCHAR ts[32]{};
+            swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
+                st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+            std::wstring full = ts + s;
 
-            WIN32_FILE_ATTRIBUTE_DATA fad{};
-            bool exists = (::GetFileAttributesExW(p.c_str(), GetFileExInfoStandard, &fad) != FALSE);
-            long long size = exists
-                ? (static_cast<long long>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow
-                : 0;
+            int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
+            if (need <= 0) return;
 
-            bool fresh = !exists || size > Limit;
-            FILE* f{};
-            if (_wfopen_s(&f, p.c_str(), fresh ? L"wb" : L"ab") == 0 && f)
-            {
-                if (fresh) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
-
-                SYSTEMTIME st{}; ::GetLocalTime(&st);
-                WCHAR ts[32]{};
-                swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
-                    st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-                std::wstring full = ts + s;
-
-                int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
-                if (need > 0)
-                {
-                    std::string utf8(static_cast<size_t>(need) - 1, '\0');
-                    ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, utf8.data(), need, nullptr, nullptr);
-                    utf8 += "\r\n";
-                    ::fwrite(utf8.data(), 1, utf8.size(), f);
-                }
-                ::fclose(f);
-            }
+            std::lock_guard<std::mutex> lock(LogMutex);
+            size_t old = LogBuffer.size();
+            LogBuffer.resize(old + static_cast<size_t>(need) - 1);
+            ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, LogBuffer.data() + old, need, nullptr, nullptr);
+            LogBuffer += "\r\n";
+            if (LogBuffer.size() >= kLogFlushBytes) FlushLogLocked();
         }
 
         struct EventVerdict {
@@ -785,6 +817,7 @@ namespace PopupBlocker
             ::PostThreadMessageW(::GetThreadId(detail::Worker.native_handle()), WM_QUIT, 0, 0);
             detail::Worker.join();
         }
+        FlushLog();
     }
 
     inline void PauseForMinutes(int minutes)
