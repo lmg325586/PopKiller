@@ -19,6 +19,9 @@ using namespace Microsoft::UI::Xaml;
 
 namespace
 {
+    // 单条规则最多允许的条件数
+    inline constexpr size_t kMaxConditions = 4;
+
     const wchar_t* ListTypeKey(int idx) { return idx == 1 ? L"W" : L"B"; }
     const wchar_t* ListTypeLabel(int idx) { return idx == 1 ? L"白名单" : L"黑名单"; }
 
@@ -38,6 +41,7 @@ namespace
         case 0:  return L"进程";
         case 1:  return L"路径";
         case 2:  return L"标题";
+        case 4:  return L"类名随机";
         default: return L"类名";
         }
     }
@@ -78,6 +82,8 @@ namespace winrt::winui::implementation
         InitializeComponent();
 
         this->NavigationCacheMode(Navigation::NavigationCacheMode::Disabled);
+
+        AddConditionRow(false, ConditionItem{});
 
         m_statusTimer = DispatcherTimer();
         m_statusTimer.Interval(std::chrono::milliseconds{ 500 });
@@ -138,20 +144,219 @@ namespace winrt::winui::implementation
     {
         PopupBlocker::Rule r;
         r.isWhitelist = (it.listType == 1);
-        switch (it.fieldType) {
-        case 0: r.field = PopupBlocker::RuleField::Exe; break;
-        case 1: r.field = PopupBlocker::RuleField::Path; break;
-        case 2: r.field = PopupBlocker::RuleField::Title; break;
-        default: r.field = PopupBlocker::RuleField::Class; break;
-        }
-        switch (it.matchMode) {
-        case 0: r.mode = PopupBlocker::MatchMode::Contains; break;
-        case 1: r.mode = PopupBlocker::MatchMode::Exact; break;
-        default: r.mode = PopupBlocker::MatchMode::Wildcard; break;
-        }
-        r.pattern = PopupBlocker::Lower(it.pattern);
         r.fromCommunity = it.fromCommunity;
+
+        if (it.conditions.empty()) {
+            r.conditions.push_back(PopupBlocker::RuleCondition{
+                PopupBlocker::RuleField::Exe, PopupBlocker::MatchMode::Contains, L"" });
+            return r;
+        }
+
+        for (auto const& c : it.conditions) {
+            PopupBlocker::RuleCondition rc;
+            if (c.fieldType == 4) {
+                rc.field = PopupBlocker::RuleField::Class;
+                rc.mode = PopupBlocker::MatchMode::RandomClass;
+                rc.pattern.clear();
+            }
+            else {
+                switch (c.fieldType) {
+                case 0: rc.field = PopupBlocker::RuleField::Exe; break;
+                case 1: rc.field = PopupBlocker::RuleField::Path; break;
+                case 2: rc.field = PopupBlocker::RuleField::Title; break;
+                default: rc.field = PopupBlocker::RuleField::Class; break;
+                }
+                switch (c.matchMode) {
+                case 0: rc.mode = PopupBlocker::MatchMode::Contains; break;
+                case 1: rc.mode = PopupBlocker::MatchMode::Exact; break;
+                default: rc.mode = PopupBlocker::MatchMode::Wildcard; break;
+                }
+                rc.pattern = PopupBlocker::Lower(c.pattern);
+            }
+            r.conditions.push_back(std::move(rc));
+        }
         return r;
+    }
+
+    std::wstring PopupBlockerPage::ConditionLabel(ConditionItem const& c) const
+    {
+        if (c.fieldType == 4) return L"类名随机";
+        return std::wstring(FieldLabel(c.fieldType)) + L"|" +
+            MatchModeLabel(c.matchMode) + L":" + c.pattern;
+    }
+
+    std::wstring PopupBlockerPage::RuleDisplay(RuleItem const& r) const
+    {
+        std::wstring display = (r.fromCommunity ? L"[社区] " : L"") +
+            std::wstring(ListTypeLabel(r.listType)) + L" | ";
+        for (size_t i = 0; i < r.conditions.size(); ++i) {
+            if (i) display += L" + ";
+            display += ConditionLabel(r.conditions[i]);
+        }
+        return display;
+    }
+
+    void PopupBlockerPage::SyncConditionRowEnabled(ConditionRow const& row)
+    {
+        bool randomClass = row.fieldCombo.SelectedIndex() == 4;
+        row.modeCombo.Visibility(randomClass ? Visibility::Collapsed : Visibility::Visible);
+        row.patternBox.Visibility(randomClass ? Visibility::Collapsed : Visibility::Visible);
+    }
+
+    void PopupBlockerPage::AddConditionRow(bool editArea, ConditionItem const& init)
+    {
+        auto row = std::make_unique<ConditionRow>();
+
+        row->fieldCombo = Controls::ComboBox();
+        row->fieldCombo.MinWidth(96);
+        row->fieldCombo.Items().Append(box_value(hstring(L"进程")));
+        row->fieldCombo.Items().Append(box_value(hstring(L"路径")));
+        row->fieldCombo.Items().Append(box_value(hstring(L"标题")));
+        row->fieldCombo.Items().Append(box_value(hstring(L"类名")));
+        row->fieldCombo.Items().Append(box_value(hstring(L"类名随机")));
+
+        row->modeCombo = Controls::ComboBox();
+        row->modeCombo.MinWidth(80);
+        row->modeCombo.Items().Append(box_value(hstring(L"包含")));
+        row->modeCombo.Items().Append(box_value(hstring(L"精确")));
+        row->modeCombo.Items().Append(box_value(hstring(L"通配符")));
+
+        row->patternBox = Controls::TextBox();
+        row->patternBox.PlaceholderText(L"如 *pop* 或完整路径");
+        row->patternBox.HorizontalAlignment(HorizontalAlignment::Stretch);
+
+        row->removeBtn = Controls::Button();
+        row->removeBtn.Content(box_value(hstring(L"✕")));
+        row->removeBtn.Padding(ThicknessHelper::FromLengths(8, 4, 8, 4));
+
+        auto grid = Controls::Grid();
+        grid.ColumnSpacing(6);
+        {
+            Controls::ColumnDefinition c0; c0.Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
+            Controls::ColumnDefinition c1; c1.Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
+            Controls::ColumnDefinition c2; c2.Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
+            Controls::ColumnDefinition c3; c3.Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
+            grid.ColumnDefinitions().Append(c0);
+            grid.ColumnDefinitions().Append(c1);
+            grid.ColumnDefinitions().Append(c2);
+            grid.ColumnDefinitions().Append(c3);
+        }
+        Controls::Grid::SetColumn(row->fieldCombo, 0);
+        Controls::Grid::SetColumn(row->modeCombo, 1);
+        Controls::Grid::SetColumn(row->patternBox, 2);
+        Controls::Grid::SetColumn(row->removeBtn, 3);
+        grid.Children().Append(row->fieldCombo);
+        grid.Children().Append(row->modeCombo);
+        grid.Children().Append(row->patternBox);
+        grid.Children().Append(row->removeBtn);
+
+        {
+            bool prev = m_populating;
+            m_populating = true;
+            int f = (init.fieldType >= 0 && init.fieldType <= 4) ? init.fieldType : 0;
+            row->fieldCombo.SelectedIndex(f);
+            int m = (init.matchMode >= 0 && init.matchMode <= 2) ? init.matchMode : 0;
+            row->modeCombo.SelectedIndex(m);
+            row->patternBox.Text(hstring(init.pattern));
+            m_populating = prev;
+        }
+
+        ConditionRow* rowPtr = row.get();
+        row->fieldCombo.SelectionChanged(
+            [weakThis = get_weak(), rowPtr](IInspectable const&, Controls::SelectionChangedEventArgs const&)
+            {
+                if (auto self = weakThis.get()) self->SyncConditionRowEnabled(*rowPtr);
+            });
+        row->removeBtn.Click(
+            [weakThis = get_weak(), editArea, rowPtr](IInspectable const&, RoutedEventArgs const&)
+            {
+                if (auto self = weakThis.get()) self->RemoveConditionRow(editArea, rowPtr);
+            });
+
+        SyncConditionRowEnabled(*row);
+
+        (editArea ? EditConditionsPanel() : AddConditionsPanel()).Children().Append(grid);
+        (editArea ? m_editRows : m_addRows).push_back(std::move(row));
+        UpdateAddConditionButtons();
+    }
+
+    void PopupBlockerPage::RemoveConditionRow(bool editArea, ConditionRow* row)
+    {
+        auto& rows = editArea ? m_editRows : m_addRows;
+        auto it = std::find_if(rows.begin(), rows.end(),
+            [row](std::unique_ptr<ConditionRow> const& p) { return p.get() == row; });
+        if (it == rows.end()) return;
+
+        // 行与面板子元素顺序一一对应
+        auto index = static_cast<uint32_t>(it - rows.begin());
+        auto panel = editArea ? EditConditionsPanel() : AddConditionsPanel();
+        if (index < panel.Children().Size()) panel.Children().RemoveAt(index);
+
+        rows.erase(it);
+        if (rows.empty()) AddConditionRow(editArea, ConditionItem{});
+        UpdateAddConditionButtons();
+    }
+
+    std::vector<PopupBlockerPage::ConditionItem> PopupBlockerPage::ReadConditions(bool editArea)
+    {
+        std::vector<ConditionItem> out;
+        auto& rows = editArea ? m_editRows : m_addRows;
+        for (auto const& row : rows) {
+            ConditionItem c;
+            int f = row->fieldCombo.SelectedIndex();
+            if (f < 0) f = 0;
+            c.fieldType = f;
+            if (f == 4) {
+                c.matchMode = 0;
+                c.pattern.clear();
+            }
+            else {
+                int m = row->modeCombo.SelectedIndex();
+                c.matchMode = (m < 0) ? 0 : m;
+                c.pattern = std::wstring(row->patternBox.Text());
+            }
+            out.push_back(std::move(c));
+        }
+        return out;
+    }
+
+    void PopupBlockerPage::PopulateConditions(bool editArea, std::vector<ConditionItem> const& conds)
+    {
+        {
+            bool prev = m_populating;
+            m_populating = true;
+            (editArea ? EditConditionsPanel() : AddConditionsPanel()).Children().Clear();
+            (editArea ? m_editRows : m_addRows).clear();
+            m_populating = prev;
+        }
+
+        for (auto const& c : conds) AddConditionRow(editArea, c);
+        if ((editArea ? m_editRows : m_addRows).empty()) AddConditionRow(editArea, ConditionItem{});
+        UpdateAddConditionButtons();
+    }
+
+    void PopupBlockerPage::UpdateAddConditionButtons()
+    {
+        if (AddConditionButton()) AddConditionButton().IsEnabled(m_addRows.size() < kMaxConditions);
+        if (EditAddConditionButton()) EditAddConditionButton().IsEnabled(m_editRows.size() < kMaxConditions);
+
+        // 只有一个条件时隐藏该行的删除按钮
+        bool showAddRemove = m_addRows.size() > 1;
+        for (auto& r : m_addRows) if (r->removeBtn) r->removeBtn.Visibility(showAddRemove ? Visibility::Visible : Visibility::Collapsed);
+        bool showEditRemove = m_editRows.size() > 1;
+        for (auto& r : m_editRows) if (r->removeBtn) r->removeBtn.Visibility(showEditRemove ? Visibility::Visible : Visibility::Collapsed);
+    }
+
+    void PopupBlockerPage::AddCondition_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (m_addRows.size() >= kMaxConditions) return;
+        AddConditionRow(false, ConditionItem{});
+    }
+
+    void PopupBlockerPage::EditAddCondition_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (m_editRows.size() >= kMaxConditions) return;
+        AddConditionRow(true, ConditionItem{});
     }
 
     void PopupBlockerPage::ReloadRulesFromEngine()
@@ -163,11 +368,23 @@ namespace winrt::winui::implementation
         {
             RuleItem item{};
             item.listType = r.isWhitelist ? 1 : 0;
-            item.fieldType = static_cast<int>(r.field);
-            item.matchMode = static_cast<int>(r.mode);
-            item.pattern = r.pattern;
             item.fromCommunity = r.fromCommunity;
-            m_rules.push_back(item);
+            for (auto const& c : r.conditions) {
+                ConditionItem ci;
+                if (c.mode == PopupBlocker::MatchMode::RandomClass) {
+                    ci.fieldType = 4;
+                    ci.matchMode = 0;
+                    ci.pattern.clear();
+                }
+                else {
+                    ci.fieldType = static_cast<int>(c.field);
+                    ci.matchMode = static_cast<int>(c.mode);
+                    ci.pattern = c.pattern;
+                }
+                item.conditions.push_back(std::move(ci));
+            }
+            if (item.conditions.empty()) item.conditions.push_back(ConditionItem{});
+            m_rules.push_back(std::move(item));
         }
 
         std::stable_partition(m_rules.begin(), m_rules.end(),
@@ -185,10 +402,7 @@ namespace winrt::winui::implementation
         auto appendItem = [this](size_t i)
             {
                 auto const& r = m_rules[i];
-                std::wstring display = (r.fromCommunity ? L"[社区] " : L"") +
-                    std::wstring(ListTypeLabel(r.listType)) + L" | " +
-                    FieldLabel(r.fieldType) + L" | " +
-                    MatchModeLabel(r.matchMode) + L"：" + r.pattern;
+                std::wstring display = RuleDisplay(r);
 
                 if (!m_searchText.empty() &&
                     PopupBlocker::Lower(display).find(m_searchText) == std::wstring::npos)
@@ -239,8 +453,7 @@ namespace winrt::winui::implementation
         if (!xamlRoot) co_return;
 
         auto const& r = m_rules[real];
-        std::wstring display = std::wstring(ListTypeLabel(r.listType)) + L" | " +
-            FieldLabel(r.fieldType) + L" | " + MatchModeLabel(r.matchMode) + L"：" + r.pattern;
+        std::wstring display = RuleDisplay(r);
         ConflictText().Text(hstring(
             L"已存在相同内容的相反名单规则：\n" + display +
             L"\n\n是否打开该规则进行编辑？（白名单优先，不处理则该窗口将被放行。）"));
@@ -250,10 +463,8 @@ namespace winrt::winui::implementation
         if (result != Controls::ContentDialogResult::Primary) co_return;
 
         // 重置"添加规则"栏目
-        PatternInput().Text(L"");
+        PopulateConditions(false, std::vector<ConditionItem>{ ConditionItem{} });
         ListTypeCombo().SelectedIndex(0);
-        RuleTypeCombo().SelectedIndex(0);
-        MatchModeCombo().SelectedIndex(1);
         PickInfo().Text(L"");
         PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
 
@@ -363,24 +574,35 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::AddRule_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        hstring text = PatternInput().Text();
-        if (text.empty()) return;
+        std::vector<ConditionItem> conds = ReadConditions(false);
+        if (conds.empty()) conds.push_back(ConditionItem{});
+
+        for (auto const& c : conds) {
+            if (c.fieldType != 4 && c.pattern.empty()) {
+                PickInfo().Text(L"⚠ 模式串不能为空，未添加。");
+                PickInfo().Foreground(Media::SolidColorBrush(
+                    winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+                return;
+            }
+        }
 
         int listType = ListTypeCombo().SelectedIndex();
-        int fieldType = RuleTypeCombo().SelectedIndex();
-        int matchMode = MatchModeCombo().SelectedIndex();
-        std::wstring pattern{ text };
-        std::wstring patternLower = PopupBlocker::Lower(pattern);
+
+        // 规范化条件集合（忽略名单类型）后比较，实现 A+B 与 B+A 视为同一规则
+        RuleItem normalized{};
+        normalized.listType = 0;
+        normalized.conditions = conds;
+        std::wstring candKey = PopupBlocker::RuleKey(ToEngineRule(normalized));
 
         bool conflict = false;
         size_t conflictReal = (size_t)-1;
         for (size_t i = 0; i < m_rules.size(); ++i)
         {
-            auto const& r = m_rules[i];
-            if (r.listType != listType &&
-                r.fieldType == fieldType &&
-                r.matchMode == matchMode &&
-                PopupBlocker::Lower(r.pattern) == patternLower)
+            if (m_rules[i].listType == listType) continue;
+            RuleItem norm{};
+            norm.listType = 0;
+            norm.conditions = m_rules[i].conditions;
+            if (PopupBlocker::RuleKey(ToEngineRule(norm)) == candKey)
             {
                 conflict = true;
                 conflictReal = i;
@@ -398,7 +620,11 @@ namespace winrt::winui::implementation
             return;
         }
 
-        PopupBlocker::Rule nr = ToEngineRule(RuleItem{ listType, fieldType, matchMode, pattern, false });
+        RuleItem item{};
+        item.listType = listType;
+        item.conditions = conds;
+        item.fromCommunity = false;
+        PopupBlocker::Rule nr = ToEngineRule(item);
         bool added = false;
         PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>&) {
             std::wstring k = PopupBlocker::RuleKey(nr);
@@ -407,7 +633,7 @@ namespace winrt::winui::implementation
             if (!exists) { rules.push_back(nr); added = true; }
         });
 
-        PatternInput().Text(L"");
+        PopulateConditions(false, std::vector<ConditionItem>{ ConditionItem{} });
         ReloadRulesFromEngine();
 
         if (!added) {
@@ -458,7 +684,16 @@ namespace winrt::winui::implementation
 
         WindowPicker::Start(hwnd, [this](WindowPicker::PickResult r)
             {
-                int fieldIdx = RuleTypeCombo().SelectedIndex();
+                if (m_addRows.empty()) AddConditionRow(false, ConditionItem{});
+                ConditionRow* row = m_addRows.back().get();
+                int fieldIdx = row->fieldCombo.SelectedIndex();
+                if (fieldIdx == 4 && m_addRows.size() < kMaxConditions) {
+                    // 最后一行是"类名随机"，无法填入模式串，新增一行承载
+                    AddConditionRow(false, ConditionItem{});
+                    row = m_addRows.back().get();
+                    fieldIdx = row->fieldCombo.SelectedIndex();
+                }
+
                 std::wstring value;
                 switch (fieldIdx) {
                 case 0:  value = r.exe;         break;
@@ -468,7 +703,7 @@ namespace winrt::winui::implementation
                 }
                 if (value.empty()) value = r.exe;
 
-                PatternInput().Text(hstring(value));
+                row->patternBox.Text(hstring(value));
                 PickInfo().Text(L"exe: " + r.exe +
                     L"\npath: " + r.processPath +
                     L"\nclass: " + r.className +
@@ -591,27 +826,37 @@ namespace winrt::winui::implementation
 
         EditDialog().XamlRoot(xamlRoot);
         EditListTypeCombo().SelectedIndex(it.listType);
-        EditFieldCombo().SelectedIndex(it.fieldType);
-        EditMatchModeCombo().SelectedIndex(it.matchMode);
-        EditPatternInput().Text(hstring(it.pattern));
+        PopulateConditions(true, it.conditions);
         EditCommunityNote().Visibility(it.fromCommunity ? Visibility::Visible : Visibility::Collapsed);
 
         auto result = co_await EditDialog().ShowAsync();
         if (result != Controls::ContentDialogResult::Primary) co_return;
 
-        hstring text = EditPatternInput().Text();
-        if (text.empty())
+        std::vector<ConditionItem> conds = ReadConditions(true);
+        if (conds.empty()) conds.push_back(ConditionItem{});
+
+        for (auto const& c : conds)
         {
-            PickInfo().Text(L"⚠ 模式串不能为空，未保存。");
-            PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
-            co_return;
+            if (c.fieldType != 4 && c.pattern.empty())
+            {
+                PickInfo().Text(L"⚠ 模式串不能为空，未保存。");
+                PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+                co_return;
+            }
         }
 
         int listType = EditListTypeCombo().SelectedIndex();
-        int fieldType = EditFieldCombo().SelectedIndex();
-        int matchMode = EditMatchModeCombo().SelectedIndex();
-        std::wstring pattern{ text };
-        std::wstring patternLower = PopupBlocker::Lower(pattern);
+
+        RuleItem updatedItem{};
+        updatedItem.listType = listType;
+        updatedItem.conditions = conds;
+        updatedItem.fromCommunity = false;
+
+        // 规范化条件集合（忽略名单类型）后比较，实现 A+B 与 B+A 视为同一规则
+        RuleItem normalized{};
+        normalized.listType = 0;
+        normalized.conditions = conds;
+        std::wstring updKey = PopupBlocker::RuleKey(ToEngineRule(normalized));
 
         bool conflict = false;
         size_t conflictReal = (size_t)-1;
@@ -619,8 +864,11 @@ namespace winrt::winui::implementation
         {
             if (i == real) continue;
             auto const& r = m_rules[i];
-            if (r.listType != listType && r.fieldType == fieldType &&
-                r.matchMode == matchMode && PopupBlocker::Lower(r.pattern) == patternLower)
+            if (r.listType == listType) continue;
+            RuleItem norm{};
+            norm.listType = 0;
+            norm.conditions = r.conditions;
+            if (PopupBlocker::RuleKey(ToEngineRule(norm)) == updKey)
             {
                 conflict = true; conflictReal = i; break;
             }
@@ -630,7 +878,7 @@ namespace winrt::winui::implementation
         bool oldCommunity = m_rules[real].fromCommunity;
         std::wstring conflictKey;
         if (conflict) conflictKey = PopupBlocker::RuleKey(ToEngineRule(m_rules[conflictReal]));
-        PopupBlocker::Rule updated = ToEngineRule(RuleItem{ listType, fieldType, matchMode, pattern, false });
+        PopupBlocker::Rule updated = ToEngineRule(updatedItem);
         PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>& removed) {
             if (oldCommunity) removed.push_back(oldKey);
             auto it = std::find_if(rules.begin(), rules.end(),
