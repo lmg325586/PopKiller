@@ -59,13 +59,15 @@ namespace HeuristicScorer
             return (idleMs > 5000) ? 1.f : 0.f;
         }
 
-        inline float CalcFarFromMouse(RECT const& rc)
+        // scale = DPI/96：阈值按 300 逻辑像素换算成物理像素（300*scale）
+        inline float CalcFarFromMouse(RECT const& rc, float scale)
         {
             POINT cpt{}; ::GetCursorPos(&cpt);
             int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
             int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
             long long d2 = (long long)dx * dx + (long long)dy * dy;
-            return (d2 > 300LL * 300) ? 1.f : 0.f;
+            long long lim = (long long)(300.f * scale);
+            return (d2 > lim * lim) ? 1.f : 0.f;
         }
     }
 
@@ -102,13 +104,14 @@ namespace HeuristicScorer
     {
         float hasOwner, toolWin, topmost, noActivate;
         float resizable, hasMinMax, captionSysmenu;
-        float wNorm, hNorm;
+        float wDip, hDip;      // 逻辑像素宽高（已按窗口 DPI 归一）
+        float dpiScale;        // 窗口 DPI / 96
         float titleLen, titleEmpty, titleDigitRatio, titleKwHits;
         float clsLen, clsHexRatio;
         float pathTemp, pathRoaming, pathDepth, exeDigitRatio;
         float procAgeSec;
         float userIdle;
-        float farFromMouse;
+        float farFromMouse;      // 距鼠标是否超过 300 逻辑像素（按窗口 DPI 归一）
         std::wstring path;
         std::wstring cls;
     };
@@ -226,8 +229,10 @@ namespace HeuristicScorer
         f.captionSysmenu = ((st & WS_CAPTION) && (st & WS_SYSMENU)) ? 1.f : 0.f;
 
         RECT rc{}; ::GetWindowRect(hwnd, &rc);
-        f.wNorm = float(rc.right - rc.left) / float(::GetSystemMetrics(SM_CXSCREEN));
-        f.hNorm = float(rc.bottom - rc.top) / float(::GetSystemMetrics(SM_CYSCREEN));
+        UINT dpi = hwnd ? ::GetDpiForWindow(hwnd) : 0;
+        f.dpiScale = (dpi ? float(dpi) : 96.f) / 96.f;
+        f.wDip = float(rc.right - rc.left) / f.dpiScale;
+        f.hDip = float(rc.bottom - rc.top) / f.dpiScale;
 
         std::wstring title = detail::GetTitle(hwnd);
         f.titleLen = float(title.size());
@@ -253,7 +258,7 @@ namespace HeuristicScorer
         f.procAgeSec = ProcessAgeSeconds(hwnd);
 
         f.userIdle = detail::CalcUserIdle(evTime);
-        f.farFromMouse = detail::CalcFarFromMouse(rc);
+        f.farFromMouse = detail::CalcFarFromMouse(rc, f.dpiScale);
         return f;
     }
 
@@ -269,10 +274,8 @@ namespace HeuristicScorer
         b += (f.captionSysmenu > 0) ? L'T' : L'F';
         b += (f.titleEmpty > 0) ? L'T' : L'F';
 
-        float wPx = f.wNorm * ::GetSystemMetrics(SM_CXSCREEN);
-        float hPx = f.hNorm * ::GetSystemMetrics(SM_CYSCREEN);
-        b += (wPx < 400 && hPx < 300) ? L'T' : L'F';
-        b += (wPx > 800 || hPx > 600) ? L'T' : L'F';
+        b += (f.wDip < 400 && f.hDip < 300) ? L'T' : L'F';
+        b += (f.wDip > 800 || f.hDip > 600) ? L'T' : L'F';
         b += (f.pathTemp > 0) ? L'T' : L'F';
         b += (f.pathRoaming > 0) ? L'T' : L'F';
 
@@ -303,8 +306,8 @@ namespace HeuristicScorer
             return 0;
         }
 
-        float wpx = f.wNorm * ::GetSystemMetrics(SM_CXSCREEN);
-        float hpx = f.hNorm * ::GetSystemMetrics(SM_CYSCREEN);
+        float wpx = f.wDip;   // 逻辑像素，阈值按 DIP
+        float hpx = f.hDip;
         if (wpx <= 0 || hpx <= 0)
         {
             detail = L"zero_size_skip";

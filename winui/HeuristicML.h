@@ -151,11 +151,9 @@ namespace HeuristicML
             features[6] = (f.captionSysmenu > 0) ? 1.0f : 0.0f;
             features[7] = (f.titleEmpty > 0) ? 1.0f : 0.0f;
 
-            RECT rc{}; ::GetWindowRect(hwnd, &rc);
-            float wPx = float(rc.right - rc.left);
-            float hPx = float(rc.bottom - rc.top);
-            features[8] = (wPx < 400 && hPx < 300) ? 1.0f : 0.0f;
-            features[9] = (wPx > 800 || hPx > 600) ? 1.0f : 0.0f;
+            // 尺寸用 DPI 归一的逻辑像素（二值特征，语义等价，无需重训）
+            features[8] = (f.wDip < 400 && f.hDip < 300) ? 1.0f : 0.0f;
+            features[9] = (f.wDip > 800 || f.hDip > 600) ? 1.0f : 0.0f;
             features[10] = (f.pathTemp > 0) ? 1.0f : 0.0f;
             features[11] = (f.pathRoaming > 0) ? 1.0f : 0.0f;
             features[12] = (f.clsHexRatio > 0.8f) ? 1.0f : 0.0f;
