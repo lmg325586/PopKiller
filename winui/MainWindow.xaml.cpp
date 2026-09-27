@@ -9,7 +9,6 @@
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
 #include "TrayIcon.h"
-#include "DarkMode.h"
 #include <commctrl.h>
 #pragma comment(lib, "comctl32.lib")
 #include <microsoft.ui.xaml.window.h>

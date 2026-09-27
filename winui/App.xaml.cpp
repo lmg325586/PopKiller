@@ -4,7 +4,7 @@
 #include "TrayIcon.h"
 #include "PopupBlocker.h"
 #include "AutoStart.h"
-#include "DarkMode.h"
+#include "AppTheme.h"
 #include "CrashHandler.h"
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
 #include <winrt/Microsoft.Windows.AppNotifications.h>
@@ -98,10 +98,8 @@ namespace
 
         if (!bringToFront) return;
 
-        // 稍微多等一会，让主窗口有时间渲染和恢复
         ::Sleep(200);
 
-        // 3. 确保从最小化状态恢复
         if (::IsIconic(ctx.found)) {
             ::ShowWindow(ctx.found, SW_RESTORE);
         }
@@ -126,13 +124,10 @@ namespace winrt::winui::implementation
 {
     App::App()
     {
-        // 尽早在进程级安装崩溃转储与全局异常处理
         CrashHandler::Init();
 
-        // 必须在创建任何窗口之前调用，原生弹出菜单（托盘右键菜单）才会跟随系统主题
         DarkMode::Init();
 
-        // XAML 未处理异常（含 Release）：生成转储并提示用户；调试时先中断到调试器
         UnhandledException([](IInspectable const&, UnhandledExceptionEventArgs const& e)
             {
                 auto message = e.Message();
@@ -187,7 +182,6 @@ namespace winrt::winui::implementation
             return;
         }
 
-        // 已启用自启时刷新注册表中的可执行文件路径（程序移动后自愈）
         AutoStart::SyncPath();
 
         RegisterToastProtocol();
