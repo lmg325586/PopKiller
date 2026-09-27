@@ -8,6 +8,7 @@
         { "list": "B", "field": "title", "mode": "contains", "pattern": "热点" },
         { "list": "B", "field": "exe",   "mode": "contains", "pattern": "kwallpaper.exe" },
         {"field": "exe","list": "W","mode": "exact","pattern": "cs2.exe"},
+        {"field": "exe","list": "W","mode": "exact","pattern": "geek.exe"},
 
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "explorer.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "wechat.exe" },
