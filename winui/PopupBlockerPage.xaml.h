@@ -54,7 +54,6 @@ namespace winrt::winui::implementation
     private:
         void UpdateCommunityStatus(bool ok, std::wstring const& msg);
         void RefreshList();
-        void Save();
         void ReloadRulesFromEngine();
         void SelectRuleByRealIndex(size_t real);
 

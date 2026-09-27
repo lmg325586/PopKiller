@@ -86,25 +86,20 @@ namespace winrt::winui::implementation
             return;
         }
 
-        std::vector<PopupBlocker::Rule> merged;
-        {
-            std::lock_guard lock(PopupBlocker::RulesMutex);
-            merged = PopupBlocker::Rules;
-        }
-
         size_t added = 0, skipped = 0;
-        for (auto r : imported)
-        {
-            r.fromCommunity = false;
-            std::wstring k = PopupBlocker::RuleKey(r);
-            bool exists = std::any_of(merged.begin(), merged.end(),
-                [&k](PopupBlocker::Rule const& e) { return PopupBlocker::RuleKey(e) == k; });
-            if (exists) { ++skipped; continue; }
-            merged.push_back(r);
-            ++added;
-        }
+        PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>&) {
+            for (auto r : imported)
+            {
+                r.fromCommunity = false;
+                std::wstring k = PopupBlocker::RuleKey(r);
+                bool exists = std::any_of(rules.begin(), rules.end(),
+                    [&k](PopupBlocker::Rule const& e) { return PopupBlocker::RuleKey(e) == k; });
+                if (exists) { ++skipped; continue; }
+                rules.push_back(r);
+                ++added;
+            }
+        });
 
-        if (added > 0) PopupBlocker::SaveRules(merged);
         ResultText().Text(L"导入完成：新增 " + std::to_wstring(added) +
             L" 条，跳过重复 " + std::to_wstring(skipped) + L" 条。");
     }

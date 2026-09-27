@@ -83,26 +83,23 @@
 | `CommunityRulesFetchCallback` | `std::function<void(bool, std::wstring)>` | 社区规则拉取完成回调 |
 | `BlockOccurredCallback` | `std::function<void(exeName, windowTitle, matchResult)>` | 拦截发生回调（用于 Toast 通知） |
 
-### ⚠️ 重要：避免死锁
+### ⚠️ 重要：写规则只经 MutateRules
 
-**切勿在持有 `RulesMutex` 锁时调用 `SaveRules`**。`SaveRules` 内部会尝试获取 `RulesMutex`，导致死锁。
+`Rules` / `CommunityRemoved` 只应通过 `MutateRules` 修改：它在持锁内完成「读-改-写 → 重建索引 → 落盘」，保证 `Rules` 与 `RulesIndexView` 原子一致，避免各处锁外「读-改-写」互相覆盖。
+
+**切勿在持有 `RulesMutex` 时，或在 `MutateRules` 的 `mutate` 回调内调用 `MutateRules`/`SaveRules`**，二者都会再次获取 `RulesMutex` 导致死锁。
 
 正确用法：
 ```cpp
-// ✅ 正确：先复制数据，释放锁后再保存
-std::vector<Rule> rules;
-{ 
-    std::lock_guard lock(RulesMutex); 
-    rules = Rules; 
-} // 锁在此处释放
-SaveRules(rules); // 安全调用
+// ✅ 正确：在临界区内基于最新 Rules 做增量
+MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>& removed) {
+    rules.push_back(newRule);
+});
 
-// ❌ 错误：在锁作用域内调用 SaveRules
-{
-    std::lock_guard lock(RulesMutex);
-    Rules = newRules;
-    SaveRules(Rules); // 死锁！
-}
+// ❌ 错误：mutate 内再调用会取锁的写入口
+MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
+    SaveRules(rules); // 死锁！
+});
 ```
 
 ### 公共函数
@@ -115,7 +112,8 @@ SaveRules(rules); // 安全调用
 | `WildcardMatch(str, pat)` | 目标串、模式 | `bool` | 大小写不敏感，支持 `*`/`?` |
 | `InitSelfExe()` | 无 | `void` | 置 `SelfExe`（自身 exe 小写名） |
 | `LooksLikePopup(hwnd)` | 窗口句柄 | `bool` | owner/toolwin/不可调且无最小化 |
-| `SaveRules(newRules)` | 规则列表 | `void` | 保存规则并刷新引擎缓存 |
+| `MutateRules(mutate)` | `fn(vector<Rule>&, vector<wstring>&)` | `void` | 唯一写入口：持锁读-改-写 + 重建索引 + 落盘 |
+| `SaveRules(newRules)` | 规则列表 | `void` | 全量替换壳（内部走 `MutateRules`） |
 | `AddWhitelistExe(exe)` | exe 名 | `bool` | 添加白名单进程（去重） |
 | `SyncFromSettings()` | 无 | `void` | 刷新所有配置缓存（含 ToastNotify） |
 | `Sha256Hex(buf)` | IBuffer | `std::wstring` | 计算 SHA256 十六进制串（小写） |

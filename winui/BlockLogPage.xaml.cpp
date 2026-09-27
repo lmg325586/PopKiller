@@ -916,16 +916,15 @@ namespace winrt::winui::implementation
         r.pattern = PopupBlocker::Lower(s.exe);
         r.fromCommunity = false;
 
-        std::vector<PopupBlocker::Rule> rules;
-        { std::lock_guard lock(PopupBlocker::RulesMutex); rules = PopupBlocker::Rules; }
-
         std::wstring k = PopupBlocker::RuleKey(r);
-        bool exists = std::any_of(rules.begin(), rules.end(),
-            [&k](PopupBlocker::Rule const& e) { return PopupBlocker::RuleKey(e) == k; });
+        bool exists = false;
+        PopupBlocker::MutateRules([&](std::vector<PopupBlocker::Rule>& rules, std::vector<std::wstring>&) {
+            exists = std::any_of(rules.begin(), rules.end(),
+                [&k](PopupBlocker::Rule const& e) { return PopupBlocker::RuleKey(e) == k; });
+            if (!exists) rules.push_back(r);
+        });
         if (exists) { MessageBoxW(nullptr, L"相同规则已存在。", L"提示", MB_OK | MB_ICONINFORMATION); return; }
 
-        rules.push_back(r);
-        PopupBlocker::SaveRules(rules);
         MessageBoxW(nullptr, ((whitelist ? L"已添加白名单规则：进程 " : L"已添加黑名单规则：进程 ") + s.exe).c_str(),
             L"提示", MB_OK | MB_ICONINFORMATION);
     }
