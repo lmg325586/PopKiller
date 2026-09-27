@@ -110,6 +110,8 @@ SaveRules(rules); // 安全调用
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `LogPath()` | 无 | `std::wstring` | `blocklog.txt` 路径 |
+| `FlushLog()` | 无 | `void` | 把日志缓冲立即落盘 |
+| `ClearLog()` | 无 | `void` | 丢弃日志缓冲并截断 `blocklog.txt` |
 | `WildcardMatch(str, pat)` | 目标串、模式 | `bool` | 大小写不敏感，支持 `*`/`?` |
 | `InitSelfExe()` | 无 | `void` | 置 `SelfExe`（自身 exe 小写名） |
 | `LooksLikePopup(hwnd)` | 窗口句柄 | `bool` | owner/toolwin/不可调且无最小化 |
@@ -137,7 +139,7 @@ SaveRules(rules); // 安全调用
 | `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
 | `MatchRule(hwnd, r, exe&, path&, title&, cls&)` | 句柄、规则、4 缓存串(in/out) | `bool` | 单规则匹配 |
 | `Match(hwnd)` | 句柄 | `int` | 0=未命中 1=白 2=黑 |
-| `Log(s)` | 日志行 | `void` | 追加 UTF-8 带时间戳行（新文件写 BOM） |
+| `Log(s)` | 日志行 | `void` | 写入内存缓冲，达 64KB 或 `FlushLog` 时落盘；新文件/空文件/超 1MB 时截断并写 BOM |
 | `PassEventFilter(hwnd, idObject, idChild)` | 句柄、对象、子ID | `bool` | 事件预过滤（跳过自身/非窗口/对象） |
 | `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 综合评估：规则匹配+启发式+ML+raw |
 | `WriteEventLog(hwnd, idEvent, v)` | 句柄、事件、评估结果 | `void` | 写日志（含启发式明细+raw+ml） |

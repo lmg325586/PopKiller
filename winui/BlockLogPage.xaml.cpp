@@ -791,6 +791,7 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::Load()
     {
+        PopupBlocker::FlushLog();
         uint64_t t = LogWriteTime();
         if (t != m_lastWrite) {
             m_lastWrite = t;
@@ -806,6 +807,7 @@ namespace winrt::winui::implementation
     void BlockLogPage::Timer_Tick(IInspectable const&, IInspectable const&)
     {
         if (PopupBlocker::ShuttingDown.load()) return;
+        PopupBlocker::FlushLog();
         auto strongThis = get_strong();
         if (!strongThis) return;
 
@@ -840,8 +842,7 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::Clear_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        FILE* f{};
-        if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"wb") == 0 && f) ::fclose(f);
+        PopupBlocker::ClearLog();
         m_lastWrite = 0;
         Load();
     }
