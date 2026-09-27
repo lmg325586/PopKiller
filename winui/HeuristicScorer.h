@@ -132,6 +132,13 @@ namespace HeuristicScorer
         return float(h) / float(s.size());
     }
 
+    // 类名是否“看起来随机”：长度≥6 且十六进制/数字占比高（供规则“类名随机”条件使用）
+    inline bool LooksLikeRandomClass(std::wstring const& cls)
+    {
+        if (cls.size() < 6) return false;
+        return HexRatio(cls) >= 0.8f || DigitRatio(cls) >= 0.6f;
+    }
+
     inline float ProcessAgeSeconds(HWND hwnd)
     {
         DWORD pid{}; ::GetWindowThreadProcessId(hwnd, &pid);

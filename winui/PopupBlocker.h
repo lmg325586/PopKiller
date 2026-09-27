@@ -100,10 +100,12 @@ namespace PopupBlocker
     {
         std::unordered_map<std::wstring, int> exact[4];
         AcAutomaton contains[4];
-        std::vector<Rule> wilds;        // 通配符规则保留遍历
+        std::vector<Rule> wilds;        // 单条件通配符规则保留遍历
+        std::vector<Rule> linear;       // 多条件 / 类名随机规则：事件时线性 AND 扫描
         bool hasExact[4]{};
         bool hasContains[4]{};
         bool hasWild[4]{};
+        bool hasLinear = false;
         bool empty = true;
     };
 
@@ -111,16 +113,26 @@ namespace PopupBlocker
     {
         auto idx = std::make_shared<RuleIndex>();
         for (auto const& r : rules) {
-            int f = static_cast<int>(r.field);
-            int flags = r.isWhitelist ? 1 : 2;
+            if (r.conditions.empty()) continue;
             idx->empty = false;
-            switch (r.mode) {
+
+            // 仅「单条件且非类名随机」可进快速索引；其余走线性 AND
+            if (r.conditions.size() != 1 || r.conditions[0].mode == MatchMode::RandomClass) {
+                idx->linear.push_back(r);
+                idx->hasLinear = true;
+                continue;
+            }
+
+            RuleCondition const& c = r.conditions[0];
+            int f = static_cast<int>(c.field);
+            int flags = r.isWhitelist ? 1 : 2;
+            switch (c.mode) {
             case MatchMode::Exact:
-                idx->exact[f][r.pattern] |= flags;
+                idx->exact[f][c.pattern] |= flags;
                 idx->hasExact[f] = true;
                 break;
             case MatchMode::Contains:
-                idx->contains[f].Add(r.pattern, flags);
+                idx->contains[f].Add(c.pattern, flags);
                 idx->hasContains[f] = true;
                 break;
             default:
@@ -288,9 +300,11 @@ namespace PopupBlocker
     {
         Rule r;
         r.isWhitelist = true;
-        r.field = RuleField::Exe;
-        r.mode = MatchMode::Exact;
-        r.pattern = Lower(exe);
+        RuleCondition c;
+        c.field = RuleField::Exe;
+        c.mode = MatchMode::Exact;
+        c.pattern = Lower(exe);
+        r.conditions.push_back(std::move(c));
 
         std::wstring k = RuleKey(r);
         bool added = false;
@@ -515,18 +529,14 @@ namespace PopupBlocker
             return Lower(std::wstring(stack, static_cast<size_t>(written)));
         }
 
-        inline bool MatchRule(HWND hwnd, const Rule& r, std::wstring& exe, std::wstring& path, std::wstring& title, std::wstring& cls) {
-            std::wstring target;
-            switch (r.field) {
-            case RuleField::Exe: if (exe.empty()) exe = GetProcessName(hwnd); target = exe; break;
-            case RuleField::Path: if (path.empty()) path = GetProcessPath(hwnd); target = path; break;
-            case RuleField::Title: if (title.empty()) title = GetTitle(hwnd); target = title; break;
-            case RuleField::Class: if (cls.empty()) cls = GetClass(hwnd); target = cls; break;
-            }
-            switch (r.mode) {
-            case MatchMode::Exact: return target == r.pattern;
-            case MatchMode::Contains: return target.find(r.pattern) != std::wstring::npos;
-            case MatchMode::Wildcard: return WildcardMatch(target.c_str(), r.pattern.c_str());
+        // 单条件求值：target 为该条件字段的取值
+        inline bool EvalCondition(RuleCondition const& c, std::wstring const& target)
+        {
+            switch (c.mode) {
+            case MatchMode::RandomClass: return HeuristicScorer::LooksLikeRandomClass(target);
+            case MatchMode::Exact:       return target == c.pattern;
+            case MatchMode::Contains:    return target.find(c.pattern) != std::wstring::npos;
+            case MatchMode::Wildcard:    return WildcardMatch(target.c_str(), c.pattern.c_str());
             }
             return false;
         }
@@ -566,8 +576,19 @@ namespace PopupBlocker
             }
             for (auto const& r : idx->wilds) {
                 if (flags == 3) break;
-                if (WildcardMatch(target(static_cast<int>(r.field)).c_str(), r.pattern.c_str()))
+                RuleCondition const& c = r.conditions[0];
+                if (WildcardMatch(target(static_cast<int>(c.field)).c_str(), c.pattern.c_str()))
                     flags |= r.isWhitelist ? 1 : 2;
+            }
+            if (idx->hasLinear) {
+                for (auto const& r : idx->linear) {
+                    if (flags == 3) break;
+                    bool all = true;
+                    for (auto const& c : r.conditions) {
+                        if (!EvalCondition(c, target(static_cast<int>(c.field)))) { all = false; break; }
+                    }
+                    if (all) flags |= r.isWhitelist ? 1 : 2;
+                }
             }
             return (flags & 1) ? 1 : (flags & 2) ? 2 : 0;
         }

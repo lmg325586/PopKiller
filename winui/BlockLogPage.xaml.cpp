@@ -913,9 +913,11 @@ namespace winrt::winui::implementation
         }
         PopupBlocker::Rule r;
         r.isWhitelist = whitelist;
-        r.field = PopupBlocker::RuleField::Exe;
-        r.mode = PopupBlocker::MatchMode::Exact;
-        r.pattern = PopupBlocker::Lower(s.exe);
+        PopupBlocker::RuleCondition c;
+        c.field = PopupBlocker::RuleField::Exe;
+        c.mode = PopupBlocker::MatchMode::Exact;
+        c.pattern = PopupBlocker::Lower(s.exe);
+        r.conditions.push_back(std::move(c));
         r.fromCommunity = false;
 
         std::wstring k = PopupBlocker::RuleKey(r);

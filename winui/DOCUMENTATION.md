@@ -17,12 +17,15 @@
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `Lower(s)` | 原串 | `std::wstring` | 小写化 |
-| `RuleKey(r)` | 规则 | `std::wstring` | 生成规则唯一键（list+field+mode+pattern） |
+| `RuleKey(r)` | 规则 | `std::wstring` | 规则唯一键；单条件与旧格式一致，多条件按各条件 key 排序后拼接（顺序无关） |
 
 全局类型：
-- `Rule{ isWhitelist, field, mode, pattern, fromCommunity }`
+- `Rule{ isWhitelist, conditions, fromCommunity }`；`conditions` 为 `std::vector<RuleCondition>`（**全部满足才命中，AND**；单条件即 size=1；UI 上限 4 个条件）
+- `RuleCondition{ field, mode, pattern }`
 - `RuleField`: `Exe`, `Path`, `Title`, `Class`
-- `MatchMode`: `Contains`, `Exact`, `Wildcard`
+- `MatchMode`: `Contains`, `Exact`, `Wildcard`, `RandomClass`（类名随机，忽略 pattern）
+- 行格式支持多条件：`B:exe:exact:foo+title:contains:广告`；类名随机写作 `class:random`
+- JSON：单条件写平铺 `field/mode/pattern`；多条件写 `conditions:[{field,mode,pattern}]`
 
 ## RuleStorage.h（规则 JSON 存储）
 
@@ -135,8 +138,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `IsProtected(hwnd)` | 句柄 | `bool` | 自身 + 系统进程 + 浏览器白名单 |
 | `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题（动态长度） |
 | `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
-| `MatchRule(hwnd, r, exe&, path&, title&, cls&)` | 句柄、规则、4 缓存串(in/out) | `bool` | 单规则匹配 |
-| `Match(hwnd)` | 句柄 | `int` | 0=未命中 1=白 2=黑 |
+| `EvalCondition(c, target)` | 条件、该字段取值 | `bool` | 单条件求值（含类名随机） |
+| `Match(hwnd)` | 句柄 | `int` | 0=未命中 1=白 2=黑；多条件/类名随机规则线性 AND 扫描 |
 | `Log(s)` | 日志行 | `void` | 写入内存缓冲，达 64KB 或 `FlushLog` 时落盘；新文件/空文件/超 1MB 时截断并写 BOM |
 | `PassEventFilter(hwnd, idObject, idChild)` | 句柄、对象、子ID | `bool` | 事件预过滤（跳过自身/非窗口/对象） |
 | `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 综合评估：规则匹配+启发式+ML+raw |

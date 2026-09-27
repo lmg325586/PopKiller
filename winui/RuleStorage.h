@@ -68,43 +68,95 @@ namespace PopupBlocker
         return true;
     }
 
+    // 单个条件：field[:mode]:pattern；类名随机写作 class:random（无 pattern）
+    inline bool ParseCondition(std::wstring const& seg, RuleCondition& c)
+    {
+        size_t a = seg.find(L':');
+        if (a == std::wstring::npos) return false;
+        std::wstring f_str = seg.substr(0, a);
+        if (f_str == L"exe") c.field = RuleField::Exe;
+        else if (f_str == L"path") c.field = RuleField::Path;
+        else if (f_str == L"title") c.field = RuleField::Title;
+        else if (f_str == L"class") c.field = RuleField::Class;
+        else return false;
+
+        size_t b = seg.find(L':', a + 1);
+        if (b == std::wstring::npos) {
+            c.mode = MatchMode::Contains;
+            c.pattern = Lower(seg.substr(a + 1));
+            return !c.pattern.empty();
+        }
+
+        std::wstring m_str = seg.substr(a + 1, b - a - 1);
+        if (m_str == L"random") {
+            c.mode = MatchMode::RandomClass;
+            c.field = RuleField::Class;
+            c.pattern.clear();
+            return true;
+        }
+        if (m_str == L"exact") c.mode = MatchMode::Exact;
+        else if (m_str == L"wildcard") c.mode = MatchMode::Wildcard;
+        else if (m_str == L"contains") c.mode = MatchMode::Contains;
+        else c.mode = MatchMode::Exact;   // 未知 mode：取最窄，不放宽为 contains
+        c.pattern = Lower(seg.substr(b + 1));
+        return !c.pattern.empty();
+    }
+
+    // 行格式：B|W:cond[+cond...]；遗留裸格式 field:pattern（单条件、黑名单）
     inline bool ParseRuleLine(std::wstring const& line, Rule& r)
     {
+        r.conditions.clear();
+        if (line.empty()) return false;
+
+        std::wstring body;
         size_t p1 = line.find(L':');
         if (p1 == std::wstring::npos) return false;
         std::wstring first = line.substr(0, p1);
-        size_t p2 = line.find(L':', p1 + 1);
-
         if (first == L"B" || first == L"W") {
             r.isWhitelist = (first == L"W");
-            if (p2 == std::wstring::npos) return false;
-            std::wstring f_str = line.substr(p1 + 1, p2 - p1 - 1);
-            size_t p3 = line.find(L':', p2 + 1);
-            std::wstring m_str, p_str;
-            if (p3 == std::wstring::npos) { m_str = L"contains"; p_str = line.substr(p2 + 1); }
-            else { m_str = line.substr(p2 + 1, p3 - p2 - 1); p_str = line.substr(p3 + 1); }
-
-            if (f_str == L"exe") r.field = RuleField::Exe;
-            else if (f_str == L"path") r.field = RuleField::Path;
-            else if (f_str == L"title") r.field = RuleField::Title;
-            else if (f_str == L"class") r.field = RuleField::Class;
-            else return false;
-
-            if (m_str == L"exact") r.mode = MatchMode::Exact;
-            else if (m_str == L"wildcard") r.mode = MatchMode::Wildcard;
-            else r.mode = MatchMode::Exact;
-            r.pattern = Lower(p_str);
+            body = line.substr(p1 + 1);
         }
         else {
             r.isWhitelist = false;
-            if (first == L"exe") r.field = RuleField::Exe;
-            else if (first == L"title") r.field = RuleField::Title;
-            else if (first == L"class") r.field = RuleField::Class;
-            else return false;
-            r.mode = MatchMode::Contains;
-            r.pattern = Lower(line.substr(p1 + 1));
+            body = line;
         }
-        return !r.pattern.empty();
+
+        size_t start = 0;
+        for (;;) {
+            size_t plus = body.find(L'+', start);
+            std::wstring seg = (plus == std::wstring::npos) ? body.substr(start) : body.substr(start, plus - start);
+            RuleCondition c;
+            if (!ParseCondition(seg, c)) return false;
+            r.conditions.push_back(std::move(c));
+            if (plus == std::wstring::npos) break;
+            start = plus + 1;
+        }
+        return !r.conditions.empty();
+    }
+
+    // 解析单个条件 JSON；RandomClass 无 pattern
+    inline bool ParseRuleConditionJson(nlohmann::json const& cj, RuleCondition& c)
+    {
+        std::string f = cj.value("field", "exe");
+        if (f == "exe") c.field = RuleField::Exe;
+        else if (f == "path") c.field = RuleField::Path;
+        else if (f == "title") c.field = RuleField::Title;
+        else if (f == "class") c.field = RuleField::Class;
+        else return false;
+
+        std::string m = cj.value("mode", "contains");
+        if (m == "random") {
+            c.mode = MatchMode::RandomClass;
+            c.field = RuleField::Class;
+            c.pattern.clear();
+            return true;
+        }
+        if (m == "exact") c.mode = MatchMode::Exact;
+        else if (m == "wildcard") c.mode = MatchMode::Wildcard;
+        else if (m == "contains") c.mode = MatchMode::Contains;
+        else c.mode = MatchMode::Exact;   // 未知 mode：取最窄
+        c.pattern = Lower(Utf8ToWString(cj.value("pattern", "")));
+        return !c.pattern.empty();
     }
 
     inline bool ParseRulesFromJsonString(std::string const& utf8_text, std::vector<Rule>& out)
@@ -117,20 +169,19 @@ namespace PopupBlocker
             for (auto& item : j["rules"]) {
                 Rule r;
                 r.isWhitelist = item.value("list", "B") == "W";
-
-                std::string f = item.value("field", "exe");
-                if (f == "exe") r.field = RuleField::Exe;
-                else if (f == "path") r.field = RuleField::Path;
-                else if (f == "title") r.field = RuleField::Title;
-                else if (f == "class") r.field = RuleField::Class;
-
-                std::string m = item.value("mode", "contains");
-                if (m == "exact") r.mode = MatchMode::Exact;
-                else if (m == "wildcard") r.mode = MatchMode::Wildcard;
-
                 r.fromCommunity = item.value("source", "") == "community";
-                r.pattern = Lower(Utf8ToWString(item.value("pattern", "")));
-                if (!r.pattern.empty()) out.push_back(r);
+
+                if (item.contains("conditions") && item["conditions"].is_array()) {
+                    for (auto& cj : item["conditions"]) {
+                        RuleCondition c;
+                        if (ParseRuleConditionJson(cj, c)) r.conditions.push_back(std::move(c));
+                    }
+                }
+                else {
+                    RuleCondition c;
+                    if (ParseRuleConditionJson(item, c)) r.conditions.push_back(std::move(c));
+                }
+                if (!r.conditions.empty()) out.push_back(std::move(r));
             }
             return true;
         }
@@ -171,26 +222,26 @@ namespace PopupBlocker
             nlohmann::json item;
             item["list"] = r.isWhitelist ? "W" : "B";
 
-            const char* f = "exe";
-            switch (r.field) {
-            case RuleField::Path:  f = "path";  break;
-            case RuleField::Title: f = "title"; break;
-            case RuleField::Class: f = "class"; break;
-            default: break;
+            if (r.conditions.size() <= 1) {
+                // 单条件写平铺字段（保持旧格式可读）；空条件按默认 exe/contains 占位
+                RuleCondition c = r.conditions.empty() ? RuleCondition{} : r.conditions[0];
+                item["field"] = FieldNameA(c.field);
+                item["mode"] = ModeNameA(c.mode);
+                item["pattern"] = (c.mode == MatchMode::RandomClass) ? "" : WStringToUtf8(c.pattern);
             }
-            item["field"] = f;
-
-            const char* m = "contains";
-            switch (r.mode) {
-            case MatchMode::Exact:    m = "exact";    break;
-            case MatchMode::Wildcard: m = "wildcard"; break;
-            default: break;
+            else {
+                item["conditions"] = nlohmann::json::array();
+                for (auto const& c : r.conditions) {
+                    nlohmann::json cj;
+                    cj["field"] = FieldNameA(c.field);
+                    cj["mode"] = ModeNameA(c.mode);
+                    if (c.mode != MatchMode::RandomClass) cj["pattern"] = WStringToUtf8(c.pattern);
+                    item["conditions"].push_back(std::move(cj));
+                }
             }
-            item["mode"] = m;
-            item["pattern"] = WStringToUtf8(r.pattern);
             if (r.fromCommunity) item["source"] = "community";
 
-            j["rules"].push_back(item);
+            j["rules"].push_back(std::move(item));
         }
 
         j["communityRemoved"] = nlohmann::json::array();
