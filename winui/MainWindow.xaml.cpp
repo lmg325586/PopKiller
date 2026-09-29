@@ -376,6 +376,14 @@ namespace winrt::winui::implementation
             dialog.CloseButtonText(L"取消");
             dialog.DefaultButton(ContentDialogButton::Secondary);
 
+            // 修复代码创建的 ContentDialog 首次 ShowAsync 缺少入场动画（WinUI 已知问题，
+            // 见 microsoft/microsoft-ui-xaml#8476）：ShowAsync 前显式指定默认样式，
+            // 使模板在进入弹窗树前即定型，避免 HostDialogWithinPopup 重设 Popup.Child 取消 Load 过渡。
+            if (auto res = Application::Current().Resources().TryLookup(box_value(L"DefaultContentDialogStyle")))
+            {
+                if (auto style = res.try_as<Style>()) dialog.Style(style);
+            }
+
             auto result = co_await dialog.ShowAsync();
             m_closeDialogOpen = false;
 

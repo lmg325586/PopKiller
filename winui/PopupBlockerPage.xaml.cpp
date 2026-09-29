@@ -22,6 +22,14 @@ namespace
     // 单条规则最多允许的条件数
     inline constexpr size_t kMaxConditions = 4;
 
+    // ContentDialog 首次 ShowAsync 可能缺入场动画（WinUI 已知问题 microsoft/microsoft-ui-xaml#8476）：
+    // ShowAsync 前显式指定默认样式，使模板在进入弹窗树前即定型。
+    void ApplyDefaultDialogStyle(winrt::Microsoft::UI::Xaml::Controls::ContentDialog const& d)
+    {
+        if (auto res = winrt::Microsoft::UI::Xaml::Application::Current().Resources().TryLookup(winrt::box_value(L"DefaultContentDialogStyle")))
+            if (auto style = res.try_as<winrt::Microsoft::UI::Xaml::Style>()) d.Style(style);
+    }
+
     const wchar_t* ListTypeKey(int idx) { return idx == 1 ? L"W" : L"B"; }
     const wchar_t* ListTypeLabel(int idx) { return idx == 1 ? L"白名单" : L"黑名单"; }
 
@@ -459,6 +467,7 @@ namespace winrt::winui::implementation
             L"\n\n是否打开该规则进行编辑？（白名单优先，不处理则该窗口将被放行。）"));
 
         ConflictDialog().XamlRoot(xamlRoot);
+        ApplyDefaultDialogStyle(ConflictDialog());
         auto result = co_await ConflictDialog().ShowAsync();
         if (result != Controls::ContentDialogResult::Primary) co_return;
 
@@ -824,6 +833,7 @@ namespace winrt::winui::implementation
         if (!xamlRoot) co_return;
 
         EditDialog().XamlRoot(xamlRoot);
+        ApplyDefaultDialogStyle(EditDialog());
         EditListTypeCombo().SelectedIndex(it.listType);
         PopulateConditions(true, it.conditions);
         EditCommunityNote().Visibility(it.fromCommunity ? Visibility::Visible : Visibility::Collapsed);
