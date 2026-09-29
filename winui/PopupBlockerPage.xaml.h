@@ -34,8 +34,6 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AddCondition_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-        void EditAddCondition_Click(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_statusTimer{ nullptr };
         void StatusTimer_Tick(winrt::Windows::Foundation::IInspectable const& sender,
@@ -82,6 +80,13 @@ namespace winrt::winui::implementation
         };
         std::vector<std::unique_ptr<ConditionRow>> m_addRows, m_editRows;
         bool m_populating{ false };
+
+        // “编辑规则”对话框改为代码创建（避免声明在页面 XAML 树里导致的入场动画缺失，WinUI #8476 §9）
+        winrt::Microsoft::UI::Xaml::Controls::ComboBox m_editListType{ nullptr };
+        winrt::Microsoft::UI::Xaml::Controls::StackPanel m_editConditionsPanel{ nullptr };
+        winrt::Microsoft::UI::Xaml::Controls::Button m_editAddButton{ nullptr };
+        winrt::Microsoft::UI::Xaml::Controls::TextBlock m_editCommunityNote{ nullptr };
+        winrt::Microsoft::UI::Xaml::Controls::ContentDialog CreateEditDialog();
 
         void AddConditionRow(bool editArea, ConditionItem const& init);
         void RemoveConditionRow(bool editArea, ConditionRow* row);

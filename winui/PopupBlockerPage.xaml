@@ -157,39 +157,5 @@
 
             </StackPanel>
         </ScrollViewer>
-
-        <ContentDialog x:Name="EditDialog"
-                       Title="编辑规则"
-                       PrimaryButtonText="保存"
-                       CloseButtonText="取消"
-                       DefaultButton="Primary">
-            <StackPanel Spacing="12">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ComboBox x:Name="EditListTypeCombo" MinWidth="90">
-                        <ComboBoxItem Content="黑名单"/>
-                        <ComboBoxItem Content="白名单"/>
-                    </ComboBox>
-                </StackPanel>
-                <ScrollViewer MaxHeight="360">
-                    <StackPanel x:Name="EditConditionsPanel" Spacing="6"/>
-                </ScrollViewer>
-                <Button x:Name="EditAddConditionButton" Content="+ 添加条件" Click="EditAddCondition_Click"/>
-                <TextBlock x:Name="EditCommunityNote"
-                           Text="该规则来自社区规则库，保存后将转为本地规则。"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           TextWrapping="Wrap"
-                           Visibility="Collapsed"/>
-            </StackPanel>
-        </ContentDialog>
-
-        <ContentDialog x:Name="ConflictDialog"
-                       Title="规则冲突"
-                       PrimaryButtonText="编辑该规则"
-                       CloseButtonText="取消"
-                       DefaultButton="Primary">
-            <TextBlock x:Name="ConflictText" TextWrapping="Wrap"
-                       Text="已存在相同内容的相反名单规则。是否打开该规则进行编辑？"/>
-        </ContentDialog>
     </Grid>
 </Page>

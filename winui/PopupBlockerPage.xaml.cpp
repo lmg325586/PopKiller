@@ -283,7 +283,7 @@ namespace winrt::winui::implementation
 
         SyncConditionRowEnabled(*row);
 
-        (editArea ? EditConditionsPanel() : AddConditionsPanel()).Children().Append(grid);
+        (editArea ? m_editConditionsPanel : AddConditionsPanel()).Children().Append(grid);
         (editArea ? m_editRows : m_addRows).push_back(std::move(row));
         UpdateAddConditionButtons();
     }
@@ -297,7 +297,7 @@ namespace winrt::winui::implementation
 
         // 行与面板子元素顺序一一对应
         auto index = static_cast<uint32_t>(it - rows.begin());
-        auto panel = editArea ? EditConditionsPanel() : AddConditionsPanel();
+        auto panel = editArea ? m_editConditionsPanel : AddConditionsPanel();
         if (index < panel.Children().Size()) panel.Children().RemoveAt(index);
 
         rows.erase(it);
@@ -333,7 +333,7 @@ namespace winrt::winui::implementation
         {
             bool prev = m_populating;
             m_populating = true;
-            (editArea ? EditConditionsPanel() : AddConditionsPanel()).Children().Clear();
+            (editArea ? m_editConditionsPanel : AddConditionsPanel()).Children().Clear();
             (editArea ? m_editRows : m_addRows).clear();
             m_populating = prev;
         }
@@ -346,7 +346,7 @@ namespace winrt::winui::implementation
     void PopupBlockerPage::UpdateAddConditionButtons()
     {
         if (AddConditionButton()) AddConditionButton().IsEnabled(m_addRows.size() < kMaxConditions);
-        if (EditAddConditionButton()) EditAddConditionButton().IsEnabled(m_editRows.size() < kMaxConditions);
+        if (m_editAddButton) m_editAddButton.IsEnabled(m_editRows.size() < kMaxConditions);
 
         // 只有一个条件时隐藏该行的删除按钮
         bool showAddRemove = m_addRows.size() > 1;
@@ -359,12 +359,6 @@ namespace winrt::winui::implementation
     {
         if (m_addRows.size() >= kMaxConditions) return;
         AddConditionRow(false, ConditionItem{});
-    }
-
-    void PopupBlockerPage::EditAddCondition_Click(IInspectable const&, RoutedEventArgs const&)
-    {
-        if (m_editRows.size() >= kMaxConditions) return;
-        AddConditionRow(true, ConditionItem{});
     }
 
     void PopupBlockerPage::ReloadRulesFromEngine()
@@ -462,13 +456,22 @@ namespace winrt::winui::implementation
 
         auto const& r = m_rules[real];
         std::wstring display = RuleDisplay(r);
-        ConflictText().Text(hstring(
+        auto conflictText = Controls::TextBlock();
+        conflictText.TextWrapping(TextWrapping::Wrap);
+        conflictText.Text(hstring(
             L"已存在相同内容的相反名单规则：\n" + display +
             L"\n\n是否打开该规则进行编辑？（白名单优先，不处理则该窗口将被放行。）"));
 
-        ConflictDialog().XamlRoot(xamlRoot);
-        ApplyDefaultDialogStyle(ConflictDialog());
-        auto result = co_await ConflictDialog().ShowAsync();
+        // 代码创建：声明在页面 XAML 树里的 ContentDialog 无入场动画（WinUI #8476 §9）
+        Controls::ContentDialog conflictDialog;
+        conflictDialog.Title(box_value(hstring(L"规则冲突")));
+        conflictDialog.PrimaryButtonText(L"编辑该规则");
+        conflictDialog.CloseButtonText(L"取消");
+        conflictDialog.DefaultButton(Controls::ContentDialogButton::Primary);
+        conflictDialog.Content(conflictText);
+        ApplyDefaultDialogStyle(conflictDialog);
+        conflictDialog.XamlRoot(xamlRoot);
+        auto result = co_await conflictDialog.ShowAsync();
         if (result != Controls::ContentDialogResult::Primary) co_return;
 
         // 重置"添加规则"栏目
@@ -823,6 +826,58 @@ namespace winrt::winui::implementation
         }
     }
 
+    // “编辑规则”对话框改为代码创建（EntireControlInPopup + 显式 Style），恢复首次弹出入场动画
+    Controls::ContentDialog PopupBlockerPage::CreateEditDialog()
+    {
+        auto listType = Controls::ComboBox();
+        listType.MinWidth(90);
+        listType.Items().Append(box_value(hstring(L"黑名单")));
+        listType.Items().Append(box_value(hstring(L"白名单")));
+        m_editListType = listType;
+
+        auto panel = Controls::StackPanel();
+        panel.Spacing(6);
+        m_editConditionsPanel = panel;
+        auto scroll = Controls::ScrollViewer();
+        scroll.MaxHeight(360);
+        scroll.Content(panel);
+
+        auto addBtn = Controls::Button();
+        addBtn.Content(box_value(hstring(L"+ 添加条件")));
+        addBtn.Click([weakThis = get_weak()](IInspectable const&, RoutedEventArgs const&)
+            {
+                if (auto self = weakThis.get())
+                    if (self->m_editRows.size() < kMaxConditions) self->AddConditionRow(true, ConditionItem{});
+            });
+        m_editAddButton = addBtn;
+
+        auto note = Controls::TextBlock();
+        note.Text(hstring(L"该规则来自社区规则库，保存后将转为本地规则。"));
+        note.TextWrapping(TextWrapping::Wrap);
+        note.Visibility(Visibility::Collapsed);
+        m_editCommunityNote = note;
+
+        auto content = Controls::StackPanel();
+        content.Spacing(12);
+        auto topRow = Controls::StackPanel();
+        topRow.Orientation(Controls::Orientation::Horizontal);
+        topRow.Spacing(8);
+        topRow.Children().Append(listType);
+        content.Children().Append(topRow);
+        content.Children().Append(scroll);
+        content.Children().Append(addBtn);
+        content.Children().Append(note);
+
+        Controls::ContentDialog dlg;
+        dlg.Title(box_value(hstring(L"编辑规则")));
+        dlg.PrimaryButtonText(L"保存");
+        dlg.CloseButtonText(L"取消");
+        dlg.DefaultButton(Controls::ContentDialogButton::Primary);
+        dlg.Content(content);
+        ApplyDefaultDialogStyle(dlg);
+        return dlg;
+    }
+
     winrt::fire_and_forget PopupBlockerPage::OpenEditDialog(size_t real)
     {
         auto lifetime = get_strong();
@@ -832,13 +887,13 @@ namespace winrt::winui::implementation
         auto xamlRoot = this->XamlRoot();
         if (!xamlRoot) co_return;
 
-        EditDialog().XamlRoot(xamlRoot);
-        ApplyDefaultDialogStyle(EditDialog());
-        EditListTypeCombo().SelectedIndex(it.listType);
+        auto editDialog = CreateEditDialog();
+        editDialog.XamlRoot(xamlRoot);
+        m_editListType.SelectedIndex(it.listType);
         PopulateConditions(true, it.conditions);
-        EditCommunityNote().Visibility(it.fromCommunity ? Visibility::Visible : Visibility::Collapsed);
+        m_editCommunityNote.Visibility(it.fromCommunity ? Visibility::Visible : Visibility::Collapsed);
 
-        auto result = co_await EditDialog().ShowAsync();
+        auto result = co_await editDialog.ShowAsync();
         if (result != Controls::ContentDialogResult::Primary) co_return;
 
         std::vector<ConditionItem> conds = ReadConditions(true);
@@ -854,7 +909,7 @@ namespace winrt::winui::implementation
             }
         }
 
-        int listType = EditListTypeCombo().SelectedIndex();
+        int listType = m_editListType.SelectedIndex();
 
         RuleItem updatedItem{};
         updatedItem.listType = listType;
