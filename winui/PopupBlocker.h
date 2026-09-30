@@ -193,10 +193,10 @@ namespace PopupBlocker
 
     inline std::thread LogWriterThread;
     inline std::condition_variable LogCv;
-    inline bool LogQuit = false;
-    inline bool LogFlushRequested = false;
-    inline bool LogWriting = false;
-    inline bool LogWriterRunning = false;
+    inline std::atomic<bool> LogQuit{ false };
+    inline bool LogFlushRequested = false;   // 仅在 LogMutex 内访问
+    inline bool LogWriting = false;          // 仅在 LogMutex 内访问
+    inline std::atomic<bool> LogWriterRunning{ false };
 
     // 落盘：大小上限/BOM/写入；不对 LogBuffer 加锁，仅由写线程或写线程未运行时的内联回退调用，
     // 保证同一时刻只有一处做 IO。
@@ -247,19 +247,19 @@ namespace PopupBlocker
 
     inline void StartLogWriter()
     {
-        if (LogWriterRunning) return;
-        LogQuit = false;
-        LogWriterRunning = true;
+        if (LogWriterRunning.load()) return;
+        LogQuit.store(false);
+        LogWriterRunning.store(true);
         LogWriterThread = std::thread(LogWriterMain);
     }
 
     inline void StopLogWriter()
     {
-        if (!LogWriterRunning) return;
-        { std::lock_guard<std::mutex> lk(LogMutex); LogQuit = true; }
+        if (!LogWriterRunning.load()) return;
+        { std::lock_guard<std::mutex> lk(LogMutex); LogQuit.store(true); }
         LogCv.notify_all();
         if (LogWriterThread.joinable()) LogWriterThread.join();
-        LogWriterRunning = false;
+        LogWriterRunning.store(false);
     }
 
     // 供 UI/退出路径调用：请求写线程排空并等待落盘；写线程未运行时内联落盘。
