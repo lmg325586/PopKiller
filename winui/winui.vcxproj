@@ -142,6 +142,7 @@
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
+    <ResourceCompile Include="winui.rc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppSettings.h" />
