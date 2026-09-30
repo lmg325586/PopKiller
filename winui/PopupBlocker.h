@@ -4,6 +4,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -185,14 +186,23 @@ namespace PopupBlocker
     }
 
     // 日志内存缓冲：按行累积，达阈值或显式 Flush 才落盘，减少高频拦截时的磁盘抖动。
+    // 落盘由独立写线程完成，钩子线程只入缓冲并唤醒，避免前台被磁盘 IO 阻塞。
     inline std::mutex LogMutex;
     inline std::string LogBuffer;
     inline constexpr size_t kLogFlushBytes = 64 * 1024;   // 64KB
 
-    // 调用方需持 LogMutex
-    inline void FlushLogLocked()
+    inline std::thread LogWriterThread;
+    inline std::condition_variable LogCv;
+    inline bool LogQuit = false;
+    inline bool LogFlushRequested = false;
+    inline bool LogWriting = false;
+    inline bool LogWriterRunning = false;
+
+    // 落盘：大小上限/BOM/写入；不对 LogBuffer 加锁，仅由写线程或写线程未运行时的内联回退调用，
+    // 保证同一时刻只有一处做 IO。
+    inline void WriteLogBytes(std::string const& bytes)
     {
-        if (LogBuffer.empty()) return;
+        if (bytes.empty()) return;
         std::wstring p = LogPath();
         constexpr long long Limit = 1024 * 1024;
 
@@ -206,28 +216,76 @@ namespace PopupBlocker
         if (_wfopen_s(&f, p.c_str(), fresh ? L"wb" : L"ab") == 0 && f)
         {
             if (fresh) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
-            ::fwrite(LogBuffer.data(), 1, LogBuffer.size(), f);
+            ::fwrite(bytes.data(), 1, bytes.size(), f);
             ::fclose(f);
-            LogBuffer.clear();
         }
-        else if (LogBuffer.size() > kLogFlushBytes * 16)
+        // 写失败：内容已由调用方从 LogBuffer 移出，直接丢弃，避免在写线程内无限重试。
+    }
+
+    // 写线程主循环：等待缓冲达阈值或显式 Flush 请求，取走缓冲后无锁落盘。
+    inline void LogWriterMain()
+    {
+        for (;;)
         {
-            LogBuffer.clear();   // 写失败：保留以便重试，但设上限（约 1MB）防内存膨胀
+            std::string out;
+            {
+                std::unique_lock<std::mutex> lk(LogMutex);
+                LogCv.wait(lk, [] { return LogQuit || LogFlushRequested || LogBuffer.size() >= kLogFlushBytes; });
+                if (LogBuffer.empty() && LogQuit) return;
+                out.swap(LogBuffer);
+                LogFlushRequested = false;
+                LogWriting = true;
+            }
+            if (!out.empty()) WriteLogBytes(out);
+            {
+                std::lock_guard<std::mutex> lk(LogMutex);
+                LogWriting = false;
+            }
+            LogCv.notify_all();
         }
     }
 
-    // 供 UI/退出路径调用：立即落盘
+    inline void StartLogWriter()
+    {
+        if (LogWriterRunning) return;
+        LogQuit = false;
+        LogWriterRunning = true;
+        LogWriterThread = std::thread(LogWriterMain);
+    }
+
+    inline void StopLogWriter()
+    {
+        if (!LogWriterRunning) return;
+        { std::lock_guard<std::mutex> lk(LogMutex); LogQuit = true; }
+        LogCv.notify_all();
+        if (LogWriterThread.joinable()) LogWriterThread.join();
+        LogWriterRunning = false;
+    }
+
+    // 供 UI/退出路径调用：请求写线程排空并等待落盘；写线程未运行时内联落盘。
     inline void FlushLog()
     {
-        std::lock_guard<std::mutex> lock(LogMutex);
-        FlushLogLocked();
+        if (!LogWriterRunning)
+        {
+            std::lock_guard<std::mutex> lk(LogMutex);
+            if (!LogBuffer.empty()) { std::string out; out.swap(LogBuffer); WriteLogBytes(out); }
+            return;
+        }
+        { std::lock_guard<std::mutex> lk(LogMutex); LogFlushRequested = true; }
+        LogCv.notify_all();
+        std::unique_lock<std::mutex> lk(LogMutex);
+        LogCv.wait(lk, [] { return LogBuffer.empty() && !LogFlushRequested && !LogWriting; });
     }
 
     // 清空日志：丢弃缓冲并截断文件（避免清空后旧缓冲又被写回）
     inline void ClearLog()
     {
-        std::lock_guard<std::mutex> lock(LogMutex);
-        LogBuffer.clear();
+        {
+            std::unique_lock<std::mutex> lk(LogMutex);
+            LogBuffer.clear();
+            // 写线程若正在写旧内容，先等它写完，否则截断后旧内容会被重新追加回来。
+            LogCv.wait(lk, [] { return !LogWriting; });
+        }
         FILE* f{};
         if (_wfopen_s(&f, LogPath().c_str(), L"wb") == 0 && f) ::fclose(f);
     }
@@ -603,7 +661,20 @@ namespace PopupBlocker
             LogBuffer.resize(old + static_cast<size_t>(need) - 1);
             ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, LogBuffer.data() + old, need, nullptr, nullptr);
             LogBuffer += "\r\n";
-            if (LogBuffer.size() >= kLogFlushBytes) FlushLogLocked();
+            if (LogBuffer.size() >= kLogFlushBytes)
+            {
+                if (LogWriterRunning)
+                {
+                    LogFlushRequested = true;
+                    LogCv.notify_all();
+                }
+                else
+                {
+                    // 写线程未运行（引擎未 Start）：内联落盘，保证不丢日志。
+                    std::string out; out.swap(LogBuffer);
+                    WriteLogBytes(out);
+                }
+            }
         }
 
         struct EventVerdict {
@@ -811,6 +882,7 @@ namespace PopupBlocker
             detail::ReadyEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
         if (detail::ReadyEvent) ::ResetEvent(detail::ReadyEvent);
         detail::Worker = std::thread([] { detail::ThreadMain(nullptr); });
+        StartLogWriter();
         // 等消息队列就绪（正常瞬时返回），确保随后的 Stop() 能可靠投递 WM_QUIT。
         if (detail::ReadyEvent) ::WaitForSingleObject(detail::ReadyEvent, 2000);
     }
@@ -824,7 +896,7 @@ namespace PopupBlocker
             ::PostThreadMessageW(::GetThreadId(detail::Worker.native_handle()), WM_QUIT, 0, 0);
             detail::Worker.join();
         }
-        FlushLog();
+        StopLogWriter();
     }
 
     inline void PauseForMinutes(int minutes)
