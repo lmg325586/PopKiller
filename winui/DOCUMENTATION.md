@@ -187,7 +187,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `ScoreWindow(f, detail&)` | 特征、明细串(out) | `int` | ≥0 分数；硬过滤时返回 0 且 detail 为 skip 标记 |
 
 全局状态：`g_w`（权重表）、`SigCache`。
-输出结构：`Features{ hasOwner, toolWin, topmost, noActivate, resizable, hasMinMax, captionSysmenu, wDip, hDip, dpiScale, titleLen, titleEmpty, titleDigitRatio, titleKwHits, clsLen, clsHexRatio, pathTemp, pathRoaming, pathDepth, exeDigitRatio, procAgeSec, userIdle, farFromMouse, path, cls }`（均为 float + 2 个 wstring；`wDip/hDip` 为按窗口 DPI（`GetDpiForWindow`）归一的逻辑像素，`farFromMouse` 亦按 DPI 归一）。
+输出结构：`Features{ hasOwner, toolWin, topmost, noActivate, resizable, hasMinMax, captionSysmenu, wDip, hDip, dpiScale, titleLen, titleEmpty, titleDigitRatio, titleKwHits, clsLen, clsHexRatio, pathTemp, pathRoaming, pathDepth, exeDigitRatio, procAgeSec, userIdle, farFromMouse, parentExplorer, parentSystem, parentUnknown, sameProcAsPrevForeground, path, cls }`（均为 float + 2 个 wstring；`wDip/hDip` 为按窗口 DPI（`GetDpiForWindow`）归一的逻辑像素，`farFromMouse` 亦按 DPI 归一；`parent*` 为父进程/启动者类别，`sameProcAsPrevForeground` 为“弹窗进程 == 本事件前的前台进程”）。
 
 ## HeuristicML.h（静态机器学习）
 
@@ -207,8 +207,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `GetInstance()` | 无 | `MLEngine&` | 单例 |
 | `IsEnabled()` | 无 | `bool` | 模型是否加载成功 |
 | `EnsureLoaded()` | 无 | `bool` | 首次调用时加载两个 ONNX 模型 |
-| `Predict(hwnd)` | 句柄 | `int` | 1=弹窗 0=非弹窗 -1=失败（双模型 AND 投票） |
-| `ExtractFeatures(hwnd, features&)` | 句柄、特征数组(out) | `bool` | 提取 23 维特征到 float 数组 |
+| `Predict(hwnd, evTime, prevForegroundPid)` | 句柄、事件时间、前一前台 pid | `bool` | 双模型 AND 投票：true=弹窗 |
+| `ExtractFeatures(hwnd, features&)` | 句柄、特征数组(out) | `bool` | 提取 27 维特征到 float 数组 |
 
 全局状态：`GOOD_EXES`（27 个正常软件白名单数组）。
 模型文件：`popup_rf.onnx`（随机森林）、`popup_lr.onnx`（逻辑回归），位于 `StaticML\` 目录。

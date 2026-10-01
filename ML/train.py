@@ -1,8 +1,9 @@
 # 用法：python train.py cleaned.json [fixes.json] [--model=...] [--seed=N] [--no-goodexe]
-# 特征契约 23 维（必须与 HeuristicML.h 逐位对齐）：
+# 特征契约 27 维（必须与 HeuristicML.h 逐位对齐）：
 #   raw 0-11 : owner toolwin topmost noact resizable minmax capsys notitle small large temp roaming
 #   raw 12-16: hexclass young unsigned idle farcur   （缺失记 -1 哨兵；15/16 当前掩码为 0）
 #   派生 17-22: title_len ad_kw_hits known_good_exe widgetwin_class r_dlg32770 exe_digit_ratio
+#   raw 17-20 追加为 23-26: parent_explorer parent_system parent_unknown same_proc_prev_fg
 import json
 import sys
 from pathlib import Path
@@ -50,6 +51,7 @@ FEATURE_NAMES = [
     "r_hexclass", "r_young", "r_unsigned", "r_idle", "r_farcur",
     "title_len", "ad_kw_hits", "known_good_exe", "widgetwin_class",
     "r_dlg32770", "exe_digit_ratio",
+    "parent_explorer", "parent_system", "parent_unknown", "same_proc_prev_fg",
 ]
 
 def featurize(s: dict):
@@ -84,6 +86,11 @@ def featurize(s: dict):
     vec.append(1.0 if "widgetwin" in cls else 0.0)
     vec.append(1.0 if cls == "#32770" else 0.0)
     vec.append(sum(1 for ch in exe if ch.isdigit()) / max(1, len(exe)))
+
+    # 追加 4 维（对应 raw 17-20）：父进程类别 + 与刚在前台进程同进程；旧样本缺失记 -1 哨兵
+    for i in range(17, 21):
+        c = raw[i] if i < len(raw) else 'U'
+        vec.append(1.0 if c == 'T' else (0.0 if c == 'F' else -1.0))
     return vec
 
 def window_key(s):

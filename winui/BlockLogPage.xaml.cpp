@@ -132,6 +132,10 @@ namespace
         TranslateTokenName(s, L"small", L"小窗");
         TranslateTokenName(s, L"large", L"大窗");
         TranslateTokenName(s, L"temp", L"临时目录");
+        TranslateTokenName(s, L"parent_explorer", L"父进程:资源管理器");
+        TranslateTokenName(s, L"parent_system", L"父进程:系统");
+        TranslateTokenName(s, L"parent_unknown", L"父进程:未知");
+        TranslateTokenName(s, L"same_fg", L"同前台进程");
         return s;
     }
 

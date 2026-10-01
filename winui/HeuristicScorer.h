@@ -2,9 +2,14 @@
 #include <windows.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <deque>
 #include <mutex>
+#include <thread>
+#include <condition_variable>
 #include <algorithm>
 #include <wintrust.h>
+#include <tlhelp32.h>
 
 #pragma comment(lib, "wintrust.lib")
 
@@ -69,6 +74,100 @@ namespace HeuristicScorer
             long long lim = (long long)(300.f * scale);
             return (d2 > lim * lim) ? 1.f : 0.f;
         }
+
+        // ---- 父进程（启动者）查询：进程表短 TTL 缓存 + 父 exe 名按子进程创建时间缓存 ----
+        inline std::wstring ProcessNameByPid(DWORD pid)
+        {
+            if (!pid) return {};
+            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (!h) return {};
+            WCHAR buf[MAX_PATH]{}; DWORD size = MAX_PATH;
+            std::wstring name;
+            if (::QueryFullProcessImageNameW(h, 0, buf, &size)) {
+                std::wstring p = buf;
+                auto pos = p.find_last_of(L"\\/");
+                name = Lower((pos == std::wstring::npos) ? p : p.substr(pos + 1));
+            }
+            ::CloseHandle(h);
+            return name;
+        }
+
+        struct ProcTable {
+            std::mutex mtx;
+            std::unordered_map<DWORD, DWORD> ppid;   // pid -> 父 pid
+            long long builtMs = 0;
+        };
+        inline ProcTable& Proc()
+        {
+            static ProcTable* t = new ProcTable();
+            return *t;
+        }
+
+        inline void RebuildProcTable(ProcTable& t)   // 调用方持 t.mtx
+        {
+            std::unordered_map<DWORD, DWORD> m;
+            HANDLE snap = ::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if (snap != INVALID_HANDLE_VALUE) {
+                PROCESSENTRY32W pe{}; pe.dwSize = sizeof(pe);
+                if (::Process32FirstW(snap, &pe)) {
+                    do { m[pe.th32ProcessID] = pe.th32ParentProcessID; } while (::Process32NextW(snap, &pe));
+                }
+                ::CloseHandle(snap);
+            }
+            t.ppid.swap(m);
+            t.builtMs = ::GetTickCount64();
+        }
+
+        inline unsigned long long ProcCreateTime(DWORD pid)
+        {
+            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (!h) return 0;
+            FILETIME c{}, e{}, k{}, u{};
+            unsigned long long r = 0;
+            if (::GetProcessTimes(h, &c, &e, &k, &u)) {
+                ULARGE_INTEGER v; v.LowPart = c.dwLowDateTime; v.HighPart = c.dwHighDateTime; r = v.QuadPart;
+            }
+            ::CloseHandle(h);
+            return r;
+        }
+
+        struct ParentCache {
+            std::mutex mtx;
+            std::unordered_map<DWORD, std::pair<unsigned long long, std::wstring>> map; // childPid -> {createTime, parentExe}
+        };
+        inline ParentCache& ParentC()
+        {
+            static ParentCache* c = new ParentCache();
+            return *c;
+        }
+
+        // 返回窗口所在进程的“父进程 exe 名”（小写）；失败返回空
+        inline std::wstring GetParentExe(DWORD pid)
+        {
+            if (!pid) return {};
+            unsigned long long ct = ProcCreateTime(pid);
+            ParentCache& pc = ParentC();
+            {
+                std::lock_guard<std::mutex> l(pc.mtx);
+                auto it = pc.map.find(pid);
+                if (it != pc.map.end() && it->second.first == ct) return it->second.second;
+            }
+            DWORD ppid = 0;
+            ProcTable& pt = Proc();
+            {
+                std::lock_guard<std::mutex> l(pt.mtx);
+                if (::GetTickCount64() - pt.builtMs > 2000) RebuildProcTable(pt);
+                auto it = pt.ppid.find(pid);
+                if (it != pt.ppid.end()) ppid = it->second;
+            }
+            std::wstring parent = ProcessNameByPid(ppid);
+            {
+                std::lock_guard<std::mutex> l(pc.mtx);
+                if (pc.map.size() > 4096) pc.map.clear();
+                pc.map[pid] = { ct, parent };
+            }
+            return parent;
+        }
     }
 
     // ===== 权重表 =====
@@ -97,6 +196,10 @@ namespace HeuristicScorer
         float userIdle = 15;
         float farFromMouse = 10;
         float mouseClose = -25;
+        float parentExplorer = -8;              // 父进程是 explorer（外壳/用户启动）→ 更像正常窗
+        float parentSystem = 8;                 // 父进程是系统/后台宿主 → 可疑
+        float parentUnknown = 4;                // 取不到父进程 → 轻微可疑
+        float sameProcAsPrevForeground = -12;   // 与“刚在前台的进程”同进程 → 很可能是自家弹窗
     };
     inline Weights g_w{};
 
@@ -112,6 +215,8 @@ namespace HeuristicScorer
         float procAgeSec;
         float userIdle;
         float farFromMouse;      // 距鼠标是否超过 300 逻辑像素（按窗口 DPI 归一）
+        float parentExplorer, parentSystem, parentUnknown;   // 父进程（启动者）类别
+        float sameProcAsPrevForeground;                       // 弹窗进程 == 本次事件前的前台进程
         std::wstring path;
         std::wstring cls;
     };
@@ -159,7 +264,8 @@ namespace HeuristicScorer
         return age;
     }
 
-    inline bool IsFileSigned(std::wstring const& path)
+    // 纯计算：真正调用 WinVerifyTrust（慢，可能数十毫秒）。只允许在后台线程调用，勿在钩子线程直接调用。
+    inline bool VerifyFileSignature(std::wstring const& path)
     {
         if (path.empty()) return false;
         WINTRUST_FILE_INFO file{};
@@ -185,42 +291,118 @@ namespace HeuristicScorer
         return res == ERROR_SUCCESS;
     }
 
-    inline std::mutex SigMx;
-    inline std::unordered_map<std::wstring, std::pair<bool, uint64_t>> SigCache;
-    inline uint64_t SigSeq = 0;
-    constexpr size_t kSigCacheLimit = 128;
+    // 兼容旧名（DOCUMENTATION.md 中的公开接口），语义不变
+    inline bool IsFileSigned(std::wstring const& path) { return VerifyFileSignature(path); }
 
-    inline bool IsFileSignedCached(std::wstring const& path)
+    // ===== 签名验证：后台线程预取 + 缓存 =====
+    // 钩子线程绝不阻塞：命中缓存直接返回；未命中只入队并由后台线程验证。
+    // 后台线程 detach，随进程退出被回收；下述状态为进程级静态量，不会先于线程销毁。
+
+    // 状态堆分配（进程生命周期，故意不释放）：后台线程 detach 未 join，进程退出的静态析构
+    // 会销毁 mutex/cv 造成 UB，故避免使用可析构的命名空间静态量。
+    struct SigState {
+        std::mutex mtx;
+        std::condition_variable cv;
+        std::unordered_map<std::wstring, bool> cache;   // path -> 是否已签名
+        std::deque<std::wstring> queue;                 // 待验证队列
+        std::unordered_set<std::wstring> pending;       // 排队中/验证中，去重
+    };
+    inline SigState& Sig()
     {
-        {
-            std::lock_guard<std::mutex> l(SigMx);
-            auto it = SigCache.find(path);
-            if (it != SigCache.end()) {
-                it->second.second = ++SigSeq;
-                return it->second.first;
-            }
-        }
-        bool s = IsFileSigned(path);
-
-        {
-            std::lock_guard<std::mutex> l(SigMx);
-            if (SigCache.size() >= kSigCacheLimit) {
-                auto oldest = SigCache.begin();
-                for (auto it = SigCache.begin(); it != SigCache.end(); ++it) {
-                    if (it->second.second < oldest->second.second) {
-                        oldest = it;
-                    }
-                }
-                if (oldest != SigCache.end()) {
-                    SigCache.erase(oldest);
-                }
-            }
-            SigCache[path] = { s, ++SigSeq };
-        }
-        return s;
+        static SigState* s = new SigState();
+        return *s;
     }
 
-    inline Features ExtractFeatures(HWND hwnd, DWORD evTime = 0)
+    inline void VerifyFileSignature_WorkerMain()
+    {
+        SigState& st = Sig();
+        for (;;)
+        {
+            std::wstring path;
+            {
+                std::unique_lock<std::mutex> l(st.mtx);
+                st.cv.wait(l, [&] { return !st.queue.empty(); });
+                path = std::move(st.queue.front());
+                st.queue.pop_front();
+            }
+
+            bool s = VerifyFileSignature(path);   // 慢操作，锁外执行
+
+            {
+                std::lock_guard<std::mutex> l(st.mtx);
+                st.cache[path] = s;
+                st.pending.erase(path);
+            }
+        }
+    }
+
+    // 仅入队 + 去重（不加 EnsureSigThread，避免在 call_once 内部重入同一 once_flag）
+    inline void EnqueueSignatureCore(std::wstring const& path)
+    {
+        if (path.empty()) return;
+        SigState& st = Sig();
+        {
+            std::lock_guard<std::mutex> l(st.mtx);
+            if (st.cache.find(path) != st.cache.end()) return;
+            if (!st.pending.insert(path).second) return;
+            st.queue.push_back(path);
+        }
+        st.cv.notify_one();
+    }
+
+    // 预热：把当前所有进程的可执行路径入队，让首次命中就能直接读到结果
+    inline void PrimeSignatures()
+    {
+        HANDLE snap = ::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snap == INVALID_HANDLE_VALUE) return;
+        PROCESSENTRY32W pe{}; pe.dwSize = sizeof(pe);
+        if (::Process32FirstW(snap, &pe)) {
+            do {
+                HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
+                if (!h) continue;
+                WCHAR buf[MAX_PATH]{}; DWORD size = MAX_PATH;
+                if (::QueryFullProcessImageNameW(h, 0, buf, &size))
+                    EnqueueSignatureCore(detail::Lower(buf));
+                ::CloseHandle(h);
+            } while (::Process32NextW(snap, &pe));
+        }
+        ::CloseHandle(snap);
+    }
+
+    // 首次调用时启动后台线程（进程生命周期）；预热与验证都在该线程执行，
+    // 调用方（钩子线程）绝不被进程枚举或签名校验阻塞。
+    inline void EnsureSigThread()
+    {
+        static std::once_flag once;
+        std::call_once(once, [] {
+            std::thread([] { PrimeSignatures(); VerifyFileSignature_WorkerMain(); }).detach();
+        });
+    }
+
+    inline void EnqueueSignature(std::wstring const& path)
+    {
+        EnsureSigThread();
+        EnqueueSignatureCore(path);
+    }
+
+    // 永不阻塞：除短暂持锁外不做任何 IO/签名验证。
+    // 未命中时乐观返回 true（临时视为“已签名”），后台验证完成后由 SigCache 纠正。
+    // 取舍：这样避免首次遇到正常软件就加 unsignedExe / unsignedUserDir 权重（宁可漏、不可误伤），
+    // 代价是极短窗口内未签名样本会少拿 unsigned 权重（也可能拿到 signedExe 的 -5）。
+    inline bool IsFileSignedCached(std::wstring const& path)
+    {
+        if (path.empty()) return false;
+        SigState& st = Sig();
+        {
+            std::lock_guard<std::mutex> l(st.mtx);
+            auto it = st.cache.find(path);
+            if (it != st.cache.end()) return it->second;
+        }
+        EnqueueSignature(path);
+        return true;
+    }
+
+    inline Features ExtractFeatures(HWND hwnd, DWORD evTime = 0, DWORD prevForegroundPid = 0)
     {
         if (evTime == 0) evTime = static_cast<DWORD>(::GetTickCount64());
 
@@ -264,6 +446,15 @@ namespace HeuristicScorer
         f.exeDigitRatio = DigitRatio(exe);
         f.procAgeSec = ProcessAgeSeconds(hwnd);
 
+        DWORD pid = 0; ::GetWindowThreadProcessId(hwnd, &pid);
+        std::wstring parent = detail::GetParentExe(pid);
+        f.parentExplorer = (parent == L"explorer.exe") ? 1.f : 0.f;
+        f.parentSystem = (parent == L"services.exe" || parent == L"svchost.exe" || parent == L"wininit.exe" ||
+            parent == L"winlogon.exe" || parent == L"lsass.exe" || parent == L"taskhostw.exe" ||
+            parent == L"runtimebroker.exe") ? 1.f : 0.f;
+        f.parentUnknown = parent.empty() ? 1.f : 0.f;
+        f.sameProcAsPrevForeground = (prevForegroundPid != 0 && pid == prevForegroundPid) ? 1.f : 0.f;
+
         f.userIdle = detail::CalcUserIdle(evTime);
         f.farFromMouse = detail::CalcFarFromMouse(rc, f.dpiScale);
         return f;
@@ -291,6 +482,10 @@ namespace HeuristicScorer
         b += (!f.path.empty() && !IsFileSignedCached(f.path)) ? L'T' : L'F';
         b += (f.userIdle > 0) ? L'T' : L'F';
         b += (f.farFromMouse > 0) ? L'T' : L'F';
+        b += (f.parentExplorer > 0) ? L'T' : L'F';
+        b += (f.parentSystem > 0) ? L'T' : L'F';
+        b += (f.parentUnknown > 0) ? L'T' : L'F';
+        b += (f.sameProcAsPrevForeground > 0) ? L'T' : L'F';
         return b;
     }
 
@@ -358,6 +553,11 @@ namespace HeuristicScorer
         if (f.userIdle > 0) add(g_w.userIdle, L"idle");
         if (f.farFromMouse > 0) add(g_w.farFromMouse, L"far_mouse");
         if (f.farFromMouse == 0.f) add(g_w.mouseClose, L"mouse_close");
+
+        if (f.parentExplorer > 0) add(g_w.parentExplorer, L"parent_explorer");
+        if (f.parentSystem > 0) add(g_w.parentSystem, L"parent_system");
+        if (f.parentUnknown > 0) add(g_w.parentUnknown, L"parent_unknown");
+        if (f.sameProcAsPrevForeground > 0) add(g_w.sameProcAsPrevForeground, L"same_fg");
 
         if (!f.path.empty()) {
             bool signed_ = IsFileSignedCached(f.path);

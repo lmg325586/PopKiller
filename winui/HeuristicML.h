@@ -11,6 +11,9 @@
 
 namespace HeuristicML
 {
+    // ML 特征维度（必须与 ML/train.py 的 FEATURE_NAMES 一致）
+    inline constexpr size_t kFeatureCount = 27;
+
     inline const std::vector<std::wstring> AD_KEYWORDS = {
         L"广告", L"优惠", L"促销", L"免费", L"中奖", L"礼包",
         L"热点", L"速看", L"推荐", L"清理", L"加速", L"升级", L"弹窗", L"资讯",
@@ -95,6 +98,15 @@ namespace HeuristicML
             try {
                 sessionRf = std::make_unique<Ort::Session>(*env, rfPath.c_str(), opts);
                 sessionLr = std::make_unique<Ort::Session>(*env, lrPath.c_str(), opts);
+
+                // 模型输入维度必须与 kFeatureCount 一致，否则禁用（避免形状不匹配静默失败）
+                auto shape = sessionRf->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+                if (shape.size() != 2 || shape[1] != static_cast<int64_t>(kFeatureCount)) {
+                    sessionRf.reset();
+                    sessionLr.reset();
+                    WarnOnce(L"ML 模型特征维度与当前版本不一致，请重新训练/更新模型；静态ML启发已禁用。");
+                    return false;
+                }
                 m_warned = false;
                 return true;
             }
@@ -106,7 +118,7 @@ namespace HeuristicML
             }
         }
 
-        bool RunSession(Ort::Session* session, const std::array<float, 23>& features) {
+        bool RunSession(Ort::Session* session, const std::array<float, kFeatureCount>& features) {
             try {
                 auto inAlloc = session->GetInputNameAllocated(0, Ort::AllocatorWithDefaultOptions());
                 auto outAlloc = session->GetOutputNameAllocated(0, Ort::AllocatorWithDefaultOptions());
@@ -115,8 +127,8 @@ namespace HeuristicML
 
                 Ort::MemoryInfo info("Cpu", OrtDeviceAllocator, 0, OrtMemTypeDefault);
                 auto inputTensor = Ort::Value::CreateTensor<float>(
-                    info, const_cast<float*>(features.data()), 23,
-                    std::array<int64_t, 2>{1, 23}.data(), 2);
+                    info, const_cast<float*>(features.data()), kFeatureCount,
+                    std::array<int64_t, 2>{1, static_cast<int64_t>(kFeatureCount)}.data(), 2);
 
                 auto outputTensors = session->Run(
                     Ort::RunOptions{ nullptr },
@@ -131,15 +143,15 @@ namespace HeuristicML
             }
         }
 
-        bool Predict(HWND hwnd, DWORD evTime) {
+        bool Predict(HWND hwnd, DWORD evTime, DWORD prevForegroundPid = 0) {
             if (!sessionRf || !sessionLr) return false;
 
-            HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd, evTime);
+            HeuristicScorer::Features f = HeuristicScorer::ExtractFeatures(hwnd, evTime, prevForegroundPid);
             std::wstring title = GetTitle(hwnd);
             std::wstring cls = GetClass(hwnd);
             std::wstring exe = GetProcessName(hwnd);
 
-            std::array<float, 23> features = { 0 };
+            std::array<float, kFeatureCount> features = { 0 };
 
             features[0] = (f.hasOwner > 0) ? 1.0f : 0.0f;
             features[1] = (f.toolWin > 0) ? 1.0f : 0.0f;
@@ -174,6 +186,12 @@ namespace HeuristicML
             int digits = 0;
             for (wchar_t c : exe) if (c >= L'0' && c <= L'9') digits++;
             features[22] = float(digits) / float(std::max<size_t>(1, exe.size()));
+
+            // 新增 4 维：父进程（启动者）类别 + 与刚在前台进程同进程
+            features[23] = f.parentExplorer;
+            features[24] = f.parentSystem;
+            features[25] = f.parentUnknown;
+            features[26] = f.sameProcAsPrevForeground;
 
             bool rf_pred = RunSession(sessionRf.get(), features);
             bool lr_pred = RunSession(sessionLr.get(), features);
