@@ -20,6 +20,34 @@ namespace
 {
     constexpr ULONG_PTR kToastCopyData = 0x504B544F;
 
+    // 百分号解码（%xx，按 UTF-8）：通知/协议里的参数可能被编码（如空格→%20）。
+    // 对未编码字符串为无操作；'+' 不转空格（exe 名可能含 '+'）。
+    std::wstring UrlDecode(std::wstring const& s)
+    {
+        auto hexv = [](wchar_t c) -> int {
+            if (c >= L'0' && c <= L'9') return c - L'0';
+            if (c >= L'a' && c <= L'f') return c - L'a' + 10;
+            if (c >= L'A' && c <= L'F') return c - L'A' + 10;
+            return -1;
+            };
+        std::string bytes;
+        bytes.reserve(s.size());
+        for (size_t i = 0; i < s.size(); ++i) {
+            wchar_t c = s[i];
+            if (c == L'%' && i + 2 < s.size()) {
+                int hi = hexv(s[i + 1]), lo = hexv(s[i + 2]);
+                if (hi >= 0 && lo >= 0) { bytes.push_back(static_cast<char>((hi << 4) | lo)); i += 2; continue; }
+            }
+            if (c < 0x80) { bytes.push_back(static_cast<char>(c)); }
+            else {
+                char buf[8]{};
+                int n = ::WideCharToMultiByte(CP_UTF8, 0, &c, 1, buf, sizeof(buf), nullptr, nullptr);
+                if (n > 0) bytes.append(buf, n);
+            }
+        }
+        return PopupBlocker::Utf8ToWString(bytes);
+    }
+
     void RegisterToastProtocol()
     {
         std::wstring exePath = GetSelfPath();
@@ -158,8 +186,8 @@ namespace winrt::winui::implementation
                     if (eq == std::wstring::npos) continue;
                     std::wstring key = item.substr(0, eq);
                     std::wstring val = item.substr(eq + 1);
-                    if (key == L"action") action = val;
-                    else if (key == L"exe") exeParam = val;
+                    if (key == L"action") action = UrlDecode(val);
+                    else if (key == L"exe") exeParam = UrlDecode(val);
                 }
             }
             ::LocalFree(argv);
@@ -249,8 +277,8 @@ namespace winrt::winui::implementation
     void App::HandleNotification(AppNotificationActivatedEventArgs const& args)
     {
         auto input = args.Arguments();
-        std::wstring action = input.HasKey(L"action") ? std::wstring(input.Lookup(L"action")) : std::wstring{};
-        std::wstring exe = input.HasKey(L"exe") ? std::wstring(input.Lookup(L"exe")) : std::wstring{};
+        std::wstring action = input.HasKey(L"action") ? UrlDecode(std::wstring(input.Lookup(L"action"))) : std::wstring{};
+        std::wstring exe = input.HasKey(L"exe") ? UrlDecode(std::wstring(input.Lookup(L"exe"))) : std::wstring{};
         if (action.empty()) return;
 
         if (!App::window) return;
