@@ -31,10 +31,15 @@ namespace CrashHandler
         ::WriteFile(h, u.data(), (DWORD)u.size(), &wrote, nullptr);
     }
 
-    // 生成转储与日志并提示用户；ep 可为空（无异常上下文时仍导出各线程堆栈）
-    inline void Report(const wchar_t* reason, EXCEPTION_POINTERS* ep = nullptr)
+    // 生成转储与日志并提示用户；ep 可为空（无异常上下文时仍导出各线程堆栈）。
+    // fatal=true（默认）：报告后结束进程，避免卡在未响应状态；fatal=false：仅记录，不弹窗不退出。
+    inline void Report(const wchar_t* reason, EXCEPTION_POINTERS* ep = nullptr, bool fatal = true)
     {
-        if (::InterlockedCompareExchange(&Handling, 1, 0) != 0) return;
+        if (::InterlockedCompareExchange(&Handling, 1, 0) != 0)
+        {
+            if (fatal) ::TerminateProcess(::GetCurrentProcess(), 1);   // 已在处理/卡死：直接退出
+            return;
+        }
 
         std::wstring dir = ExeDir();
 
@@ -86,8 +91,12 @@ namespace CrashHandler
         std::wstring msg = L"PopKiller 遇到问题需要关闭。\n\n已生成诊断文件：\n";
         msg += dmpPath + L"\n" + logPath;
         msg += L"\n\n请将 .dmp 文件反馈给开发者以帮助定位问题。";
-        ::MessageBoxW(nullptr, msg.c_str(), L"PopKiller 异常",
-            MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST | MB_TASKMODAL);
+        if (fatal)
+        {
+            ::MessageBoxW(nullptr, msg.c_str(), L"PopKiller 异常",
+                MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST | MB_TASKMODAL);
+            ::TerminateProcess(::GetCurrentProcess(), 1);   // 报告后干净退出，不再停留在未响应
+        }
     }
 
     inline LONG WINAPI Filter(EXCEPTION_POINTERS* ep)
@@ -104,7 +113,7 @@ namespace CrashHandler
 
     inline void OnInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int, uintptr_t)
     {
-        Report(L"CRT 参数无效 (_invalid_parameter)");
+        Report(L"CRT 参数无效 (_invalid_parameter)", nullptr, false);   // 可恢复：仅记录，不弹窗不退出
     }
 
     inline void OnPureCall()

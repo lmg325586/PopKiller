@@ -715,7 +715,7 @@ namespace winrt::winui::implementation
     void BlockLogPage::Timer_Tick(IInspectable const&, IInspectable const&)
     {
         if (PopupBlocker::ShuttingDown.load()) return;
-        PopupBlocker::FlushLog();
+        PopupBlocker::RequestFlushLog();   // 非阻塞：不等待写线程，避免每秒卡住 UI
         auto strongThis = get_strong();
         if (!strongThis) return;
 
