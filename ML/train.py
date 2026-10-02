@@ -1,7 +1,7 @@
 # 用法：python train.py cleaned.json [fixes.json] [--model=...] [--seed=N] [--no-goodexe]
 # 特征契约 27 维（必须与 HeuristicML.h 逐位对齐）：
 #   raw 0-11 : owner toolwin topmost noact resizable minmax capsys notitle small large temp roaming
-#   raw 12-16: hexclass young unsigned idle farcur   （缺失记 -1 哨兵；15/16 当前掩码为 0）
+#   raw 12-16: hexclass young unsigned idle farcur   （缺失记 -1 哨兵；15/16 已解锁真实位）
 #   派生 17-22: title_len ad_kw_hits known_good_exe widgetwin_class r_dlg32770 exe_digit_ratio
 #   raw 17-20 追加为 23-26: parent_explorer parent_system parent_unknown same_proc_prev_fg
 import json
@@ -67,8 +67,6 @@ def featurize(s: dict):
     for i in range(12, 17):
         c = raw[i] if i < len(raw) else 'U'
         v = 1.0 if c == 'T' else (0.0 if c == 'F' else -1.0)
-        if i in (15, 16):
-            v = 0.0   # 行为位掩码：解锁条件=真实位 popup 样本≥10 且系数翻正
         vec.append(v)
 
     title = (s.get("title") or "").lower()
@@ -201,6 +199,14 @@ def main():
     X = np.asarray(X, dtype=np.float32)
     y = np.asarray(y, dtype=np.int64)
     print(f"有效样本: {len(X)}  弹窗: {int(y.sum())}  非弹窗: {int(len(y) - y.sum())}")
+
+    # 特征诊断：零方差列 + 重复特征向量（重复会导致折内外泄漏、准确率虚高）
+    col_var = X.var(axis=0)
+    zero_cols = [FEATURE_NAMES[i] for i in range(X.shape[1]) if float(col_var[i]) == 0.0]
+    _, uniq_idx = np.unique(X, axis=0, return_index=True)
+    dup = len(X) - len(uniq_idx)
+    print(f"零方差列({len(zero_cols)}): {', '.join(zero_cols) if zero_cols else '无'}")
+    print(f"重复特征向量: {dup} / {len(X)}（重复越多，交叉验证越虚高）")
 
     spw = float((y == 0).sum()) / max(1, int((y == 1).sum()))
     models = build_models(spw, seed)
