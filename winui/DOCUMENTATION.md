@@ -178,13 +178,16 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `DigitRatio(s)` | 串 | `float` | 数字占比 |
 | `HexRatio(s)` | 串 | `float` | 十六进制字符占比 |
 | `ProcessAgeSeconds(hwnd)` | 句柄 | `float` | 进程年龄秒，失败 -1 |
-| `IsFileSignedCached(path)` | 路径 | `bool` | 带后台缓存（未命中乐观返回 true，后台验证后纠正） |
+| `GetSignatureStatus(path)` | 路径 | `SignatureStatus` | 三态 `Unknown/Signed/Unsigned`；永不阻塞，未命中即入队并返回 `Unknown` |
+| `IsFileSignedCached(path)` | 路径 | `bool` | 兼容包装：仅“已确认签名”为 true，`Unknown` 亦为 false |
 | `ExtractFeatures(hwnd, evTime)` | 句柄、事件时间 | `Features` | 21 项特征（含 `path`、`cls`） |
-| `BuildRawBits(f, rc, evTime)` | 特征、窗口矩形、事件时间 | `std::wstring` | 21 位 T/F 特征串（含空闲/鼠标距离/父进程/同前台） |
+| `BuildRawBits(f, rc, evTime)` | 特征、窗口矩形、事件时间 | `std::wstring` | 21 位 T/F/U 特征串：`raw[14]`=`unsigned`（T 未签名/F 已签名/U 未知），含空闲/鼠标距离/父进程/同前台 |
 | `ScoreWindow(f, detail&)` | 特征、明细串(out) | `int` | ≥0 分数；硬过滤时返回 0 且 detail 为 skip 标记 |
 
 全局状态：`g_weights`（权重表）、`SigCache`。
 输出结构：`Features{ hasOwner, toolWin, topmost, noActivate, resizable, hasMinMax, captionSysmenu, wDip, hDip, dpiScale, titleEmpty, titleKwHits, clsHexRatio, pathTemp, pathRoaming, procAgeSec, userIdle, farFromMouse, parentExplorer, parentSystem, parentUnknown, sameProcAsPrevForeground, path, cls }`（均为 float + 2 个 wstring；`wDip/hDip` 为按窗口 DPI（`GetDpiForWindow`）归一的逻辑像素，`farFromMouse` 亦按 DPI 归一；`parent*` 为父进程/启动者类别，`sameProcAsPrevForeground` 为“弹窗进程 == 本事件前的前台进程”）。
+
+签名与父进程：`raw` 的 `unsigned` 位与打分共用 `GetSignatureStatus`（`Unknown` 不计权、也不再伪造成 F）；父进程名优先取 Toolhelp 快照自带的 `szExeFile`（可覆盖系统/提权父进程），仅当父进程已退出、不在快照中时才回退 `OpenProcess`。引擎 `Start()` 时即预热签名缓存。
 
 ## HeuristicML.h（静态机器学习）
 

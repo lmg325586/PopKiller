@@ -940,6 +940,7 @@ namespace PopupBlocker
         std::lock_guard lock(detail::WorkerMutex);
         if (Running.exchange(true)) return;
         InitSelfExeName();
+        HeuristicScorer::EnsureSigThread();   // 提前预热签名缓存，减少早窗口的 Unknown
         if (!detail::ReadyEvent)
             detail::ReadyEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
         if (detail::ReadyEvent) ::ResetEvent(detail::ReadyEvent);

@@ -51,9 +51,6 @@ namespace AppTheme
     }
 }
 
-// ---- 原生弹出菜单深色模式 ----
-// 让 Win32 原生弹出菜单（托盘右键菜单等）跟随系统深色模式。
-// uxtheme.dll 以序号导出这些未公开 API，故动态加载。
 namespace DarkMode
 {
     enum class PreferredAppMode

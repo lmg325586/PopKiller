@@ -107,9 +107,10 @@ namespace HeuristicScorer
             return name;
         }
 
+        struct ProcEntry { DWORD ppid = 0; std::wstring name; };   // name 为小写 exe 名
         struct ProcTable {
             std::mutex mtx;
-            std::unordered_map<DWORD, DWORD> ppid;   // pid -> 父 pid
+            std::unordered_map<DWORD, ProcEntry> proc;   // pid -> {父 pid, exe 名}
             long long builtMs = 0;
         };
         inline ProcTable& ProcTableInstance()
@@ -120,16 +121,18 @@ namespace HeuristicScorer
 
         inline void RebuildProcTable(ProcTable& t)   // 调用方持 t.mtx
         {
-            std::unordered_map<DWORD, DWORD> m;
+            std::unordered_map<DWORD, ProcEntry> m;
             HANDLE snap = ::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
             if (snap != INVALID_HANDLE_VALUE) {
                 PROCESSENTRY32W pe{}; pe.dwSize = sizeof(pe);
                 if (::Process32FirstW(snap, &pe)) {
-                    do { m[pe.th32ProcessID] = pe.th32ParentProcessID; } while (::Process32NextW(snap, &pe));
+                    // 快照自带 exe 名：系统/提权父进程 OpenProcess 会被拒，靠 szExeFile 才拿得到名字
+                    do { m[pe.th32ProcessID] = ProcEntry{ pe.th32ParentProcessID, Lower(pe.szExeFile) }; }
+                    while (::Process32NextW(snap, &pe));
                 }
                 ::CloseHandle(snap);
             }
-            t.ppid.swap(m);
+            t.proc.swap(m);
             t.builtMs = ::GetTickCount64();
         }
 
@@ -156,7 +159,9 @@ namespace HeuristicScorer
             return *c;
         }
 
-        // 返回窗口所在进程的“父进程 exe 名”（小写）；失败返回空
+        // 返回窗口所在进程的“父进程 exe 名”（小写）；取不到返回空。
+        // 先用 Toolhelp 快照（自带 exe 名，免 OpenProcess，可覆盖系统/提权父进程），
+        // 仅当父进程已退出、不在快照中时才回退 OpenProcess 查询。
         inline std::wstring GetParentExe(DWORD pid)
         {
             if (!pid) return {};
@@ -168,14 +173,19 @@ namespace HeuristicScorer
                 if (it != pc.map.end() && it->second.first == ct) return it->second.second;
             }
             DWORD ppid = 0;
+            std::wstring parent;
             ProcTable& pt = ProcTableInstance();
             {
                 std::lock_guard<std::mutex> l(pt.mtx);
                 if (::GetTickCount64() - pt.builtMs > kProcTableTtlMs) RebuildProcTable(pt);
-                auto it = pt.ppid.find(pid);
-                if (it != pt.ppid.end()) ppid = it->second;
+                auto it = pt.proc.find(pid);
+                if (it != pt.proc.end()) {
+                    ppid = it->second.ppid;
+                    auto pit = pt.proc.find(ppid);              // 父进程也在快照里 → 直接取名字
+                    if (pit != pt.proc.end()) parent = pit->second.name;
+                }
             }
-            std::wstring parent = ProcessNameByPid(ppid);
+            if (parent.empty() && ppid) parent = ProcessNameByPid(ppid);   // 父进程已退出 → 兜底
             {
                 std::lock_guard<std::mutex> l(pc.mtx);
                 if (pc.map.size() > kParentCacheMax) pc.map.clear();
@@ -397,21 +407,28 @@ namespace HeuristicScorer
         EnqueueSignatureCore(path);
     }
 
-    // 永不阻塞：除短暂持锁外不做任何 IO/签名验证。
-    // 未命中时乐观返回 true（临时视为“已签名”），后台验证完成后由 SigCache 纠正。
-    // 取舍：这样避免首次遇到正常软件就加 unsignedExe / unsignedUserDir 权重（宁可漏、不可误伤），
-    // 代价是极短窗口内未签名样本会少拿 unsigned 权重（也可能拿到 signedExe 的 -5）。
-    inline bool IsFileSignedCached(std::wstring const& path)
+    // 签名三态：未命中仅入队，绝不阻塞、也不再乐观冒充“已签名”。
+    enum class SignatureStatus { Unknown, Signed, Unsigned };
+
+    // 永不阻塞：除短暂持锁外不做任何 IO/签名验证；未命中返回 Unknown。
+    inline SignatureStatus GetSignatureStatus(std::wstring const& path)
     {
-        if (path.empty()) return false;
+        if (path.empty()) return SignatureStatus::Unknown;
         SigState& st = Sig();
         {
             std::lock_guard<std::mutex> l(st.mtx);
             auto it = st.cache.find(path);
-            if (it != st.cache.end()) return it->second;
+            if (it != st.cache.end())
+                return it->second ? SignatureStatus::Signed : SignatureStatus::Unsigned;
         }
         EnqueueSignature(path);
-        return true;
+        return SignatureStatus::Unknown;
+    }
+
+    // 兼容包装：仅“已确认签名”为 true；Unknown 亦为 false。新代码请用 GetSignatureStatus。
+    inline bool IsFileSignedCached(std::wstring const& path)
+    {
+        return GetSignatureStatus(path) == SignatureStatus::Signed;
     }
 
     // 采集窗口全部特征：输入 hwnd、事件时间与前前台 pid，输出 Features（DPI 已归一，含类名/路径/父进程）。
@@ -486,7 +503,12 @@ namespace HeuristicScorer
 
         b += (f.clsHexRatio > kHexRatioThreshold) ? L'T' : L'F';
         b += (f.procAgeSec >= 0 && f.procAgeSec < kYoungProcessSec) ? L'T' : L'F';
-        b += (!f.path.empty() && !IsFileSignedCached(f.path)) ? L'T' : L'F';
+        // 14: 未签名 T / 已签名 F / 未知 U（U 在 train.py 记 -1 哨兵，不再伪造成 F）
+        {
+            auto sig = GetSignatureStatus(f.path);
+            b += (sig == SignatureStatus::Unsigned) ? L'T'
+               : (sig == SignatureStatus::Signed)   ? L'F' : L'U';
+        }
         b += (f.userIdle > 0) ? L'T' : L'F';
         b += (f.farFromMouse > 0) ? L'T' : L'F';
         b += (f.parentExplorer > 0) ? L'T' : L'F';
@@ -568,16 +590,17 @@ namespace HeuristicScorer
         if (f.sameProcAsPrevForeground > 0) add(g_weights.sameProcAsPrevForeground, L"same_fg");
 
         if (!f.path.empty()) {
-            bool signed_ = IsFileSignedCached(f.path);
-            if (signed_) {
+            auto sig = GetSignatureStatus(f.path);
+            if (sig == SignatureStatus::Signed) {
                 add(g_weights.signedExe, L"signed");
             }
-            else {
+            else if (sig == SignatureStatus::Unsigned) {
                 add(g_weights.unsignedExe, L"unsigned");
                 if (f.pathTemp > 0 || f.pathRoaming > 0) {
                     add(g_weights.unsignedUserDir, L"unsigned_userdir");
                 }
             }
+            // Unknown：签名未就绪，不加任何签名相关权重（既不误伤也不漏判）
         }
         else {
             detail += L"no_path ";
