@@ -220,7 +220,8 @@ namespace PopupBlocker
     // 落盘由独立写线程完成，钩子线程只入缓冲并唤醒，避免前台被磁盘 IO 阻塞。
     inline std::mutex LogMutex;
     inline std::string LogBuffer;
-    inline constexpr size_t kLogFlushBytes = 64 * 1024;   // 64KB
+    inline constexpr size_t kLogFlushBytes = 64 * 1024;      // 64KB
+    inline constexpr size_t kLogBufferMax  = 8 * 1024 * 1024; // 8MB：写线程卡住时丢弃，防 OOM
 
     inline std::thread LogWriterThread;
     inline std::condition_variable LogCv;
@@ -306,6 +307,14 @@ namespace PopupBlocker
         LogCv.notify_all();
         std::unique_lock<std::mutex> lk(LogMutex);
         LogCv.wait(lk, [] { return LogBuffer.empty() && !LogFlushRequested && !LogWriting; });
+    }
+
+    // 非阻塞：只请求写线程尽快落盘，调用方不等待（供日志页定时器等 UI 路径使用）。
+    inline void RequestFlushLog()
+    {
+        if (!LogWriterRunning) { FlushLog(); return; }
+        { std::lock_guard<std::mutex> lk(LogMutex); LogFlushRequested = true; }
+        LogCv.notify_all();
     }
 
     // 清空日志：丢弃缓冲并截断文件（避免清空后旧缓冲又被写回）
@@ -677,34 +686,41 @@ namespace PopupBlocker
 
         inline void Log(std::wstring const& s)
         {
-            SYSTEMTIME st{}; ::GetLocalTime(&st);
-            WCHAR ts[kTimestampBufferLen]{};
-            swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
-                st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-            std::wstring full = ts + s;
-
-            int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
-            if (need <= 0) return;
-
-            std::lock_guard<std::mutex> lock(LogMutex);
-            size_t old = LogBuffer.size();
-            LogBuffer.resize(old + static_cast<size_t>(need) - 1);
-            ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, LogBuffer.data() + old, need, nullptr, nullptr);
-            LogBuffer += "\r\n";
-            if (LogBuffer.size() >= kLogFlushBytes)
+            try
             {
-                if (LogWriterRunning)
+                SYSTEMTIME st{}; ::GetLocalTime(&st);
+                WCHAR ts[kTimestampBufferLen]{};
+                swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
+                    st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+                std::wstring full = ts + s;
+
+                int need = ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                if (need <= 0) return;
+
+                std::lock_guard<std::mutex> lock(LogMutex);
+                size_t add = static_cast<size_t>(need) - 1 + 2;   // 内容 + CRLF
+                if (LogBuffer.size() + add > kLogBufferMax)       // 写线程卡住/资源紧张：丢弃本条，绝不 OOM
+                    return;
+                size_t old = LogBuffer.size();
+                LogBuffer.resize(old + static_cast<size_t>(need) - 1);
+                ::WideCharToMultiByte(CP_UTF8, 0, full.c_str(), -1, LogBuffer.data() + old, need, nullptr, nullptr);
+                LogBuffer += "\r\n";
+                if (LogBuffer.size() >= kLogFlushBytes)
                 {
-                    LogFlushRequested = true;
-                    LogCv.notify_all();
-                }
-                else
-                {
-                    // 写线程未运行（引擎未 Start）：内联落盘，保证不丢日志。
-                    std::string out; out.swap(LogBuffer);
-                    WriteLogBytes(out);
+                    if (LogWriterRunning)
+                    {
+                        LogFlushRequested = true;
+                        LogCv.notify_all();
+                    }
+                    else
+                    {
+                        // 写线程未运行（引擎未 Start）：内联落盘，保证不丢日志。
+                        std::string out; out.swap(LogBuffer);
+                        WriteLogBytes(out);
+                    }
                 }
             }
+            catch (...) { /* 钩子线程绝不抛出：日志失败不影响拦截 */ }
         }
 
         struct EventVerdict {

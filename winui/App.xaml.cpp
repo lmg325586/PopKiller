@@ -160,7 +160,9 @@ namespace winrt::winui::implementation
 #if defined _DEBUG && !defined DISABLE_XAML_GENERATED_BREAK_ON_UNHANDLED_EXCEPTION
                 if (IsDebuggerPresent()) __debugbreak();
 #endif
-                CrashHandler::ReportCrash(message.empty() ? L"XAML 未处理异常" : message.c_str());
+                e.Handled(true);   // 阻止 XAML 再次抛出/递归
+                // 记录转储与日志后结束进程：不再停留在未响应状态
+                CrashHandler::ReportCrash(message.empty() ? L"XAML 未处理异常" : message.c_str(), nullptr, true);
             });
     }
 
