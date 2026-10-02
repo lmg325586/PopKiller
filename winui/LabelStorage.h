@@ -1,9 +1,11 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <string>
 #include <map>
+#include <cstdlib>
 #include "RuleStorage.h"
 
+// 训练样本标签持久化：labels.json 的读写及日志行/JSON 解析。
 namespace SampleLabels
 {
     struct Sample
@@ -26,6 +28,7 @@ namespace SampleLabels
         return p.substr(0, pos + 1) + L"labels.json";
     }
 
+    // 从 "key=value | ..." 形式的日志行中取出 key 的值，未找到返回空串。
     inline std::wstring ExtractField(std::wstring const& s, std::wstring const& key)
     {
         auto pos = s.find(key);
@@ -35,6 +38,7 @@ namespace SampleLabels
         return s.substr(pos, end == std::wstring::npos ? std::wstring::npos : end - pos);
     }
 
+    // 把一行日志解析为 Sample（action/reason/title/class/exe、heuristic(...) 分数、raw）。
     inline Sample ParseLine(std::wstring const& line)
     {
         Sample s;
@@ -67,6 +71,7 @@ namespace SampleLabels
         return s;
     }
 
+    // 从 labels.json 载入样本到 out（按 line 为键去重；读取或解析失败时只清空 out）。
     inline void Load(std::map<std::wstring, Sample>& out)
     {
         out.clear();
@@ -93,6 +98,7 @@ namespace SampleLabels
         catch (...) {}
     }
 
+    // 把样本集写入 labels.json（UTF-8），成功返回 true。
     inline bool Save(std::map<std::wstring, Sample> const& m)
     {
         nlohmann::json j;
@@ -114,6 +120,7 @@ namespace SampleLabels
         return PopupBlocker::WriteUtf8StringToFile(LabelsPath(), j.dump(4));
     }
 
+    // 导出训练用 JSON 字符串（带 type 标识与全部样本，含缩进）。
     inline std::string ExportJson(std::map<std::wstring, Sample> const& m)
     {
         nlohmann::json j;
@@ -135,6 +142,7 @@ namespace SampleLabels
         return j.dump(4);
     }
 
+    // 清空内存样本表并删除 labels.json。
     inline void Clear(std::map<std::wstring, Sample>& m)
     {
         m.clear();

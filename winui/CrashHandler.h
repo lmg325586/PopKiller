@@ -10,7 +10,7 @@
 // 全局崩溃处理：捕获未处理异常，在 exe 目录生成 minidump（.dmp）与崩溃日志（crash.log），
 namespace CrashHandler
 {
-    inline volatile LONG Handling = 0; // 防重入：崩溃处理中再次崩溃直接跳过
+    inline volatile LONG InHandler = 0; // 防重入：崩溃处理中再次崩溃直接跳过
 
     inline std::wstring ExeDir()
     {
@@ -20,6 +20,7 @@ namespace CrashHandler
         return p;
     }
 
+    // 把宽串转成 UTF-8 字节并写入句柄 h（空串直接返回）。
     inline void WriteUtf8(HANDLE h, std::wstring const& s)
     {
         if (s.empty()) return;
@@ -32,9 +33,9 @@ namespace CrashHandler
     }
 
     // 生成转储与日志并提示用户；ep 可为空（无异常上下文时仍导出各线程堆栈）
-    inline void Report(const wchar_t* reason, EXCEPTION_POINTERS* ep = nullptr)
+    inline void ReportCrash(const wchar_t* reason, EXCEPTION_POINTERS* ep = nullptr)
     {
-        if (::InterlockedCompareExchange(&Handling, 1, 0) != 0) return;
+        if (::InterlockedCompareExchange(&InHandler, 1, 0) != 0) return;
 
         std::wstring dir = ExeDir();
 
@@ -92,24 +93,24 @@ namespace CrashHandler
 
     inline LONG WINAPI Filter(EXCEPTION_POINTERS* ep)
     {
-        Report(L"未处理异常 (SEH)", ep);
+        ReportCrash(L"未处理异常 (SEH)", ep);
         return EXCEPTION_EXECUTE_HANDLER;
     }
 
     inline void OnTerminate()
     {
-        Report(L"C++ 未捕获异常 (std::terminate)");
+        ReportCrash(L"C++ 未捕获异常 (std::terminate)");
         ::TerminateProcess(::GetCurrentProcess(), 3);
     }
 
     inline void OnInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int, uintptr_t)
     {
-        Report(L"CRT 参数无效 (_invalid_parameter)");
+        ReportCrash(L"CRT 参数无效 (_invalid_parameter)");
     }
 
     inline void OnPureCall()
     {
-        Report(L"纯虚函数调用 (_purecall)");
+        ReportCrash(L"纯虚函数调用 (_purecall)");
     }
 
     inline void Init()

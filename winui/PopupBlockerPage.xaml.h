@@ -79,7 +79,6 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::Controls::Button removeBtn{ nullptr };
         };
         std::vector<std::unique_ptr<ConditionRow>> m_addRows, m_editRows;
-        bool m_populating{ false };
 
         // “编辑规则”对话框改为代码创建（避免声明在页面 XAML 树里导致的入场动画缺失，WinUI #8476 §9）
         winrt::Microsoft::UI::Xaml::Controls::ComboBox m_editListType{ nullptr };
@@ -98,6 +97,10 @@ namespace winrt::winui::implementation
         std::wstring RuleDisplay(RuleItem const& r) const;
 
         PopupBlocker::Rule ToEngineRule(RuleItem const& it);
+
+        // 在 m_rules 中查找与 conds 同内容（忽略名单类型）但名单类型相反的规则；
+        // 返回其真实下标，kInvalidIndex 表示无冲突。excludeReal 用于编辑场景排除自身。
+        size_t FindConflictingRule(std::vector<ConditionItem> const& conds, int listType, size_t excludeReal);
 
         winrt::fire_and_forget OpenEditDialog(size_t real);
         winrt::fire_and_forget PromptConflictEdit(size_t real);

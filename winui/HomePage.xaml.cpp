@@ -21,9 +21,21 @@ using namespace Microsoft::UI::Xaml::Input;
 
 namespace
 {
+    // 注册表字符串读取缓冲区长度（WCHAR 数）
+    constexpr DWORD kRegBufSize = 512;
+
+    // 状态刷新定时器间隔（毫秒）
+    constexpr int kStatusTimerMs = 1000;
+
+    // 光标光晕半径（设备无关像素）
+    constexpr double kGlowRadius = 100.0;
+
+    // Windows 11 起始内部版本号
+    constexpr uint16_t kWin11Build = 22000;
+
     std::wstring ReadRegString(HKEY key, LPCWSTR value)
     {
-        WCHAR buffer[512]{};
+        WCHAR buffer[kRegBufSize]{};
         DWORD size = sizeof(buffer);
         if (::RegGetValueW(key, nullptr, value, RRF_RT_REG_SZ, nullptr, buffer, &size) == ERROR_SUCCESS)
         {
@@ -99,7 +111,7 @@ namespace winrt::winui::implementation
             L" (OS 内部版本 " + std::to_wstring(build) + L"." + std::to_wstring(rev) + L")";
         VersionLineText().Text(hstring(versionLine));
 
-        std::wstring baseName = (build >= 22000) ? L"Windows 11" : L"Windows 10";
+        std::wstring baseName = (build >= kWin11Build) ? L"Windows 11" : L"Windows 10";
         std::wstring edition = baseName + L" " + EditionName(editionId);
         EditionText().Text(hstring(edition));
 
@@ -107,7 +119,7 @@ namespace winrt::winui::implementation
         OrgText().Text(hstring(org));
 
         m_statusTimer = DispatcherTimer();
-        m_statusTimer.Interval(std::chrono::milliseconds{ 1000 });
+        m_statusTimer.Interval(std::chrono::milliseconds{ kStatusTimerMs });
         m_statusTimer.Tick({ get_weak(), &HomePage::StatusTimer_Tick });
         m_statusTimer.Start();
         RefreshEngineStatus();
@@ -144,9 +156,7 @@ namespace winrt::winui::implementation
         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
         AppSettings::WriteInt(L"Blocker", L"Enabled", 1);
-        PopupBlocker::SyncFromSettings();
-        HeuristicML::GetInstance().Init();
-        PopupBlocker::Start();
+        PopupBlocker::StartEngine();
         RefreshEngineStatus();
     }
 
@@ -166,7 +176,7 @@ namespace winrt::winui::implementation
         auto pos = e.GetCurrentPoint(card).Position();
         double w = card.ActualWidth();
         double h = card.ActualHeight();
-        const double R = 100.0;
+        const double R = kGlowRadius;
 
         double dx = pos.X < 0 ? -pos.X : (pos.X > w ? pos.X - w : 0.0);
         double dy = pos.Y < 0 ? -pos.Y : (pos.Y > h ? pos.Y - h : 0.0);

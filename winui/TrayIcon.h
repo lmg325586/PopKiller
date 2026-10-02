@@ -3,6 +3,7 @@
 #include <shellapi.h>
 #include <functional>
 #include <vector>
+#include <string>
 #include "PopupBlocker.h"
 #include "AppSettings.h"
 #pragma comment(lib, "shell32.lib")
@@ -196,9 +197,7 @@ namespace TrayIcon
         }
         else
         {
-            PopupBlocker::SyncFromSettings();
-            HeuristicML::GetInstance().Init();
-            PopupBlocker::Start();
+            PopupBlocker::StartEngine();
             AppSettings::WriteInt(L"Blocker", L"Enabled", 1);
         }
 

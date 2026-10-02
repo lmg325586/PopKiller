@@ -8,6 +8,7 @@
 #include <thread>
 #include <condition_variable>
 #include <algorithm>
+#include <utility>
 #include <wintrust.h>
 #include <tlhelp32.h>
 
@@ -15,6 +16,20 @@
 
 namespace HeuristicScorer
 {
+    // ===== 常量 =====
+    inline constexpr float kSmallW = 400.f;                     // 小窗宽阈值（逻辑像素）
+    inline constexpr float kSmallH = 300.f;                     // 小窗高阈值（逻辑像素）
+    inline constexpr float kLargeW = 800.f;                     // 大窗宽阈值（逻辑像素）
+    inline constexpr float kLargeH = 600.f;                     // 大窗高阈值（逻辑像素）
+    inline constexpr float kHexRatioThreshold = 0.8f;           // 类名十六进制占比阈值
+    inline constexpr float kDigitRatioThreshold = 0.6f;         // 类名数字占比阈值
+    inline constexpr size_t kRandomClassMinLen = 6;             // 随机类名最短长度
+    inline constexpr float kYoungProcessSec = 120.f;            // 年轻进程秒数阈值
+    inline constexpr long long kUserIdleThresholdMs = 5000;     // 视为空闲的毫秒阈值
+    inline constexpr float kFarFromMouseDip = 300.f;            // 距鼠标过远的 DIP 阈值
+    inline constexpr unsigned long long kProcTableTtlMs = 2000; // 进程表缓存 TTL
+    inline constexpr size_t kParentCacheMax = 4096;             // 父进程缓存上限
+
     namespace detail
     {
         inline std::wstring Lower(std::wstring s)
@@ -52,7 +67,7 @@ namespace HeuristicScorer
             return Lower(buf);
         }
 
-        inline float CalcUserIdle(DWORD evTime)
+        inline float IsUserIdle(DWORD evTime)
         {
             LASTINPUTINFO lii{}; lii.cbSize = sizeof(lii);
             if (!::GetLastInputInfo(&lii)) return 0.f;
@@ -61,17 +76,17 @@ namespace HeuristicScorer
             long long idleMs = diff;
             if (idleMs < 0) idleMs = 0;
 
-            return (idleMs > 5000) ? 1.f : 0.f;
+            return (idleMs > kUserIdleThresholdMs) ? 1.f : 0.f;
         }
 
         // scale = DPI/96：阈值按 300 逻辑像素换算成物理像素（300*scale）
-        inline float CalcFarFromMouse(RECT const& rc, float scale)
+        inline float IsFarFromMouse(RECT const& rc, float scale)
         {
             POINT cpt{}; ::GetCursorPos(&cpt);
             int dx = (cpt.x < rc.left) ? (rc.left - cpt.x) : (cpt.x > rc.right ? cpt.x - rc.right : 0);
             int dy = (cpt.y < rc.top) ? (rc.top - cpt.y) : (cpt.y > rc.bottom ? cpt.y - rc.bottom : 0);
             long long d2 = (long long)dx * dx + (long long)dy * dy;
-            long long lim = (long long)(300.f * scale);
+            long long lim = (long long)(kFarFromMouseDip * scale);
             return (d2 > lim * lim) ? 1.f : 0.f;
         }
 
@@ -97,7 +112,7 @@ namespace HeuristicScorer
             std::unordered_map<DWORD, DWORD> ppid;   // pid -> 父 pid
             long long builtMs = 0;
         };
-        inline ProcTable& Proc()
+        inline ProcTable& ProcTableInstance()
         {
             static ProcTable* t = new ProcTable();
             return *t;
@@ -135,7 +150,7 @@ namespace HeuristicScorer
             std::mutex mtx;
             std::unordered_map<DWORD, std::pair<unsigned long long, std::wstring>> map; // childPid -> {createTime, parentExe}
         };
-        inline ParentCache& ParentC()
+        inline ParentCache& ParentCacheInstance()
         {
             static ParentCache* c = new ParentCache();
             return *c;
@@ -146,24 +161,24 @@ namespace HeuristicScorer
         {
             if (!pid) return {};
             unsigned long long ct = ProcCreateTime(pid);
-            ParentCache& pc = ParentC();
+            ParentCache& pc = ParentCacheInstance();
             {
                 std::lock_guard<std::mutex> l(pc.mtx);
                 auto it = pc.map.find(pid);
                 if (it != pc.map.end() && it->second.first == ct) return it->second.second;
             }
             DWORD ppid = 0;
-            ProcTable& pt = Proc();
+            ProcTable& pt = ProcTableInstance();
             {
                 std::lock_guard<std::mutex> l(pt.mtx);
-                if (::GetTickCount64() - pt.builtMs > 2000) RebuildProcTable(pt);
+                if (::GetTickCount64() - pt.builtMs > kProcTableTtlMs) RebuildProcTable(pt);
                 auto it = pt.ppid.find(pid);
                 if (it != pt.ppid.end()) ppid = it->second;
             }
             std::wstring parent = ProcessNameByPid(ppid);
             {
                 std::lock_guard<std::mutex> l(pc.mtx);
-                if (pc.map.size() > 4096) pc.map.clear();
+                if (pc.map.size() > kParentCacheMax) pc.map.clear();
                 pc.map[pid] = { ct, parent };
             }
             return parent;
@@ -173,35 +188,35 @@ namespace HeuristicScorer
     // ===== 权重表 =====
     struct Weights
     {
-        float owner = 15;
-        float toolWin = 12;
-        float topmost = 20;
+        float owner = 16;
+        float toolWin = 13;
+        float topmost = 22;
         float noActivate = 5;
-        float notResizable = 12;
+        float notResizable = 13;
         float resizable = -15;
-        float noMinMax = 12;
+        float noMinMax = 13;
         float hasMinMax = -5;
         float captionSysmenu = -10;
-        float smallWindow = 28;
+        float smallWindow = 29;
         float largeWindow = -20;
-        float titleEmpty = 20;
-        float titleKwHit = 46;
-        float clsHex = 10;
-        float pathTemp = 20;
-        float pathRoaming = 12;
-        float youngProcess = 5;
-        float unsignedExe = 12;
-        float unsignedUserDir = 25;
+        float titleEmpty = 22;
+        float titleKwHit = 48;
+        float clsHex = 12;
+        float pathTemp = 22;
+        float pathRoaming = 14;
+        float youngProcess = 6;
+        float unsignedExe = 14;
+        float unsignedUserDir = 27;
         float signedExe = -5;
-        float userIdle = 15;
-        float farFromMouse = 10;
+        float userIdle = 16;
+        float farFromMouse = 11;
         float mouseClose = -25;
         float parentExplorer = -8;              // 父进程是 explorer（外壳/用户启动）→ 更像正常窗
-        float parentSystem = 8;                 // 父进程是系统/后台宿主 → 可疑
-        float parentUnknown = 4;                // 取不到父进程 → 轻微可疑
+        float parentSystem = 11;                // 父进程是系统/后台宿主 → 可疑
+        float parentUnknown = 7;                // 取不到父进程 → 轻微可疑
         float sameProcAsPrevForeground = -12;   // 与“刚在前台的进程”同进程 → 很可能是自家弹窗
     };
-    inline Weights g_w{};
+    inline Weights g_weights{};
 
     struct Features
     {
@@ -209,9 +224,9 @@ namespace HeuristicScorer
         float resizable, hasMinMax, captionSysmenu;
         float wDip, hDip;      // 逻辑像素宽高（已按窗口 DPI 归一）
         float dpiScale;        // 窗口 DPI / 96
-        float titleLen, titleEmpty, titleDigitRatio, titleKwHits;
-        float clsLen, clsHexRatio;
-        float pathTemp, pathRoaming, pathDepth, exeDigitRatio;
+        float titleEmpty, titleKwHits;
+        float clsHexRatio;
+        float pathTemp, pathRoaming;
         float procAgeSec;
         float userIdle;
         float farFromMouse;      // 距鼠标是否超过 300 逻辑像素（按窗口 DPI 归一）
@@ -240,8 +255,8 @@ namespace HeuristicScorer
     // 类名是否“看起来随机”：长度≥6 且十六进制/数字占比高（供规则“类名随机”条件使用）
     inline bool LooksLikeRandomClass(std::wstring const& cls)
     {
-        if (cls.size() < 6) return false;
-        return HexRatio(cls) >= 0.8f || DigitRatio(cls) >= 0.6f;
+        if (cls.size() < kRandomClassMinLen) return false;
+        return HexRatio(cls) >= kHexRatioThreshold || DigitRatio(cls) >= kDigitRatioThreshold;
     }
 
     inline float ProcessAgeSeconds(HWND hwnd)
@@ -290,9 +305,6 @@ namespace HeuristicScorer
 
         return res == ERROR_SUCCESS;
     }
-
-    // 兼容旧名（DOCUMENTATION.md 中的公开接口），语义不变
-    inline bool IsFileSigned(std::wstring const& path) { return VerifyFileSignature(path); }
 
     // ===== 签名验证：后台线程预取 + 缓存 =====
     // 钩子线程绝不阻塞：命中缓存直接返回；未命中只入队并由后台线程验证。
@@ -402,6 +414,7 @@ namespace HeuristicScorer
         return true;
     }
 
+    // 采集窗口全部特征：输入 hwnd、事件时间与前前台 pid，输出 Features（DPI 已归一，含类名/路径/父进程）。
     inline Features ExtractFeatures(HWND hwnd, DWORD evTime = 0, DWORD prevForegroundPid = 0)
     {
         if (evTime == 0) evTime = static_cast<DWORD>(::GetTickCount64());
@@ -424,26 +437,19 @@ namespace HeuristicScorer
         f.hDip = float(rc.bottom - rc.top) / f.dpiScale;
 
         std::wstring title = detail::GetTitle(hwnd);
-        f.titleLen = float(title.size());
         f.titleEmpty = title.empty() ? 1.f : 0.f;
-        f.titleDigitRatio = DigitRatio(title);
         float kw = 0.f;
         for (auto k : { L"热点", L"资讯", L"推荐", L"广告", L"优惠", L"领取", L"pop", L"ads" })
             if (title.find(k) != std::wstring::npos) kw += 1.f;
         f.titleKwHits = kw;
 
         std::wstring cls = detail::GetClass(hwnd);
-        f.clsLen = float(cls.size());
         f.clsHexRatio = HexRatio(cls);
         f.cls = cls;
 
         f.path = detail::GetProcessPath(hwnd);
         f.pathTemp = f.path.find(L"\\appdata\\local\\temp\\") != std::wstring::npos ? 1.f : 0.f;
         f.pathRoaming = f.path.find(L"\\appdata\\roaming\\") != std::wstring::npos ? 1.f : 0.f;
-        f.pathDepth = float(std::count(f.path.begin(), f.path.end(), L'\\'));
-        auto pos = f.path.find_last_of(L"\\/");
-        std::wstring exe = (pos == std::wstring::npos) ? f.path : f.path.substr(pos + 1);
-        f.exeDigitRatio = DigitRatio(exe);
         f.procAgeSec = ProcessAgeSeconds(hwnd);
 
         DWORD pid = 0; ::GetWindowThreadProcessId(hwnd, &pid);
@@ -455,11 +461,12 @@ namespace HeuristicScorer
         f.parentUnknown = parent.empty() ? 1.f : 0.f;
         f.sameProcAsPrevForeground = (prevForegroundPid != 0 && pid == prevForegroundPid) ? 1.f : 0.f;
 
-        f.userIdle = detail::CalcUserIdle(evTime);
-        f.farFromMouse = detail::CalcFarFromMouse(rc, f.dpiScale);
+        f.userIdle = detail::IsUserIdle(evTime);
+        f.farFromMouse = detail::IsFarFromMouse(rc, f.dpiScale);
         return f;
     }
 
+    // 把 Features 压成 21 位 T/F 原始串（顺序同权重量表），用于日志与规则调试。
     inline std::wstring BuildRawBits(Features const& f)
     {
         std::wstring b;
@@ -472,13 +479,13 @@ namespace HeuristicScorer
         b += (f.captionSysmenu > 0) ? L'T' : L'F';
         b += (f.titleEmpty > 0) ? L'T' : L'F';
 
-        b += (f.wDip < 400 && f.hDip < 300) ? L'T' : L'F';
-        b += (f.wDip > 800 || f.hDip > 600) ? L'T' : L'F';
+        b += (f.wDip < kSmallW && f.hDip < kSmallH) ? L'T' : L'F';
+        b += (f.wDip > kLargeW || f.hDip > kLargeH) ? L'T' : L'F';
         b += (f.pathTemp > 0) ? L'T' : L'F';
         b += (f.pathRoaming > 0) ? L'T' : L'F';
 
-        b += (f.clsHexRatio > 0.8f) ? L'T' : L'F';
-        b += (f.procAgeSec >= 0 && f.procAgeSec < 120) ? L'T' : L'F';
+        b += (f.clsHexRatio > kHexRatioThreshold) ? L'T' : L'F';
+        b += (f.procAgeSec >= 0 && f.procAgeSec < kYoungProcessSec) ? L'T' : L'F';
         b += (!f.path.empty() && !IsFileSignedCached(f.path)) ? L'T' : L'F';
         b += (f.userIdle > 0) ? L'T' : L'F';
         b += (f.farFromMouse > 0) ? L'T' : L'F';
@@ -489,6 +496,7 @@ namespace HeuristicScorer
         return b;
     }
 
+    // 加权打分：输入 Features，返回 ≥0 的分数并填充 detail 明细；命中硬过滤（基础设施类/零尺寸）时返回 0 且 detail 为 *_skip。
     inline int ScoreWindow(Features const& f, std::wstring& detail)
     {
         if (f.cls == L"consolewindowclass" ||
@@ -508,9 +516,9 @@ namespace HeuristicScorer
             return 0;
         }
 
-        float wpx = f.wDip;   // 逻辑像素，阈值按 DIP
-        float hpx = f.hDip;
-        if (wpx <= 0 || hpx <= 0)
+        float wDip = f.wDip;   // 逻辑像素，阈值按 DIP
+        float hDip = f.hDip;
+        if (wDip <= 0 || hDip <= 0)
         {
             detail = L"zero_size_skip";
             return 0;
@@ -525,49 +533,49 @@ namespace HeuristicScorer
             detail += L" ";
             };
 
-        if (f.hasOwner > 0) add(g_w.owner, L"owner");
-        if (f.toolWin > 0) add(g_w.toolWin, L"toolwin");
-        if (f.topmost > 0) add(g_w.topmost, L"topmost");
-        if (f.noActivate > 0) add(g_w.noActivate, L"noactivate");
+        if (f.hasOwner > 0) add(g_weights.owner, L"owner");
+        if (f.toolWin > 0) add(g_weights.toolWin, L"toolwin");
+        if (f.topmost > 0) add(g_weights.topmost, L"topmost");
+        if (f.noActivate > 0) add(g_weights.noActivate, L"noactivate");
 
-        if (f.resizable > 0) add(g_w.resizable, L"resizable");
-        else add(g_w.notResizable, L"notresizable");
+        if (f.resizable > 0) add(g_weights.resizable, L"resizable");
+        else add(g_weights.notResizable, L"notresizable");
 
-        if (f.hasMinMax > 0) add(g_w.hasMinMax, L"minmax");
-        else add(g_w.noMinMax, L"nominmax");
+        if (f.hasMinMax > 0) add(g_weights.hasMinMax, L"minmax");
+        else add(g_weights.noMinMax, L"nominmax");
 
-        if (f.captionSysmenu > 0) add(g_w.captionSysmenu, L"capsys");
+        if (f.captionSysmenu > 0) add(g_weights.captionSysmenu, L"capsys");
 
-        if (wpx < 400 && hpx < 300) add(g_w.smallWindow, L"small");
-        if (wpx > 800 || hpx > 600) add(g_w.largeWindow, L"large");
+        if (wDip < kSmallW && hDip < kSmallH) add(g_weights.smallWindow, L"small");
+        if (wDip > kLargeW || hDip > kLargeH) add(g_weights.largeWindow, L"large");
 
-        if (f.titleEmpty > 0) add(g_w.titleEmpty, L"notitle");
+        if (f.titleEmpty > 0) add(g_weights.titleEmpty, L"notitle");
         if (f.titleKwHits > 0)
-            add(g_w.titleKwHit * (f.titleKwHits > 2 ? 2 : f.titleKwHits), L"kw");
+            add(g_weights.titleKwHit * (f.titleKwHits > 2 ? 2 : f.titleKwHits), L"kw");
 
-        if (f.clsHexRatio > 0.8f) add(g_w.clsHex, L"hexclass");
-        if (f.pathTemp > 0) add(g_w.pathTemp, L"temp");
-        if (f.pathRoaming > 0) add(g_w.pathRoaming, L"roaming");
-        if (f.procAgeSec >= 0 && f.procAgeSec < 120) add(g_w.youngProcess, L"young");
+        if (f.clsHexRatio > kHexRatioThreshold) add(g_weights.clsHex, L"hexclass");
+        if (f.pathTemp > 0) add(g_weights.pathTemp, L"temp");
+        if (f.pathRoaming > 0) add(g_weights.pathRoaming, L"roaming");
+        if (f.procAgeSec >= 0 && f.procAgeSec < kYoungProcessSec) add(g_weights.youngProcess, L"young");
 
-        if (f.userIdle > 0) add(g_w.userIdle, L"idle");
-        if (f.farFromMouse > 0) add(g_w.farFromMouse, L"far_mouse");
-        if (f.farFromMouse == 0.f) add(g_w.mouseClose, L"mouse_close");
+        if (f.userIdle > 0) add(g_weights.userIdle, L"idle");
+        if (f.farFromMouse > 0) add(g_weights.farFromMouse, L"far_mouse");
+        if (f.farFromMouse == 0.f) add(g_weights.mouseClose, L"mouse_close");
 
-        if (f.parentExplorer > 0) add(g_w.parentExplorer, L"parent_explorer");
-        if (f.parentSystem > 0) add(g_w.parentSystem, L"parent_system");
-        if (f.parentUnknown > 0) add(g_w.parentUnknown, L"parent_unknown");
-        if (f.sameProcAsPrevForeground > 0) add(g_w.sameProcAsPrevForeground, L"same_fg");
+        if (f.parentExplorer > 0) add(g_weights.parentExplorer, L"parent_explorer");
+        if (f.parentSystem > 0) add(g_weights.parentSystem, L"parent_system");
+        if (f.parentUnknown > 0) add(g_weights.parentUnknown, L"parent_unknown");
+        if (f.sameProcAsPrevForeground > 0) add(g_weights.sameProcAsPrevForeground, L"same_fg");
 
         if (!f.path.empty()) {
             bool signed_ = IsFileSignedCached(f.path);
             if (signed_) {
-                add(g_w.signedExe, L"signed");
+                add(g_weights.signedExe, L"signed");
             }
             else {
-                add(g_w.unsignedExe, L"unsigned");
+                add(g_weights.unsignedExe, L"unsigned");
                 if (f.pathTemp > 0 || f.pathRoaming > 0) {
-                    add(g_w.unsignedUserDir, L"unsigned_userdir");
+                    add(g_weights.unsignedUserDir, L"unsigned_userdir");
                 }
             }
         }

@@ -1,8 +1,6 @@
 ﻿#include "pch.h"
 #include "RuleIOPage.xaml.h"
 #include "PopupBlocker.h"
-#include "RuleStorage.h"
-#include "App.xaml.h"
 #include "FilePicker.h"
 #include <algorithm>
 #if __has_include("RuleIOPage.g.cpp")

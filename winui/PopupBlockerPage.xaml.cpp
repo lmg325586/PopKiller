@@ -1,15 +1,11 @@
 ﻿#include "pch.h"
 #include "PopupBlockerPage.xaml.h"
 #include "AppSettings.h"
-#include "PopupBlocker.h"
-#include "RuleStorage.h" 
 #include "WindowPicker.h"
 #include "App.xaml.h"
 #include "RuleIOPage.xaml.h"
 #include <microsoft.ui.xaml.window.h>
-#include <winrt/Windows.System.h>
 #include <algorithm>
-#include <sstream>
 #if __has_include("PopupBlockerPage.g.cpp")
 #include "PopupBlockerPage.g.cpp"
 #endif
@@ -22,6 +18,28 @@ namespace
     // 单条规则最多允许的条件数
     inline constexpr size_t kMaxConditions = 4;
 
+    // “类名随机”字段在字段组合框中的索引（与 FieldLabel 的 case 对应）
+    inline constexpr int kRandomClassField = 4;
+
+    // 状态刷新定时器间隔（毫秒）
+    inline constexpr int kStatusTimerMs = 500;
+
+    // 条件面板滚动区最大高度（逻辑像素）
+    inline constexpr double kCondPanelMaxHeight = 360.0;
+
+    // 条件行组合框宽度（逻辑像素）
+    inline constexpr double kFieldComboWidth = 96.0;
+    inline constexpr double kModeComboWidth = 80.0;
+    inline constexpr double kListTypeComboWidth = 90.0;
+
+    // 次要文本颜色（ARGB）
+    inline constexpr winrt::Windows::UI::Color kTextDimColor{ 0xFF, 0x80, 0x80, 0x80 };
+    // 警告文本颜色（ARGB）
+    inline constexpr winrt::Windows::UI::Color kWarnColor{ 0xFF, 0xE6, 0xA2, 0x3C };
+
+    // 无效索引哨兵
+    inline constexpr size_t kInvalidIndex = static_cast<size_t>(-1);
+
     // ContentDialog 首次 ShowAsync 可能缺入场动画（WinUI 已知问题 microsoft/microsoft-ui-xaml#8476）：
     // ShowAsync 前显式指定默认样式，使模板在进入弹窗树前即定型。
     void ApplyDefaultDialogStyle(winrt::Microsoft::UI::Xaml::Controls::ContentDialog const& d)
@@ -33,33 +51,14 @@ namespace
     const wchar_t* ListTypeKey(int idx) { return idx == 1 ? L"W" : L"B"; }
     const wchar_t* ListTypeLabel(int idx) { return idx == 1 ? L"白名单" : L"黑名单"; }
 
-    const wchar_t* FieldKey(int idx)
-    {
-        switch (idx) {
-        case 0:  return L"exe";
-        case 1:  return L"path";
-        case 2:  return L"title";
-        default: return L"class";
-        }
-    }
-
     const wchar_t* FieldLabel(int idx)
     {
         switch (idx) {
         case 0:  return L"进程";
         case 1:  return L"路径";
         case 2:  return L"标题";
-        case 4:  return L"类名随机";
+        case kRandomClassField:  return L"类名随机";
         default: return L"类名";
-        }
-    }
-
-    const wchar_t* MatchModeKey(int idx)
-    {
-        switch (idx) {
-        case 0:  return L"contains";
-        case 1:  return L"exact";
-        default: return L"wildcard";
         }
     }
 
@@ -94,7 +93,7 @@ namespace winrt::winui::implementation
         AddConditionRow(false, ConditionItem{});
 
         m_statusTimer = DispatcherTimer();
-        m_statusTimer.Interval(std::chrono::milliseconds{ 500 });
+        m_statusTimer.Interval(std::chrono::milliseconds{ kStatusTimerMs });
         m_statusTimer.Tick({ get_weak(), &PopupBlockerPage::StatusTimer_Tick });
         m_statusTimer.Start();
         m_resumeButton = winrt::Microsoft::UI::Xaml::Controls::Button();
@@ -162,7 +161,7 @@ namespace winrt::winui::implementation
 
         for (auto const& c : it.conditions) {
             PopupBlocker::RuleCondition rc;
-            if (c.fieldType == 4) {
+            if (c.fieldType == kRandomClassField) {
                 rc.field = PopupBlocker::RuleField::Class;
                 rc.mode = PopupBlocker::MatchMode::RandomClass;
                 rc.pattern.clear();
@@ -186,9 +185,28 @@ namespace winrt::winui::implementation
         return r;
     }
 
+    size_t PopupBlockerPage::FindConflictingRule(std::vector<ConditionItem> const& conds, int listType, size_t excludeReal)
+    {
+        RuleItem normalized{};
+        normalized.listType = 0;
+        normalized.conditions = conds;
+        std::wstring key = PopupBlocker::RuleKey(ToEngineRule(normalized));
+
+        for (size_t i = 0; i < m_rules.size(); ++i)
+        {
+            if (i == excludeReal) continue;
+            if (m_rules[i].listType == listType) continue;
+            RuleItem norm{};
+            norm.listType = 0;
+            norm.conditions = m_rules[i].conditions;
+            if (PopupBlocker::RuleKey(ToEngineRule(norm)) == key) return i;
+        }
+        return kInvalidIndex;
+    }
+
     std::wstring PopupBlockerPage::ConditionLabel(ConditionItem const& c) const
     {
-        if (c.fieldType == 4) return L"类名随机";
+        if (c.fieldType == kRandomClassField) return L"类名随机";
         return std::wstring(FieldLabel(c.fieldType)) + L"|" +
             MatchModeLabel(c.matchMode) + L":" + c.pattern;
     }
@@ -206,7 +224,7 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::SyncConditionRowEnabled(ConditionRow const& row)
     {
-        bool randomClass = row.fieldCombo.SelectedIndex() == 4;
+        bool randomClass = row.fieldCombo.SelectedIndex() == kRandomClassField;
         row.modeCombo.Visibility(randomClass ? Visibility::Collapsed : Visibility::Visible);
         row.patternBox.Visibility(randomClass ? Visibility::Collapsed : Visibility::Visible);
     }
@@ -216,7 +234,7 @@ namespace winrt::winui::implementation
         auto row = std::make_unique<ConditionRow>();
 
         row->fieldCombo = Controls::ComboBox();
-        row->fieldCombo.MinWidth(96);
+        row->fieldCombo.MinWidth(kFieldComboWidth);
         row->fieldCombo.Items().Append(box_value(hstring(L"进程")));
         row->fieldCombo.Items().Append(box_value(hstring(L"路径")));
         row->fieldCombo.Items().Append(box_value(hstring(L"标题")));
@@ -224,7 +242,7 @@ namespace winrt::winui::implementation
         row->fieldCombo.Items().Append(box_value(hstring(L"类名随机")));
 
         row->modeCombo = Controls::ComboBox();
-        row->modeCombo.MinWidth(80);
+        row->modeCombo.MinWidth(kModeComboWidth);
         row->modeCombo.Items().Append(box_value(hstring(L"包含")));
         row->modeCombo.Items().Append(box_value(hstring(L"精确")));
         row->modeCombo.Items().Append(box_value(hstring(L"通配符")));
@@ -258,16 +276,11 @@ namespace winrt::winui::implementation
         grid.Children().Append(row->patternBox);
         grid.Children().Append(row->removeBtn);
 
-        {
-            bool prev = m_populating;
-            m_populating = true;
-            int f = (init.fieldType >= 0 && init.fieldType <= 4) ? init.fieldType : 0;
-            row->fieldCombo.SelectedIndex(f);
-            int m = (init.matchMode >= 0 && init.matchMode <= 2) ? init.matchMode : 0;
-            row->modeCombo.SelectedIndex(m);
-            row->patternBox.Text(hstring(init.pattern));
-            m_populating = prev;
-        }
+        int f = (init.fieldType >= 0 && init.fieldType <= kRandomClassField) ? init.fieldType : 0;
+        row->fieldCombo.SelectedIndex(f);
+        int m = (init.matchMode >= 0 && init.matchMode <= 2) ? init.matchMode : 0;
+        row->modeCombo.SelectedIndex(m);
+        row->patternBox.Text(hstring(init.pattern));
 
         ConditionRow* rowPtr = row.get();
         row->fieldCombo.SelectionChanged(
@@ -314,7 +327,7 @@ namespace winrt::winui::implementation
             int f = row->fieldCombo.SelectedIndex();
             if (f < 0) f = 0;
             c.fieldType = f;
-            if (f == 4) {
+            if (f == kRandomClassField) {
                 c.matchMode = 0;
                 c.pattern.clear();
             }
@@ -330,13 +343,8 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::PopulateConditions(bool editArea, std::vector<ConditionItem> const& conds)
     {
-        {
-            bool prev = m_populating;
-            m_populating = true;
-            (editArea ? m_editConditionsPanel : AddConditionsPanel()).Children().Clear();
-            (editArea ? m_editRows : m_addRows).clear();
-            m_populating = prev;
-        }
+        (editArea ? m_editConditionsPanel : AddConditionsPanel()).Children().Clear();
+        (editArea ? m_editRows : m_addRows).clear();
 
         for (auto const& c : conds) AddConditionRow(editArea, c);
         if ((editArea ? m_editRows : m_addRows).empty()) AddConditionRow(editArea, ConditionItem{});
@@ -374,7 +382,7 @@ namespace winrt::winui::implementation
             for (auto const& c : r.conditions) {
                 ConditionItem ci;
                 if (c.mode == PopupBlocker::MatchMode::RandomClass) {
-                    ci.fieldType = 4;
+                    ci.fieldType = kRandomClassField;
                     ci.matchMode = 0;
                     ci.pattern.clear();
                 }
@@ -478,7 +486,7 @@ namespace winrt::winui::implementation
         PopulateConditions(false, std::vector<ConditionItem>{ ConditionItem{} });
         ListTypeCombo().SelectedIndex(0);
         PickInfo().Text(L"");
-        PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
+        PickInfo().Foreground(Media::SolidColorBrush(kTextDimColor));
 
         SelectRuleByRealIndex(real);
         OpenEditDialog(real);
@@ -493,9 +501,7 @@ namespace winrt::winui::implementation
         AppSettings::WriteInt(L"Blocker", L"Enabled", on ? 1 : 0);
         if (on)
         {
-            PopupBlocker::SyncFromSettings();
-            HeuristicML::GetInstance().Init();
-            PopupBlocker::Start();
+            PopupBlocker::StartEngine();
             RefreshStatus();
         }
         else
@@ -544,14 +550,14 @@ namespace winrt::winui::implementation
         if (ok) {
             CommunityStatusText().Text(L"社区规则已更新，新增 " + winrt::hstring(msg) + L" 条");
             CommunityStatusText().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
+                kTextDimColor));
             RetryFetchButton().Visibility(Visibility::Collapsed);
             ReloadRulesFromEngine();
         }
         else {
             CommunityStatusText().Text(L"社区规则拉取失败：" + winrt::hstring(msg));
             CommunityStatusText().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+                kWarnColor));
             RetryFetchButton().Visibility(Visibility::Visible);
         }
     }
@@ -568,11 +574,11 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::EditRule_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        size_t real = (size_t)-1;
-        if (m_rightClickRealIndex != (size_t)-1 && m_rightClickRealIndex < m_rules.size())
+        size_t real = kInvalidIndex;
+        if (m_rightClickRealIndex != kInvalidIndex && m_rightClickRealIndex < m_rules.size())
         {
             real = m_rightClickRealIndex;
-            m_rightClickRealIndex = (size_t)-1;
+            m_rightClickRealIndex = kInvalidIndex;
         }
         else
         {
@@ -590,44 +596,24 @@ namespace winrt::winui::implementation
         if (conds.empty()) conds.push_back(ConditionItem{});
 
         for (auto const& c : conds) {
-            if (c.fieldType != 4 && c.pattern.empty()) {
+            if (c.fieldType != kRandomClassField && c.pattern.empty()) {
                 PickInfo().Text(L"⚠ 模式串不能为空，未添加。");
                 PickInfo().Foreground(Media::SolidColorBrush(
-                    winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+                    kWarnColor));
                 return;
             }
         }
 
         int listType = ListTypeCombo().SelectedIndex();
 
-        // 规范化条件集合（忽略名单类型）后比较，实现 A+B 与 B+A 视为同一规则
-        RuleItem normalized{};
-        normalized.listType = 0;
-        normalized.conditions = conds;
-        std::wstring candKey = PopupBlocker::RuleKey(ToEngineRule(normalized));
+        size_t conflictReal = FindConflictingRule(conds, listType, kInvalidIndex);
 
-        bool conflict = false;
-        size_t conflictReal = (size_t)-1;
-        for (size_t i = 0; i < m_rules.size(); ++i)
-        {
-            if (m_rules[i].listType == listType) continue;
-            RuleItem norm{};
-            norm.listType = 0;
-            norm.conditions = m_rules[i].conditions;
-            if (PopupBlocker::RuleKey(ToEngineRule(norm)) == candKey)
-            {
-                conflict = true;
-                conflictReal = i;
-                break;
-            }
-        }
-
-        if (conflict)
+        if (conflictReal != kInvalidIndex)
         {
             // 有冲突：不添加新规则，弹确认框询问是否编辑冲突规则
             PickInfo().Text(L"⚠ 检测到冲突：已存在相同内容的相反名单规则。");
             PickInfo().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+                kWarnColor));
             PromptConflictEdit(conflictReal);
             return;
         }
@@ -651,22 +637,22 @@ namespace winrt::winui::implementation
         if (!added) {
             PickInfo().Text(L"⚠ 相同规则已存在，未重复添加。");
             PickInfo().Foreground(Media::SolidColorBrush(
-                winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+                kWarnColor));
             return;
         }
 
         PickInfo().Text(L"");
         PickInfo().Foreground(Media::SolidColorBrush(
-            winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
+            kTextDimColor));
     }
 
     void PopupBlockerPage::DeleteRule_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        size_t real = (size_t)-1;
-        if (m_rightClickRealIndex != (size_t)-1 && m_rightClickRealIndex < m_rules.size())
+        size_t real = kInvalidIndex;
+        if (m_rightClickRealIndex != kInvalidIndex && m_rightClickRealIndex < m_rules.size())
         {
             real = m_rightClickRealIndex;
-            m_rightClickRealIndex = (size_t)-1;
+            m_rightClickRealIndex = kInvalidIndex;
         }
         else
         {
@@ -699,7 +685,7 @@ namespace winrt::winui::implementation
                 if (m_addRows.empty()) AddConditionRow(false, ConditionItem{});
                 ConditionRow* row = m_addRows.back().get();
                 int fieldIdx = row->fieldCombo.SelectedIndex();
-                if (fieldIdx == 4 && m_addRows.size() < kMaxConditions) {
+                if (fieldIdx == kRandomClassField && m_addRows.size() < kMaxConditions) {
                     // 最后一行是"类名随机"，无法填入模式串，新增一行承载
                     AddConditionRow(false, ConditionItem{});
                     row = m_addRows.back().get();
@@ -721,7 +707,7 @@ namespace winrt::winui::implementation
                     L"\nclass: " + r.className +
                     L"\ntitle: " + r.title);
                 PickInfo().Foreground(Media::SolidColorBrush(
-                    winrt::Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
+                    kTextDimColor));
             });
     }
 
@@ -803,7 +789,7 @@ namespace winrt::winui::implementation
     void PopupBlockerPage::RuleItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,
         winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const&)
     {
-        m_rightClickRealIndex = (size_t)-1;
+        m_rightClickRealIndex = kInvalidIndex;
         if (auto tb = sender.try_as<Controls::TextBlock>())
         {
             uint32_t uiIdx = 0;
@@ -831,7 +817,7 @@ namespace winrt::winui::implementation
     Controls::ContentDialog PopupBlockerPage::CreateEditDialog()
     {
         auto listType = Controls::ComboBox();
-        listType.MinWidth(90);
+        listType.MinWidth(kListTypeComboWidth);
         listType.Items().Append(box_value(hstring(L"黑名单")));
         listType.Items().Append(box_value(hstring(L"白名单")));
         m_editListType = listType;
@@ -840,7 +826,7 @@ namespace winrt::winui::implementation
         panel.Spacing(6);
         m_editConditionsPanel = panel;
         auto scroll = Controls::ScrollViewer();
-        scroll.MaxHeight(360);
+        scroll.MaxHeight(kCondPanelMaxHeight);
         scroll.Content(panel);
 
         auto addBtn = Controls::Button();
@@ -902,10 +888,10 @@ namespace winrt::winui::implementation
 
         for (auto const& c : conds)
         {
-            if (c.fieldType != 4 && c.pattern.empty())
+            if (c.fieldType != kRandomClassField && c.pattern.empty())
             {
                 PickInfo().Text(L"⚠ 模式串不能为空，未保存。");
-                PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+                PickInfo().Foreground(Media::SolidColorBrush(kWarnColor));
                 co_return;
             }
         }
@@ -917,27 +903,8 @@ namespace winrt::winui::implementation
         updatedItem.conditions = conds;
         updatedItem.fromCommunity = false;
 
-        // 规范化条件集合（忽略名单类型）后比较，实现 A+B 与 B+A 视为同一规则
-        RuleItem normalized{};
-        normalized.listType = 0;
-        normalized.conditions = conds;
-        std::wstring updKey = PopupBlocker::RuleKey(ToEngineRule(normalized));
-
-        bool conflict = false;
-        size_t conflictReal = (size_t)-1;
-        for (size_t i = 0; i < m_rules.size(); ++i)
-        {
-            if (i == real) continue;
-            auto const& r = m_rules[i];
-            if (r.listType == listType) continue;
-            RuleItem norm{};
-            norm.listType = 0;
-            norm.conditions = r.conditions;
-            if (PopupBlocker::RuleKey(ToEngineRule(norm)) == updKey)
-            {
-                conflict = true; conflictReal = i; break;
-            }
-        }
+        size_t conflictReal = FindConflictingRule(conds, listType, real);
+        bool conflict = (conflictReal != kInvalidIndex);
 
         std::wstring oldKey = PopupBlocker::RuleKey(ToEngineRule(m_rules[real]));
         bool oldCommunity = m_rules[real].fromCommunity;
@@ -955,12 +922,12 @@ namespace winrt::winui::implementation
         ReloadRulesFromEngine();
 
         if (conflict) {
-            size_t conflictRealAfter = (size_t)-1;
+            size_t conflictRealAfter = kInvalidIndex;
             for (size_t i = 0; i < m_rules.size(); ++i)
                 if (PopupBlocker::RuleKey(ToEngineRule(m_rules[i])) == conflictKey) { conflictRealAfter = i; break; }
-            if (conflictRealAfter != (size_t)-1) SelectRuleByRealIndex(conflictRealAfter);
+            if (conflictRealAfter != kInvalidIndex) SelectRuleByRealIndex(conflictRealAfter);
             PickInfo().Text(L"⚠ 已选中冲突规则：已存在相同内容的相反名单规则；白名单优先，该窗口将被放行。");
-            PickInfo().Foreground(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE6, 0xA2, 0x3C }));
+            PickInfo().Foreground(Media::SolidColorBrush(kWarnColor));
         }
         else {
             PickInfo().Text(L"");

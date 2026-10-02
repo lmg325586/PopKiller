@@ -12,6 +12,8 @@
 #include <queue>
 #include <map>
 #include <unordered_map>
+#include <memory>
+#include <utility>
 #include "HeuristicML.h"
 #include "AppSettings.h"
 #include "HeuristicScorer.h"
@@ -29,6 +31,27 @@
 
 namespace PopupBlocker
 {
+    // ===== 常量 =====
+    inline constexpr int kFieldCount = 4;                        // RuleIndex 字段数（exe/path/title/class）
+    inline constexpr int kFlagWhite = 1;                         // 白名单位
+    inline constexpr int kFlagBlack = 2;                         // 黑名单位
+    inline constexpr int kFlagBoth = kFlagWhite | kFlagBlack;    // 白+黑
+    inline constexpr long long kLogMaxBytes = 1024 * 1024;       // 日志文件大小上限
+    inline constexpr size_t kUtf8BomLen = 3;                     // UTF-8 BOM 字节数
+    inline constexpr size_t kWildcardMaxLen = 128;               // 通配符模式最大长度
+    inline constexpr size_t kWildcardMaxStars = 16;              // 通配符 * 数量上限
+    inline constexpr size_t kSha256HexLen = 64;                  // SHA256 十六进制串长度
+    inline constexpr UINT kFullscreenPollIntervalMs = 1000;      // 全屏状态轮询间隔
+    inline constexpr DWORD kReadyWaitMs = 2000;                  // 等待工作线程就绪超时
+    inline constexpr int kMsPerMinute = 60000;                   // 每分钟毫秒数
+    inline constexpr unsigned long long kNewlyCreatedWindowMs = 5000;   // 新创建进程判定窗口
+    inline constexpr unsigned long long kFiletimeTicksPerMs = 10000ULL; // FILETIME 每毫秒 tick 数
+    inline constexpr int kClassNameFallbackBuf = 256;            // 类名兜底缓冲长度
+    inline constexpr int kTimestampBufferLen = 32;               // 日志时间戳缓冲长度
+    inline constexpr int kHeuristicThresholdDefault = 70;        // 启发式阈值默认值
+    inline constexpr int kHeuristicThresholdMin = 0;             // 启发式阈值下限
+    inline constexpr int kHeuristicThresholdMax = 100;           // 启发式阈值上限
+
     inline std::vector<Rule> Rules;
     inline std::vector<std::wstring> CommunityRemoved;
     inline std::function<void(bool, std::wstring)> CommunityRulesFetchCallback;
@@ -90,7 +113,7 @@ namespace PopupBlocker
                 cur = (it != nodes[cur].next.end()) ? it->second : 0;
                 if (nodes[cur].out) {
                     flags |= nodes[cur].out;
-                    if (flags == 3) return flags;
+                    if (flags == kFlagBoth) return flags;
                 }
             }
             return flags;
@@ -99,13 +122,13 @@ namespace PopupBlocker
 
     struct RuleIndex
     {
-        std::unordered_map<std::wstring, int> exact[4];
-        AcAutomaton contains[4];
+        std::unordered_map<std::wstring, int> exact[kFieldCount];
+        AcAutomaton contains[kFieldCount];
         std::vector<Rule> wilds;        // 单条件通配符规则保留遍历
         std::vector<Rule> linear;       // 多条件 / 类名随机规则：事件时线性 AND 扫描
-        bool hasExact[4]{};
-        bool hasContains[4]{};
-        bool hasWild[4]{};
+        bool hasExact[kFieldCount]{};
+        bool hasContains[kFieldCount]{};
+        bool hasWild[kFieldCount]{};
         bool hasLinear = false;
         bool empty = true;
     };
@@ -126,7 +149,7 @@ namespace PopupBlocker
 
             RuleCondition const& c = r.conditions[0];
             int f = static_cast<int>(c.field);
-            int flags = r.isWhitelist ? 1 : 2;
+            int flags = r.isWhitelist ? kFlagWhite : kFlagBlack;
             switch (c.mode) {
             case MatchMode::Exact:
                 idx->exact[f][c.pattern] |= flags;
@@ -142,7 +165,7 @@ namespace PopupBlocker
                 break;
             }
         }
-        for (int f = 0; f < 4; ++f) if (idx->hasContains[f]) idx->contains[f].Build();
+        for (int f = 0; f < kFieldCount; ++f) if (idx->hasContains[f]) idx->contains[f].Build();
         return idx;
     }
 
@@ -152,11 +175,11 @@ namespace PopupBlocker
     inline std::function<void()> EnabledChangedCallback;
     inline bool ForceBlock = false;
     inline bool GameMode = false;   // 游戏模式：全屏游戏时拦截焦点窃取
-    inline std::wstring SelfExe;
+    inline std::wstring SelfExeName;
     inline bool ToastNotify = true;
 
-    inline constexpr int kMLArbLow = 35;
-    inline constexpr int kMLArbHigh = 90;
+    inline constexpr int kMLArbitrationLow = 35;
+    inline constexpr int kMLArbitrationHigh = 95;
 
     inline std::atomic<bool> Paused{ false };
     inline std::atomic<bool> ShuttingDown{ false };
@@ -165,7 +188,7 @@ namespace PopupBlocker
     inline std::atomic<int> PauseGen{ 0 };
 
     inline int HeuristicMode = 0;
-    inline int HeuristicThreshold = 70;
+    inline int HeuristicThreshold = kHeuristicThresholdDefault;
     inline bool VerboseLog = false;
     inline bool MLHeuristic = false;
 
@@ -212,7 +235,7 @@ namespace PopupBlocker
     {
         if (bytes.empty()) return;
         std::wstring p = LogPath();
-        constexpr long long Limit = 1024 * 1024;
+        constexpr long long Limit = kLogMaxBytes;
 
         WIN32_FILE_ATTRIBUTE_DATA fad{};
         bool exists = (::GetFileAttributesExW(p.c_str(), GetFileExInfoStandard, &fad) != FALSE);
@@ -223,7 +246,7 @@ namespace PopupBlocker
         FILE* f{};
         if (_wfopen_s(&f, p.c_str(), fresh ? L"wb" : L"ab") == 0 && f)
         {
-            if (fresh) ::fwrite("\xEF\xBB\xBF", 1, 3, f);
+            if (fresh) ::fwrite("\xEF\xBB\xBF", 1, kUtf8BomLen, f);
             ::fwrite(bytes.data(), 1, bytes.size(), f);
             ::fclose(f);
         }
@@ -302,7 +325,7 @@ namespace PopupBlocker
         // pattern 来自远端，病态 * 密集会反复回溯：过长或 * 过多时退化为精确比较，避免高开销重复求值
         size_t patLen = 0, starCount = 0;
         for (const wchar_t* q = pat; *q; ++q) { ++patLen; if (*q == L'*') ++starCount; }
-        if (patLen > 128 || starCount > 16) return ::wcscmp(str, pat) == 0;
+        if (patLen > kWildcardMaxLen || starCount > kWildcardMaxStars) return ::wcscmp(str, pat) == 0;
 
         const wchar_t* s = str, * p = pat;
         const wchar_t* star_s = nullptr, * star_p = nullptr;
@@ -316,11 +339,11 @@ namespace PopupBlocker
         return *p == L'\0';
     }
 
-    inline void InitSelfExe()
+    inline void InitSelfExeName()
     {
         std::wstring p = GetSelfPath();
         auto pos = p.find_last_of(L"\\/");
-        SelfExe = Lower((pos == std::wstring::npos) ? p : p.substr(pos + 1));
+        SelfExeName = Lower((pos == std::wstring::npos) ? p : p.substr(pos + 1));
     }
 
     inline bool LooksLikePopup(HWND hwnd)
@@ -378,7 +401,7 @@ namespace PopupBlocker
     {
         ForceBlock = AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1;
         HeuristicMode = AppSettings::ReadInt(L"Blocker", L"HeuristicMode", 0);
-        HeuristicThreshold = std::clamp(AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", 70), 0, 100);
+        HeuristicThreshold = std::clamp(AppSettings::ReadInt(L"Blocker", L"HeuristicThreshold", kHeuristicThresholdDefault), kHeuristicThresholdMin, kHeuristicThresholdMax);
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
         MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
         ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
@@ -431,7 +454,7 @@ namespace PopupBlocker
             if (shaResp.StatusCode() == winrt::Windows::Web::Http::HttpStatusCode::Ok) {
                 std::string shaText = winrt::to_string(co_await shaResp.Content().ReadAsStringAsync());
                 std::wstring expected = ParseExpectedSha(shaText);
-                if (expected.size() == 64) {
+                if (expected.size() == kSha256HexLen) {
                     HttpResponseMessage resp = co_await client.GetAsync(
                         winrt::Windows::Foundation::Uri(base + L"community_rules.json" + tick));
                     if (resp.StatusCode() == winrt::Windows::Web::Http::HttpStatusCode::Ok) {
@@ -534,7 +557,7 @@ namespace PopupBlocker
         inline bool IsProtected(HWND hwnd)
         {
             std::wstring exe = GetProcessName(hwnd);
-            if (!SelfExe.empty() && exe == SelfExe) return true;
+            if (!SelfExeName.empty() && exe == SelfExeName) return true;
 
             static const wchar_t* list[] = {
                 // 外壳与桌面
@@ -553,8 +576,8 @@ namespace PopupBlocker
                 L"taskmgr.exe", L"systemsettings.exe", L"systemsettingsbroker.exe",
                 L"control.exe", L"mmc.exe", L"openwith.exe", L"msiexec.exe",
                 L"sndvol.exe", L"snippingtool.exe", L"screensketch.exe",
-                L"mstsc.exe", L"conhost.exe", L"shellhost.exe", L"snippingtool.exe",
-                L"screensketch.exe", L"mspaint.exe", L"calc.exe",L"svchost.exe", L"services.exe", L"lsass.exe", L"csrss.exe",
+                L"mstsc.exe", L"conhost.exe", L"shellhost.exe",
+                L"mspaint.exe", L"calc.exe",L"svchost.exe", L"services.exe", L"lsass.exe", L"csrss.exe",
                 // Win11 小组件
                 L"widgets.exe", L"widgetservice.exe",
                 // 常见软件
@@ -582,8 +605,8 @@ namespace PopupBlocker
                 int written = ::GetClassNameW(hwnd, buf.data(), len + 1);
                 if (written > 0) { buf.resize(static_cast<size_t>(written)); return Lower(buf); }
             }
-            WCHAR stack[256]{};   // 兜底：长度查询失败时退回固定缓冲
-            int written = ::GetClassNameW(hwnd, stack, 256);
+            WCHAR stack[kClassNameFallbackBuf]{};   // 兜底：长度查询失败时退回固定缓冲
+            int written = ::GetClassNameW(hwnd, stack, kClassNameFallbackBuf);
             if (written <= 0) return {};
             return Lower(std::wstring(stack, static_cast<size_t>(written)));
         }
@@ -606,8 +629,8 @@ namespace PopupBlocker
             { std::lock_guard lock(RulesMutex); idx = RulesIndexView; }
             if (!idx || idx->empty) return 0;
 
-            std::wstring t[4];
-            bool loaded[4]{};
+            std::wstring t[kFieldCount];
+            bool loaded[kFieldCount]{};
             auto target = [&](int f) -> std::wstring const& {
                 if (!loaded[f]) {
                     switch (f) {
@@ -622,7 +645,7 @@ namespace PopupBlocker
                 };
 
             int flags = 0;
-            for (int f = 0; f < 4 && flags != 3; ++f) {
+            for (int f = 0; f < kFieldCount && flags != kFlagBoth; ++f) {
                 if (!idx->hasExact[f] && !idx->hasContains[f] && !idx->hasWild[f]) continue; // 无规则 field：零系统调用
                 if (idx->hasExact[f] || idx->hasContains[f]) {
                     std::wstring const& s = target(f);
@@ -634,28 +657,28 @@ namespace PopupBlocker
                 }
             }
             for (auto const& r : idx->wilds) {
-                if (flags == 3) break;
+                if (flags == kFlagBoth) break;
                 RuleCondition const& c = r.conditions[0];
                 if (WildcardMatch(target(static_cast<int>(c.field)).c_str(), c.pattern.c_str()))
-                    flags |= r.isWhitelist ? 1 : 2;
+                    flags |= r.isWhitelist ? kFlagWhite : kFlagBlack;
             }
             if (idx->hasLinear) {
                 for (auto const& r : idx->linear) {
-                    if (flags == 3) break;
+                    if (flags == kFlagBoth) break;
                     bool all = true;
                     for (auto const& c : r.conditions) {
                         if (!EvalCondition(c, target(static_cast<int>(c.field)))) { all = false; break; }
                     }
-                    if (all) flags |= r.isWhitelist ? 1 : 2;
+                    if (all) flags |= r.isWhitelist ? kFlagWhite : kFlagBlack;
                 }
             }
-            return (flags & 1) ? 1 : (flags & 2) ? 2 : 0;
+            return (flags & kFlagWhite) ? kFlagWhite : (flags & kFlagBlack) ? kFlagBlack : 0;
         }
 
         inline void Log(std::wstring const& s)
         {
             SYSTEMTIME st{}; ::GetLocalTime(&st);
-            WCHAR ts[32]{};
+            WCHAR ts[kTimestampBufferLen]{};
             swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d ",
                 st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
             std::wstring full = ts + s;
@@ -708,11 +731,11 @@ namespace PopupBlocker
             bool isPopup = LooksLikePopup(hwnd);
             v.matchResult = Match(hwnd);
 
-            if (v.matchResult == 1) {
+            if (v.matchResult == kFlagWhite) {
                 v.reason = L"whitelist";
                 v.action = L"allow";
             }
-            else if (v.matchResult == 2) {
+            else if (v.matchResult == kFlagBlack) {
                 v.reason = L"blacklist";
                 if (ForceBlock || isPopup) { v.shouldBlock = true; v.action = L"block"; }
             }
@@ -725,7 +748,7 @@ namespace PopupBlocker
 
                 bool mlYes = false;
                 if (MLHeuristic) {
-                    if (score >= kMLArbLow && score <= kMLArbHigh) {
+                    if (score >= kMLArbitrationLow && score <= kMLArbitrationHigh) {
                         mlYes = HeuristicML::GetInstance().Predict(hwnd, idEventTime, prevForegroundPid);
                         v.detail += mlYes ? L" ml=Y" : L" ml=N";
                     }
@@ -736,8 +759,8 @@ namespace PopupBlocker
                 v.reason = L"heuristic(" + std::to_wstring(score) + L")";
                 if (HeuristicMode == 2) {
                     bool block;
-                    if (score > kMLArbHigh) block = true;
-                    else if (score < kMLArbLow) block = false;
+                    if (score > kMLArbitrationHigh) block = true;
+                    else if (score < kMLArbitrationLow) block = false;
                     else block = MLHeuristic ? mlYes : (score >= HeuristicThreshold);
                     if (block) { v.shouldBlock = true; v.action = L"block"; }
                 }
@@ -746,7 +769,7 @@ namespace PopupBlocker
                 v.reason = L"heuristic_off";
             }
 
-            v.shouldLog = VerboseLog || v.shouldBlock || v.matchResult == 1 || v.matchResult == 2;
+            v.shouldLog = VerboseLog || v.shouldBlock || v.matchResult == kFlagWhite || v.matchResult == kFlagBlack;
             return v;
         }
 
@@ -768,7 +791,7 @@ namespace PopupBlocker
         }
 
         // 目标窗口进程是否刚创建（默认 5 秒内）
-        inline bool IsNewlyCreated(HWND hwnd, unsigned long long withinMs = 5000)
+        inline bool IsNewlyCreated(HWND hwnd, unsigned long long withinMs = kNewlyCreatedWindowMs)
         {
             DWORD pid = 0;
             ::GetWindowThreadProcessId(hwnd, &pid);
@@ -786,7 +809,7 @@ namespace PopupBlocker
             now.LowPart = nowFt.dwLowDateTime; now.HighPart = nowFt.dwHighDateTime;
             cre.LowPart = creation.dwLowDateTime; cre.HighPart = creation.dwHighDateTime;
             if (now.QuadPart <= cre.QuadPart) return false;
-            return ((now.QuadPart - cre.QuadPart) / 10000ULL) <= withinMs;
+            return ((now.QuadPart - cre.QuadPart) / kFiletimeTicksPerMs) <= withinMs;
         }
 
         // 焦点窃取：阻止置顶 + 关闭并隐藏
@@ -804,7 +827,6 @@ namespace PopupBlocker
             v.action = L"block";
             v.shouldBlock = true;
             v.shouldLog = true;
-            v.matchResult = 0;
             return v;
         }
 
@@ -860,7 +882,7 @@ namespace PopupBlocker
             HookFg = ::SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
             // 约每秒刷新一次全屏缓存（无窗口定时器，WM_TIMER 投递到本线程消息队列）
-            UINT_PTR fsTimer = ::SetTimer(nullptr, 0, 1000, nullptr);
+            UINT_PTR fsTimer = ::SetTimer(nullptr, 0, kFullscreenPollIntervalMs, nullptr);
             UpdateFullscreenState();
 
             while (::GetMessageW(&msg, nullptr, 0, 0) > 0) {
@@ -891,7 +913,7 @@ namespace PopupBlocker
             && GameMode
             && InFullscreenGame()
             && (idEvent == EVENT_SYSTEM_FOREGROUND || idEvent == EVENT_OBJECT_SHOW)
-            && detail::Match(hwnd) != 1
+            && detail::Match(hwnd) != kFlagWhite
             && detail::IsNewlyCreated(hwnd)
             && hwnd != detail::LastFullscreenHwnd)
         {
@@ -917,14 +939,22 @@ namespace PopupBlocker
     {
         std::lock_guard lock(detail::WorkerMutex);
         if (Running.exchange(true)) return;
-        InitSelfExe();
+        InitSelfExeName();
         if (!detail::ReadyEvent)
             detail::ReadyEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
         if (detail::ReadyEvent) ::ResetEvent(detail::ReadyEvent);
         detail::Worker = std::thread([] { detail::ThreadMain(nullptr); });
         StartLogWriter();
         // 等消息队列就绪（正常瞬时返回），确保随后的 Stop() 能可靠投递 WM_QUIT。
-        if (detail::ReadyEvent) ::WaitForSingleObject(detail::ReadyEvent, 2000);
+        if (detail::ReadyEvent) ::WaitForSingleObject(detail::ReadyEvent, kReadyWaitMs);
+    }
+
+    // 开启拦截的标准流程：刷新配置缓存 → 惰性加载 ML → 启动引擎
+    inline void StartEngine()
+    {
+        SyncFromSettings();
+        HeuristicML::GetInstance().Init();
+        Start();
     }
 
     inline void Stop()
@@ -944,7 +974,7 @@ namespace PopupBlocker
         bool wasPaused = Paused.exchange(true);
         if (!wasPaused && Running.load()) Stop();
 
-        PauseDeadlineMs.store(NowMs() + static_cast<long long>(minutes) * 60000);
+        PauseDeadlineMs.store(NowMs() + static_cast<long long>(minutes) * kMsPerMinute);
         int gen = ++PauseGen;
 
         std::thread([gen]() {

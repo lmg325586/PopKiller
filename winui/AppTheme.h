@@ -4,11 +4,12 @@
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
+#include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.h>
 
 namespace AppTheme
 {
-    inline int32_t Index{ 0 };
+    inline int32_t ThemeIndex{ 0 };   // 0 普通 / 1 Mica
     inline winrt::Microsoft::UI::Xaml::Controls::Panel TitleBarElement{ nullptr };
 
     inline void ApplyTitleBar(winrt::Microsoft::UI::Windowing::AppWindowTitleBar const& titleBar)
@@ -16,7 +17,7 @@ namespace AppTheme
         namespace ui = winrt::Windows::UI;
         namespace mux = winrt::Microsoft::UI::Xaml;
 
-        bool mica = (Index == 1);
+        bool mica = (ThemeIndex == 1);
         bool dark = TitleBarElement &&
             (TitleBarElement.ActualTheme() == mux::ElementTheme::Dark);
         auto bg = mica ? ui::Colors::Transparent()

@@ -4,6 +4,7 @@
 #include "AppTheme.h"
 #include "AutoStart.h"
 #include "AppSettings.h"
+#include "HeuristicML.h"
 #include "LicensePage.xaml.h"
 #include "PrivacyPage.xaml.h"
 #include "PopupBlocker.h"
@@ -55,7 +56,7 @@ namespace winrt::winui::implementation
         AutoStartToggle().IsOn(AutoStart::IsEnabled());
         int closeBehavior = AppSettings::ReadInt(L"UI", L"CloseBehavior", -1);
         CloseBehaviorCombo().SelectedIndex(closeBehavior >= 0 && closeBehavior <= 2 ? closeBehavior : 0);
-        ThemeComboBox().SelectedIndex(AppTheme::Index);
+        ThemeComboBox().SelectedIndex(AppTheme::ThemeIndex);
         ForceBlockToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ForceBlock", 0) == 1);
         MLHeuristicToggle().IsOn(PopupBlocker::MLHeuristic);
         ToastNotifyToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1);
@@ -82,8 +83,8 @@ namespace winrt::winui::implementation
             return;
         }
 
-        AppTheme::Index = ThemeComboBox().SelectedIndex();
-        AppSettings::WriteInt(L"UI", L"Material", AppTheme::Index);
+        AppTheme::ThemeIndex = ThemeComboBox().SelectedIndex();
+        AppSettings::WriteInt(L"UI", L"Material", AppTheme::ThemeIndex);
 
         auto window = winrt::winui::implementation::App::window;
         if (!window)
@@ -91,7 +92,7 @@ namespace winrt::winui::implementation
             return;
         }
 
-        if (AppTheme::Index == 1)
+        if (AppTheme::ThemeIndex == 1)
         {
             window.SystemBackdrop(Media::MicaBackdrop());
         }
@@ -148,7 +149,7 @@ namespace winrt::winui::implementation
 
         auto toggle = sender.as<winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch>();
         bool on = toggle.IsOn();
-        bool ok = on ? AutoStart::EnableAutoStartup() : AutoStart::DisableAutoStartup();
+        bool ok = on ? AutoStart::EnableAutoStart() : AutoStart::DisableAutoStart();
         if (!ok) toggle.IsOn(!on);
     }
 

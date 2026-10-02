@@ -1,7 +1,7 @@
 #pragma once
-#pragma comment(lib, "advapi32.lib")
 #include <windows.h>
 #include <string>
+#pragma comment(lib, "advapi32.lib")
 
 namespace AutoStart
 {
@@ -40,7 +40,7 @@ namespace AutoStart
         return true;
     }
 
-    inline bool EnableAutoStartup()
+    inline bool EnableAutoStart()
     {
         HKEY hKey{};
         if (::RegCreateKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, nullptr, 0, KEY_SET_VALUE,
@@ -67,7 +67,7 @@ namespace AutoStart
         return true;
     }
 
-    inline bool DisableAutoStartup()
+    inline bool DisableAutoStart()
     {
         HKEY hKey{};
         if (::RegOpenKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
@@ -79,6 +79,6 @@ namespace AutoStart
 
     inline void SyncPath()
     {
-        if (IsEnabled()) EnableAutoStartup();
+        if (IsEnabled()) EnableAutoStart();
     }
 }

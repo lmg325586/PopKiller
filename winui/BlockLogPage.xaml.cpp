@@ -2,13 +2,11 @@
 #include "pch.h"
 #include "BlockLogPage.xaml.h"
 #include "PopupBlocker.h"
-#include "LabelStorage.h"
 #include "FilePicker.h"
 #include <sstream>
 #include <vector>
 #include <algorithm>
 #include <functional>
-#include <ctime>
 #include <string>
 #if __has_include("BlockLogPage.g.cpp")
 #include "BlockLogPage.g.cpp"
@@ -19,12 +17,28 @@ using namespace Microsoft::UI::Xaml;
 
 namespace
 {
+    // 展开行时最多显示的最近记录条数
+    constexpr uint32_t kMaxSubRows = 100;
+
+    // 日志读取缓冲区大小（字节）
+    constexpr size_t kReadBuf = 4096;
+    constexpr size_t kChunkBuf = 65536;
+
+    // 图标列宽（逻辑像素）
+    constexpr double kColIconWidth = 20.0;
+
+    // 行内图标按钮尺寸 / chevron 列宽（逻辑像素）
+    constexpr double kIconButtonSize = 24.0;
+
+    // 判定“已置顶”的垂直偏移阈值（逻辑像素）
+    constexpr double kTopEpsilon = 4.0;
+
     std::wstring ReadLogText()
     {
         FILE* f{};
         if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"rb") != 0 || !f) return {};
         std::string data;
-        char buf[4096];
+        char buf[kReadBuf];
         size_t n;
         while ((n = ::fread(buf, 1, sizeof(buf), f)) > 0) data.append(buf, n);
         ::fclose(f);
@@ -47,7 +61,7 @@ namespace
         LARGE_INTEGER pos{}; pos.QuadPart = static_cast<LONGLONG>(offset);
         if (!::SetFilePointerEx(hf, pos, nullptr, FILE_BEGIN)) { ::CloseHandle(hf); return {}; }
         std::string buf;
-        char chunk[65536];
+        char chunk[kChunkBuf];
         DWORD rd{};
         while (::ReadFile(hf, chunk, sizeof(chunk), &rd, nullptr) && rd > 0) buf.append(chunk, rd);
         ::CloseHandle(hf);
@@ -198,7 +212,7 @@ namespace winrt::winui::implementation
             m_logScrollViewer.ViewChanged([this](IInspectable const&,
                 Controls::ScrollViewerViewChangedEventArgs const&) {
                     if (m_inApplyFilter || !m_logScrollViewer) return;
-                    bool nowPinned = m_logScrollViewer.VerticalOffset() < 4.0;
+                    bool nowPinned = m_logScrollViewer.VerticalOffset() < kTopEpsilon;
                     if (nowPinned && !m_pinnedToTop) {
                         m_pendingNewCount = 0;
                         SyncJumpButton();
@@ -318,7 +332,7 @@ namespace winrt::winui::implementation
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
         grid.ColumnDefinitions().GetAt(1).Width(GridLengthHelper::FromValueAndType(44, GridUnitType::Pixel));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
-        grid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(20, GridUnitType::Pixel));
+        grid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(kColIconWidth, GridUnitType::Pixel));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
         grid.ColumnDefinitions().GetAt(3).Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
         grid.ColumnDefinitions().Append(Controls::ColumnDefinition());
@@ -378,8 +392,8 @@ namespace winrt::winui::implementation
         auto menuBtn = Controls::Button();
         menuBtn.Content(box_value(hstring(L"⋯")));
         menuBtn.Padding(ThicknessHelper::FromUniformLength(0));
-        menuBtn.MinWidth(24);
-        menuBtn.MinHeight(24);
+        menuBtn.MinWidth(kIconButtonSize);
+        menuBtn.MinHeight(kIconButtonSize);
         menuBtn.FontSize(11);
         menuBtn.Background(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 }));
         menuBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
@@ -435,10 +449,10 @@ namespace winrt::winui::implementation
         auto head = Controls::Grid();
         for (int i = 0; i < 9; ++i) {
             auto cd = Controls::ColumnDefinition();
-            if (i == 0) cd.Width(GridLengthHelper::FromValueAndType(24, GridUnitType::Pixel));
+            if (i == 0) cd.Width(GridLengthHelper::FromValueAndType(kIconButtonSize, GridUnitType::Pixel));
             else if (i == 3) cd.Width(GridLengthHelper::FromValueAndType(150, GridUnitType::Pixel));
             else if (i == 4) cd.Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
-            else if (i == 7) cd.Width(GridLengthHelper::FromValueAndType(20, GridUnitType::Pixel));
+            else if (i == 7) cd.Width(GridLengthHelper::FromValueAndType(kColIconWidth, GridUnitType::Pixel));
             else cd.Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
             head.ColumnDefinitions().Append(cd);
         }
@@ -515,8 +529,8 @@ namespace winrt::winui::implementation
         // chevron 按钮（第 0 列）
         ui.chevronBtn = Controls::Button();
         ui.chevronBtn.Padding(ThicknessHelper::FromUniformLength(0));
-        ui.chevronBtn.MinWidth(24);
-        ui.chevronBtn.MinHeight(24);
+        ui.chevronBtn.MinWidth(kIconButtonSize);
+        ui.chevronBtn.MinHeight(kIconButtonSize);
         ui.chevronBtn.Background(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 }));
         ui.chevronBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
         ui.chevronBtn.Tag(box_value(static_cast<uint64_t>(gidx)));
@@ -536,8 +550,8 @@ namespace winrt::winui::implementation
         auto menuBtn = Controls::Button();
         menuBtn.Content(box_value(hstring(L"⋯")));
         menuBtn.Padding(ThicknessHelper::FromUniformLength(0));
-        menuBtn.MinWidth(24);
-        menuBtn.MinHeight(24);
+        menuBtn.MinWidth(kIconButtonSize);
+        menuBtn.MinHeight(kIconButtonSize);
         menuBtn.FontSize(12);
         menuBtn.Background(Media::SolidColorBrush(winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 }));
         menuBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
@@ -566,11 +580,11 @@ namespace winrt::winui::implementation
         ui->subPanel.Children().Clear();
         if (g.expanded) {
             size_t n = g.raws.size();
-            size_t from = (n > 100) ? n - 100 : 0;
+            size_t from = (n > kMaxSubRows) ? n - kMaxSubRows : 0;
             for (size_t i = n; i-- > from; ) ui->subPanel.Children().Append(BuildSubRow(g.raws[i]));
-            if (n > 100) {
+            if (n > kMaxSubRows) {
                 auto tip = Controls::TextBlock();
-                tip.Text(L"        … 仅显示最近 100 条 …");
+                tip.Text(std::wstring(L"        … 仅显示最近 ") + std::to_wstring(kMaxSubRows) + L" 条 …");
                 tip.FontSize(11);
                 tip.Foreground(BrushDim());
                 ui->subPanel.Children().Append(tip);
@@ -685,7 +699,7 @@ namespace winrt::winui::implementation
             UpdateRowUi(ui, m_groups[i]);
             if (m_groups[i].expanded) {
                 size_t n = m_groups[i].raws.size();
-                size_t from = (n > 100) ? n - 100 : 0;
+                size_t from = (n > kMaxSubRows) ? n - kMaxSubRows : 0;
                 for (size_t r = n; r-- > from; ) ui.subPanel.Children().Append(BuildSubRow(m_groups[i].raws[r]));
                 ui.subPanel.Visibility(Visibility::Visible);
             }
@@ -779,7 +793,7 @@ namespace winrt::winui::implementation
                         UpdateRowUi(m_rows[0], grp);
                         if (grp.expanded) {
                             m_rows[0].subPanel.Children().InsertAt(0, BuildSubRow(line));
-                            uint32_t cap = 100 + (grp.raws.size() > 100 ? 1 : 0);
+                            uint32_t cap = kMaxSubRows + (grp.raws.size() > kMaxSubRows ? 1 : 0);
                             while (m_rows[0].subPanel.Children().Size() > cap)
                                 m_rows[0].subPanel.Children().RemoveAt(m_rows[0].subPanel.Children().Size() - 1);
                         }

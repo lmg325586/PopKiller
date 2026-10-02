@@ -29,6 +29,24 @@ using namespace Microsoft::UI::Xaml::Controls;
 
 namespace
 {
+    // 最小窗口尺寸（逻辑像素）
+    constexpr int kMinWinW = 640;
+    constexpr int kMinWinH = 480;
+    // 初始窗口尺寸（逻辑像素）
+    constexpr int kInitWinW = 900;
+    constexpr int kInitWinH = 650;
+
+    // Toast 节流：全局最快 3s 一条、同一进程 60s 一条
+    constexpr int kToastThrottleGlobalMs = 3000;
+    constexpr int kToastThrottlePerExeMs = 60000;
+
+    // 第二实例转发 Toast 动作的 WM_COPYDATA 标识
+    constexpr ULONG_PTR kToastCopyData = 0x504B544F;
+
+    // Toast 动作参数
+    constexpr const wchar_t* kActionLog = L"action=log";
+    constexpr const wchar_t* kActionWhitelist = L"action=whitelist";
+
     LRESULT CALLBACK MinSizeSubclass(HWND h, UINT msg, WPARAM wp, LPARAM lp,
         UINT_PTR, DWORD_PTR)
     {
@@ -46,8 +64,8 @@ namespace
         {
             auto* mmi = reinterpret_cast<MINMAXINFO*>(lp);
             UINT dpi = ::GetDpiForWindow(h);
-            mmi->ptMinTrackSize.x = ::MulDiv(640, dpi, 96);
-            mmi->ptMinTrackSize.y = ::MulDiv(480, dpi, 96);
+            mmi->ptMinTrackSize.x = ::MulDiv(kMinWinW, dpi, 96);
+            mmi->ptMinTrackSize.y = ::MulDiv(kMinWinH, dpi, 96);
             return 0;
         }
 
@@ -55,7 +73,7 @@ namespace
         if (msg == WM_COPYDATA)
         {
             auto* cds = reinterpret_cast<COPYDATASTRUCT*>(lp);
-            if (cds && cds->dwData == 0x504B544F && cds->lpData)
+            if (cds && cds->dwData == kToastCopyData && cds->lpData)
             {
                 std::wstring payload(reinterpret_cast<wchar_t*>(cds->lpData));
                 auto sep = payload.find(L'|');
@@ -140,7 +158,7 @@ namespace winrt::winui::implementation
 
         auto titleBar = this->AppWindow().TitleBar();
         titleBar.IconShowOptions(winrt::Microsoft::UI::Windowing::IconShowOptions::HideIconAndSystemMenu);
-        AppTheme::Index = AppSettings::ReadInt(L"UI", L"Material", 0);
+        AppTheme::ThemeIndex = AppSettings::ReadInt(L"UI", L"Material", 0);
         ExtendsContentIntoTitleBar(true);
         SetTitleBar(AppTitleBar());
         AppTheme::TitleBarElement = AppTitleBar();
@@ -150,7 +168,7 @@ namespace winrt::winui::implementation
             AppTheme::ApplyTitleBar(titleBar);
             });
 
-        if (AppTheme::Index == 1)
+        if (AppTheme::ThemeIndex == 1)
         {
             SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
         }
@@ -176,8 +194,8 @@ namespace winrt::winui::implementation
             {
                 UINT dpi = ::GetDpiForWindow(hwnd);
                 this->AppWindow().Resize({
-                    ::MulDiv(900, dpi, 96),
-                    ::MulDiv(650, dpi, 96) });
+                    ::MulDiv(kInitWinW, dpi, 96),
+                    ::MulDiv(kInitWinH, dpi, 96) });
 
                 ::SetWindowSubclass(hwnd, MinSizeSubclass, 0, 0);
                 TrayIcon::Init(hwnd);
@@ -189,10 +207,8 @@ namespace winrt::winui::implementation
                     {
                         if (auto self = weakThis.get())
                         {
-                            // The tray callback runs inside the native window
-                            // procedure. Defer destruction until that message
-                            // has unwound so the subclass cannot be torn down
-                            // while it is still executing.
+                            // 托盘回调在原生窗口过程内执行：推迟销毁到该消息返回之后，
+                            // 避免子类过程尚未执行完就被拆掉。
                             self->DispatcherQueue().TryEnqueue([weakThis]()
                                 {
                                     if (auto queuedSelf = weakThis.get())
@@ -217,7 +233,7 @@ namespace winrt::winui::implementation
                         auto self = weakThis.get();
                         if (!self) return;
 
-                        if (AppTheme::Index == 1)
+                        if (AppTheme::ThemeIndex == 1)
                             self->SystemBackdrop(winrt::Microsoft::UI::Xaml::Media::MicaBackdrop());
 
                         auto item = self->NavView().SelectedItem().try_as<NavigationViewItem>();
@@ -227,12 +243,8 @@ namespace winrt::winui::implementation
                             if (auto t = item.Tag().try_as<hstring>()) tag = *t;
                         }
 
-                        if (tag == L"Blocker")
-                            self->ContentFrame().Navigate(xaml_typename<winrt::winui::PopupBlockerPage>());
-                        else if (tag == L"BlockLog")
-                            self->ContentFrame().Navigate(xaml_typename<winrt::winui::BlockLogPage>());
-                        else if (tag == L"Home")
-                            self->ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
+                        if (tag == L"Home" || tag == L"Blocker" || tag == L"BlockLog")
+                            self->NavigateFrameToTag(tag);
                         else
                             self->ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
                     };
@@ -249,9 +261,9 @@ namespace winrt::winui::implementation
                 static std::chrono::steady_clock::time_point s_lastGlobal{};
                 auto now = std::chrono::steady_clock::now();
                 std::lock_guard<std::mutex> lock(s_mtx);
-                if (now - s_lastGlobal < std::chrono::seconds(3)) return;
+                if (now - s_lastGlobal < std::chrono::milliseconds(kToastThrottleGlobalMs)) return;
                 auto it = s_lastPerExe.find(exe);
-                if (it != s_lastPerExe.end() && now - it->second < std::chrono::seconds(60)) return;
+                if (it != s_lastPerExe.end() && now - it->second < std::chrono::milliseconds(kToastThrottlePerExeMs)) return;
                 s_lastGlobal = now;
                 s_lastPerExe[exe] = now;
             }
@@ -262,19 +274,18 @@ namespace winrt::winui::implementation
 
                 if (matchResult == 2) {
 
-                    actionsXml = L"<actions>"
-                        L"<action content=\"查看日志\" arguments=\"action=log\"/>"
-                        L"</actions>";
+                    actionsXml = std::wstring(L"<actions>"
+                        L"<action content=\"查看日志\" arguments=\"") + kActionLog +
+                        L"\"/></actions>";
                 }
                 else {
 
-                    actionsXml = L"<actions>"
-                        L"<action content=\"加入白名单\" arguments=\"action=whitelist&amp;exe=" + XmlEscape(exe) + L"\"/>"
-                        L"<action content=\"查看日志\" arguments=\"action=log\"/>"
-                        L"</actions>";
+                    actionsXml = std::wstring(L"<actions>"
+                        L"<action content=\"加入白名单\" arguments=\"") + kActionWhitelist + L"&amp;exe=" + XmlEscape(exe) +
+                        L"\"/><action content=\"查看日志\" arguments=\"" + kActionLog + L"\"/></actions>";
                 }
 
-                std::wstring xml = L"<toast duration=\"short\" launch=\"action=log\">"
+                std::wstring xml = std::wstring(L"<toast duration=\"short\" launch=\"") + kActionLog + L"\">"
                     L"<visual><binding template=\"ToastGeneric\">"
                     L"<text>" + toastTitle + L"</text>"
                     L"<text>进程：" + XmlEscape(exe) + L"</text>";
@@ -416,7 +427,6 @@ namespace winrt::winui::implementation
     {
         if (args.IsSettingsSelected())
         {
-            m_currentTag = L"Settings";
             ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
             return;
         }
@@ -428,7 +438,6 @@ namespace winrt::winui::implementation
         }
 
         hstring tag = unbox_value<hstring>(item.Tag());
-        m_currentTag = tag;
         NavigateFrameToTag(tag);
     }
 

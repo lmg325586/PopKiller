@@ -3,6 +3,7 @@
 #include <commctrl.h>
 #include <functional>
 #include <string>
+#include <cstring>
 #include "PopupBlocker.h"
 
 #pragma comment(lib, "gdi32.lib")
@@ -20,10 +21,9 @@ namespace WindowPicker
 
     namespace detail
     {
-        inline HWND MainHwnd{};
         inline HWND OverlayHwnd{};
         inline HWND FrameHwnd{};
-        inline HWND Target{};
+        inline HWND TargetHwnd{};
         inline ULONGLONG StartTick = 0;
         inline std::function<void(PickResult)> OnPicked;
 
@@ -99,9 +99,9 @@ namespace WindowPicker
 
         inline void MoveFrame()
         {
-            if (!Target) { ::ShowWindow(FrameHwnd, SW_HIDE); return; }
+            if (!TargetHwnd) { ::ShowWindow(FrameHwnd, SW_HIDE); return; }
             RECT r{};
-            ::GetWindowRect(Target, &r);
+            ::GetWindowRect(TargetHwnd, &r);
             ::SetWindowPos(FrameHwnd, HWND_TOPMOST,
                 r.left - 3, r.top - 3,
                 (r.right - r.left) + 6, (r.bottom - r.top) + 6,
@@ -134,8 +134,8 @@ namespace WindowPicker
 
         inline void Teardown(bool commit)
         {
-            HWND t = Target;
-            Target = nullptr;
+            HWND t = TargetHwnd;
+            TargetHwnd = nullptr;
             if (OverlayHwnd) {
                 ::UnregisterHotKey(OverlayHwnd, 1);  // 即使注册失败也无害
                 ::ReleaseCapture();                  // 释放鼠标捕获
@@ -169,10 +169,10 @@ namespace WindowPicker
                 ::ShowWindow(h, SW_SHOWNA);
 
                 // 排除自身和框架窗口
-                if (t == FrameHwnd || t == h) t = Target;
-                if (t != Target)
+                if (t == FrameHwnd || t == h) t = TargetHwnd;
+                if (t != TargetHwnd)
                 {
-                    Target = t;
+                    TargetHwnd = t;
                     MoveFrame();
                 }
                 return 0;
@@ -202,9 +202,8 @@ namespace WindowPicker
         }
     }
 
-    inline void Start(HWND mainHwnd, std::function<void(PickResult)> cb)
+    inline void Start(HWND /*mainHwnd*/, std::function<void(PickResult)> cb)
     {
-        detail::MainHwnd = mainHwnd;
         detail::OnPicked = std::move(cb);
         if (detail::OverlayHwnd && ::IsWindowVisible(detail::OverlayHwnd)) return;
 
@@ -219,7 +218,7 @@ namespace WindowPicker
             OutputDebugStringW(L"RegisterHotKey(ESC) failed!\n");
         }
 
-        detail::Target = nullptr;
+        detail::TargetHwnd = nullptr;
         detail::StartTick = ::GetTickCount64();
 
         ::ShowWindow(detail::OverlayHwnd, SW_SHOW);

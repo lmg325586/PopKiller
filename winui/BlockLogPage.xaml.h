@@ -10,7 +10,6 @@
 namespace winrt::winui::implementation
 {
     struct LogGroup {
-        std::wstring key;
         std::wstring exe, title, cls;
         std::wstring action, ev, reason;
         int count = 0;
