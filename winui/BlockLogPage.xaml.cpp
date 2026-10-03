@@ -125,6 +125,8 @@ namespace
         ReplaceAll(s, L"ml=Y", L"ML=是");
         ReplaceAll(s, L"ml=N", L"ML=否");
         ReplaceAll(s, L"ml=-", L"ML=跳过");
+        ReplaceAll(s, L"infra_class_skip", L"基础设施类:跳过");
+        ReplaceAll(s, L"zero_size_skip", L"零尺寸:跳过");
         TranslateTokenName(s, L"mouse_close", L"靠近鼠标");
         TranslateTokenName(s, L"idle", L"用户空闲");
         TranslateTokenName(s, L"far_mouse", L"远离鼠标");
