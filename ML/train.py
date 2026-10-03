@@ -13,7 +13,7 @@ from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.model_selection import StratifiedKFold, GroupKFold, cross_val_predict
 from sklearn.metrics import accuracy_score
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
@@ -200,13 +200,43 @@ def main():
     y = np.asarray(y, dtype=np.int64)
     print(f"有效样本: {len(X)}  弹窗: {int(y.sum())}  非弹窗: {int(len(y) - y.sum())}")
 
-    # 特征诊断：零方差列 + 重复特征向量（重复会导致折内外泄漏、准确率虚高）
+    # 特征/泄漏诊断（仅报告，不删除样本）
     col_var = X.var(axis=0)
     zero_cols = [FEATURE_NAMES[i] for i in range(X.shape[1]) if float(col_var[i]) == 0.0]
-    _, uniq_idx = np.unique(X, axis=0, return_index=True)
-    dup = len(X) - len(uniq_idx)
     print(f"零方差列({len(zero_cols)}): {', '.join(zero_cols) if zero_cols else '无'}")
-    print(f"重复特征向量: {dup} / {len(X)}（重复越多，交叉验证越虚高）")
+
+    vec2labels, vec2idx = {}, {}
+    for i, v in enumerate(X):
+        k = tuple(float(t) for t in v)
+        vec2labels.setdefault(k, set()).add(int(y[i]))
+        vec2idx.setdefault(k, []).append(i)
+    dup = sum(len(v) - 1 for v in vec2idx.values())
+    conflicts = [k for k, labs in vec2labels.items() if len(labs) > 1]
+    conflict_rows = sum(len(vec2idx[k]) for k in conflicts)
+    print(f"重复特征向量: {dup} / {len(X)}（仅报告，不删除）")
+    print(f"同特征不同标签(冲突): {len(conflicts)} 组 / {conflict_rows} 条（特征不足以区分的样本）")
+
+    # 泄漏分组：同一窗口（exe/title/class）或特征完全相同（X 相同）的行并入同组，交给 GroupKFold，
+    # 避免同一行/同特征样本同时落在 train 与 test；不删除任何样本。
+    parent = list(range(len(X)))
+    def _find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]; a = parent[a]
+        return a
+    def _union(a, b):
+        ra, rb = _find(a), _find(b)
+        if ra != rb: parent[ra] = rb
+    by_win, by_vec = {}, {}
+    for i, s in enumerate(records):
+        wk = ((s.get("exe") or "").lower(), s.get("title") or "", (s.get("class") or "").lower())
+        if wk in by_win: _union(i, by_win[wk])
+        else: by_win[wk] = i
+        vk = tuple(float(t) for t in X[i])
+        if vk in by_vec: _union(i, by_vec[vk])
+        else: by_vec[vk] = i
+    groups = np.asarray([_find(i) for i in range(len(X))])
+    n_groups = len(set(groups.tolist()))
+    print(f"泄漏分组数: {n_groups} / {len(X)}")
 
     spw = float((y == 0).sum()) / max(1, int((y == 1).sum()))
     models = build_models(spw, seed)
@@ -215,23 +245,29 @@ def main():
         return 1
 
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+    gkf = GroupKFold(n_splits=min(5, n_groups)) if n_groups >= 2 else skf
 
-    print("== 模型对比（5折折外）==")
-    preds = {}
-    for name, m in models.items():
-        pre = cross_val_predict(m, X, y, cv=skf)
-        preds[name] = pre
-        tp = int(((pre == 1) & (y == 1)).sum())
-        fp = int(((pre == 1) & (y == 0)).sum())
-        fn = int(((pre == 0) & (y == 1)).sum())
-        p = tp / (tp + fp) if tp + fp else 0.0
-        r = tp / (tp + fn) if tp + fn else 0.0
-        print(f"  {name:<6} acc={accuracy_score(y, pre):.3f}  popup P={p:.3f} R={r:.3f}")
+    def eval_models(cv, tag):
+        print(f"== 模型对比（{tag}）==")
+        out = {}
+        for name, m in models.items():
+            pre = cross_val_predict(m, X, y, groups=groups if isinstance(cv, GroupKFold) else None, cv=cv)
+            out[name] = pre
+            tp = int(((pre == 1) & (y == 1)).sum())
+            fp = int(((pre == 1) & (y == 0)).sum())
+            fn = int(((pre == 0) & (y == 1)).sum())
+            p = tp / (tp + fp) if tp + fp else 0.0
+            r = tp / (tp + fn) if tp + fn else 0.0
+            print(f"  {name:<6} acc={accuracy_score(y, pre):.3f}  popup P={p:.3f} R={r:.3f}")
+        return out
 
-    # 融合策略对比（裁决 C++ 侧 && 还是 ||）
+    eval_models(skf, "普通5折（行随机，偏乐观）")
+    preds = eval_models(gkf, f"分组5折（{n_groups} 组，防泄漏；以此为准）")
+
+    # 融合策略对比（裁决 C++ 侧 && 还是 ||），主指标用分组折
     rf_pre = np.asarray(preds["rf"])
     lr_pre = np.asarray(preds["lr"])
-    print("== 融合策略对比（折外）==")
+    print("== 融合策略对比（分组折外）==")
     for name, pre in [
         ("AND双票", ((rf_pre == 1) & (lr_pre == 1)).astype(int)),
         ("OR一票 ", ((rf_pre == 1) | (lr_pre == 1)).astype(int)),
@@ -244,12 +280,12 @@ def main():
         print(f"  {name} acc={accuracy_score(y, pre):.3f}  popup P={p:.3f} R={r:.3f}")
 
     # 准确率加权投票对比
-    rf_prob = cross_val_predict(models["rf"], X, y, cv=skf, method="predict_proba")[:, 1]
-    lr_prob = cross_val_predict(models["lr"], X, y, cv=skf, method="predict_proba")[:, 1]
+    rf_prob = cross_val_predict(models["rf"], X, y, groups=groups, cv=gkf, method="predict_proba")[:, 1]
+    lr_prob = cross_val_predict(models["lr"], X, y, groups=groups, cv=gkf, method="predict_proba")[:, 1]
     w_rf = accuracy_score(y, preds["rf"])
     w_lr = accuracy_score(y, preds["lr"])
     wsum = w_rf + w_lr
-    print(f"== 准确率加权投票（w_rf={w_rf:.3f} w_lr={w_lr:.3f}）==")
+    print(f"== 准确率加权投票（w_rf={w_rf:.3f} w_lr={w_lr:.3f}，分组折外）==")
     fuse_wsoft = (w_rf * rf_prob + w_lr * lr_prob) / wsum
     hard_w = ((rf_pre == 1) * w_rf + (lr_pre == 1) * w_lr)
     for name, pre in [
@@ -264,7 +300,7 @@ def main():
         print(f"  {name} acc={accuracy_score(y, pre):.3f}  popup P={p:.3f} R={r:.3f}")
 
     pre = preds[chosen]
-    print(f"== 误判明细（{chosen}，折外）==")
+    print(f"== 误判明细（{chosen}，分组折外）==")
     n_bad = 0
     for s, yy, pp in zip(records, y, pre):
         if yy != pp:
