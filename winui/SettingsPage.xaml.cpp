@@ -42,6 +42,14 @@ namespace
         default: return 0;
         }
     }
+
+    // ContentDialog 首次 ShowAsync 可能缺入场动画（WinUI #8476）：ShowAsync 前显式指定默认样式。
+    void ApplyDefaultDialogStyle(winrt::Microsoft::UI::Xaml::Controls::ContentDialog const& d)
+    {
+        if (auto res = winrt::Microsoft::UI::Xaml::Application::Current().Resources().TryLookup(
+                winrt::box_value(L"DefaultContentDialogStyle")))
+            if (auto style = res.try_as<winrt::Microsoft::UI::Xaml::Style>()) d.Style(style);
+    }
 }
 
 namespace winrt::winui::implementation
@@ -61,12 +69,93 @@ namespace winrt::winui::implementation
         MLHeuristicToggle().IsOn(PopupBlocker::MLHeuristic);
         ToastNotifyToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1);
         VersionTextBlock().Text(APP_VERSION_STRING);
-        {
-            std::wstring mv = HeuristicML::StaticModelVersion();
-            ModelVersionTextBlock().Text(mv.empty() ? L"未找到" : mv);
-        }
+        RefreshModelVersion();
+
+        // 打开设置页时自动检查模型更新（仅在远端更新时弹确认框；离线/失败静默）
+        this->Loaded([weakThis = get_weak()](auto&&, auto&&)
+            {
+                if (!weakThis.get()) return;
+                PopupBlocker::ModelUpdateCheckCallback =
+                    [weakThis](int state, std::wstring remote, std::wstring local, std::wstring msg) {
+                        if (auto s = weakThis.get())
+                            s->DispatcherQueue().TryEnqueue([weakThis, state, remote, local, msg]() {
+                                if (auto s2 = weakThis.get()) s2->OnModelCheckResult(state, remote, local, msg);
+                                });
+                    };
+                PopupBlocker::ModelUpdateApplyCallback =
+                    [weakThis](bool ok, std::wstring msg) {
+                        if (auto s = weakThis.get())
+                            s->DispatcherQueue().TryEnqueue([weakThis, ok, msg]() {
+                                if (auto s2 = weakThis.get()) s2->OnModelApplyResult(ok, msg);
+                                });
+                    };
+                PopupBlocker::FetchModelUpdateCheckAsync();
+            });
 
         m_initialized = true;
+    }
+
+    void SettingsPage::RefreshModelVersion()
+    {
+        std::wstring mv = HeuristicML::StaticModelVersion();
+        ModelVersionTextBlock().Text(mv.empty() ? L"未找到" : mv);
+    }
+
+    void SettingsPage::CheckModelButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        m_manualModelCheck = true;
+        ModelVersionTextBlock().Text(L"检查中…");
+        PopupBlocker::FetchModelUpdateCheckAsync();
+    }
+
+    winrt::fire_and_forget SettingsPage::OnModelCheckResult(int state, std::wstring remote, std::wstring local, std::wstring msg)
+    {
+        auto strong = get_strong();
+        RefreshModelVersion();
+        bool manual = m_manualModelCheck;
+        m_manualModelCheck = false;
+
+        if (state == 1) {
+            Controls::ContentDialog dlg;
+            dlg.Title(box_value(L"发现新的 ML 模型"));
+            dlg.Content(box_value(L"远端版本 " + remote + L"，当前 " +
+                (local.empty() ? std::wstring(L"无") : local) + L"。\n是否下载并更新？"));
+            dlg.PrimaryButtonText(L"更新");
+            dlg.CloseButtonText(L"取消");
+            dlg.DefaultButton(Controls::ContentDialogButton::Primary);
+            ApplyDefaultDialogStyle(dlg);
+            dlg.XamlRoot(this->XamlRoot());
+            auto r = co_await dlg.ShowAsync();
+            if (r == Controls::ContentDialogResult::Primary)
+                PopupBlocker::ApplyModelUpdateAsync();
+        }
+        else if (manual) {
+            std::wstring text = (state == 0)
+                ? (L"已是最新版本 " + (remote.empty() ? local : remote))
+                : (L"检查失败：" + (msg.empty() ? L"未知错误" : msg));
+            Controls::ContentDialog dlg;
+            dlg.Title(box_value(L"模型更新"));
+            dlg.Content(box_value(text));
+            dlg.CloseButtonText(L"确定");
+            ApplyDefaultDialogStyle(dlg);
+            dlg.XamlRoot(this->XamlRoot());
+            co_await dlg.ShowAsync();
+        }
+        co_return;
+    }
+
+    winrt::fire_and_forget SettingsPage::OnModelApplyResult(bool ok, std::wstring msg)
+    {
+        auto strong = get_strong();
+        RefreshModelVersion();
+        Controls::ContentDialog dlg;
+        dlg.Title(box_value(L"模型更新"));
+        dlg.Content(box_value(ok ? (L"已更新到 " + msg) : (L"更新失败：" + msg)));
+        dlg.CloseButtonText(L"确定");
+        ApplyDefaultDialogStyle(dlg);
+        dlg.XamlRoot(this->XamlRoot());
+        co_await dlg.ShowAsync();
+        co_return;
     }
 
     void SettingsPage::LicenseLink_Click(IInspectable const&, RoutedEventArgs const&)

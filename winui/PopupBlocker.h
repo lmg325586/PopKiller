@@ -55,6 +55,9 @@ namespace PopupBlocker
     inline std::vector<Rule> Rules;
     inline std::vector<std::wstring> CommunityRemoved;
     inline std::function<void(bool, std::wstring)> CommunityRulesFetchCallback;
+    // 模型更新：state 0=已最新 1=有更新 -1=检查失败
+    inline std::function<void(int, std::wstring, std::wstring, std::wstring)> ModelUpdateCheckCallback;
+    inline std::function<void(bool, std::wstring)> ModelUpdateApplyCallback;
     inline std::mutex RulesMutex;
 
     inline std::mutex CallbackMutex;
@@ -515,6 +518,142 @@ namespace PopupBlocker
         if (ShuttingDown.load()) co_return;
 
         SafeInvoke(CommunityRulesFetchCallback, ok, msg);
+    }
+
+    // ===== ML 模型在线更新（复用社区规则的 GitHub raw 拉取/校验方式）=====
+
+    inline std::wstring ModelDir()
+    {
+        std::wstring p = GetSelfPath();
+        auto pos = p.find_last_of(L"\\/");
+        if (pos == std::wstring::npos) return L"StaticML\\";
+        return p.substr(0, pos + 1) + L"StaticML\\";
+    }
+
+    inline bool WriteFileBytes(std::wstring const& path, std::string const& bytes)
+    {
+        HANDLE h = ::CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (h == INVALID_HANDLE_VALUE) return false;
+        DWORD wrote = 0;
+        bool ok = bytes.empty() ||
+            (::WriteFile(h, bytes.data(), static_cast<DWORD>(bytes.size()), &wrote, nullptr) && wrote == bytes.size());
+        ::CloseHandle(h);
+        return ok;
+    }
+
+    // "YY.MM.N" → (yy,mm,n)
+    inline bool ParseModelVersion(std::wstring const& s, int& yy, int& mm, int& n)
+    {
+        int a[3] = { 0, 0, 0 }; int idx = 0;
+        for (wchar_t c : s) {
+            if (c == L'.') { if (++idx > 2) return false; continue; }
+            if (c < L'0' || c > L'9') return false;
+            a[idx] = a[idx] * 10 + (c - L'0');
+        }
+        if (idx != 2) return false;
+        yy = a[0]; mm = a[1]; n = a[2];
+        return true;
+    }
+
+    inline bool ModelVersionGreater(std::wstring const& remote, std::wstring const& local)
+    {
+        int ry, rm, rn, ly, lm, ln;
+        if (!ParseModelVersion(remote, ry, rm, rn) || !ParseModelVersion(local, ly, lm, ln)) return false;
+        if (ry != ly) return ry > ly;
+        if (rm != lm) return rm > lm;
+        return rn > ln;
+    }
+
+    // 抓远端 StaticML/popup_models.json，与本地版本比较；有更新/失败均通过回调通知（离线静默）。
+    inline winrt::Windows::Foundation::IAsyncAction FetchModelUpdateCheckAsync()
+    {
+        using namespace winrt::Windows::Web::Http;
+        int state = -1;
+        std::wstring remote, local, msg;
+        try {
+            local = HeuristicML::StaticModelVersion();
+            HttpClient client;
+            std::wstring tick = L"?t=" + std::to_wstring(::GetTickCount64());
+            HttpResponseMessage resp = co_await client.GetAsync(winrt::Windows::Foundation::Uri(
+                L"https://raw.githubusercontent.com/lmg325586/PopKiller/master/StaticML/popup_models.json" + tick));
+            if (resp.StatusCode() == HttpStatusCode::Ok) {
+                std::string body = winrt::to_string(co_await resp.Content().ReadAsStringAsync());
+                auto j = nlohmann::json::parse(body, nullptr, false);
+                if (!j.is_discarded() && j.contains("version")) {
+                    remote = Utf8ToWString(j.value("version", ""));
+                    if (!remote.empty())
+                        state = (local.empty() || ModelVersionGreater(remote, local)) ? 1 : 0;
+                    else msg = L"清单缺少版本号";
+                }
+                else msg = L"清单解析失败";
+            }
+            else msg = L"HTTP " + std::to_wstring(static_cast<int>(resp.StatusCode()));
+        }
+        catch (...) { msg = L"网络错误"; }
+
+        if (ShuttingDown.load()) co_return;
+        SafeInvoke(ModelUpdateCheckCallback, state, remote, local, msg);
+    }
+
+    // 下载 popup_rf/lr.onnx + 清单，按清单内 sha256 校验后写入 exe 同级 StaticML\ 并重载 ML。
+    inline winrt::Windows::Foundation::IAsyncAction ApplyModelUpdateAsync()
+    {
+        using namespace winrt::Windows::Web::Http;
+        bool ok = false;
+        std::wstring msg;
+        try {
+            HttpClient client;
+            std::wstring base = L"https://raw.githubusercontent.com/lmg325586/PopKiller/master/StaticML/";
+            std::wstring tick = L"?t=" + std::to_wstring(::GetTickCount64());
+
+            HttpResponseMessage mresp = co_await client.GetAsync(
+                winrt::Windows::Foundation::Uri(base + L"popup_models.json" + tick));
+            if (mresp.StatusCode() != HttpStatusCode::Ok) {
+                msg = L"清单 HTTP " + std::to_wstring(static_cast<int>(mresp.StatusCode()));
+            }
+            else {
+                auto mbuf = co_await mresp.Content().ReadAsBufferAsync();
+                std::string mbody(reinterpret_cast<char const*>(mbuf.data()), mbuf.Length());
+                auto j = nlohmann::json::parse(mbody, nullptr, false);
+                if (j.is_discarded() || !j.contains("sha256")) {
+                    msg = L"清单解析失败";
+                }
+                else {
+                    std::wstring dir = ModelDir();
+                    ::CreateDirectoryW(dir.c_str(), nullptr);
+                    struct MF { const wchar_t* name; const char* key; };
+                    const MF files[] = { { L"popup_rf.onnx", "rf" }, { L"popup_lr.onnx", "lr" } };
+                    bool allOk = true;
+                    for (auto const& f : files) {
+                        std::string expect = j["sha256"].value(f.key, "");
+                        HttpResponseMessage r = co_await client.GetAsync(
+                            winrt::Windows::Foundation::Uri(base + f.name + tick));
+                        if (r.StatusCode() != HttpStatusCode::Ok) {
+                            msg = std::wstring(f.name) + L" HTTP"; allOk = false; break;
+                        }
+                        auto buf = co_await r.Content().ReadAsBufferAsync();
+                        if (expect.size() != kSha256HexLen || Sha256Hex(buf) != Utf8ToWString(expect)) {
+                            msg = std::wstring(f.name) + L" SHA256 校验失败"; allOk = false; break;
+                        }
+                        std::string bytes(reinterpret_cast<char const*>(buf.data()), buf.Length());
+                        if (!WriteFileBytes(dir + f.name, bytes)) {
+                            msg = L"写入失败（目录不可写？）"; allOk = false; break;
+                        }
+                    }
+                    if (allOk) {
+                        WriteFileBytes(dir + L"popup_models.json", mbody);
+                        HeuristicML::GetInstance().Reload();
+                        ok = true;
+                        msg = Utf8ToWString(j.value("version", ""));
+                    }
+                }
+            }
+        }
+        catch (...) { msg = L"网络错误"; }
+
+        if (ShuttingDown.load()) co_return;
+        SafeInvoke(ModelUpdateApplyCallback, ok, msg);
     }
 
     inline void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);

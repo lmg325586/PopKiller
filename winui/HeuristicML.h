@@ -126,6 +126,14 @@ namespace HeuristicML
 
         std::wstring const& Version() const { return m_version; }
 
+        // 模型文件更新后重载：重置会话并重新 Init。
+        void Reload() {
+            sessionRf.reset();
+            sessionLr.reset();
+            m_version.clear();
+            Init();
+        }
+
         void WarnOnce(const wchar_t* msg) {
             if (m_warned) return;
             m_warned = true;

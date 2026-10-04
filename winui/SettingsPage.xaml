@@ -197,8 +197,12 @@
                     <Grid ColumnDefinitions="Auto,*">
                         <TextBlock Text="ML 模型" Style="{StaticResource BodyTextBlockStyle}" 
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock x:Name="ModelVersionTextBlock" Text="—" Grid.Column="1" Margin="16,0,0,0" 
-                                   Style="{StaticResource BodyTextBlockStyle}"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="16,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="ModelVersionTextBlock" Text="—" VerticalAlignment="Center"
+                                       Style="{StaticResource BodyTextBlockStyle}"/>
+                            <HyperlinkButton Content="检查模型更新" Padding="0" VerticalAlignment="Center"
+                                             Click="CheckModelButton_Click"/>
+                        </StackPanel>
                     </Grid>
 
                     <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4,0,0"/>

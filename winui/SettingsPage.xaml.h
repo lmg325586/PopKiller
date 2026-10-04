@@ -36,6 +36,13 @@ namespace winrt::winui::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
         void ToastNotifyToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
+
+        void CheckModelButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void RefreshModelVersion();
+        winrt::fire_and_forget OnModelCheckResult(int state, std::wstring remote, std::wstring local, std::wstring msg);
+        winrt::fire_and_forget OnModelApplyResult(bool ok, std::wstring msg);
+        bool m_manualModelCheck{ false };
     };
 }
 

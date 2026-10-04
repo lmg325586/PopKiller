@@ -5,6 +5,7 @@
 #   派生 17-22: title_len ad_kw_hits known_good_exe widgetwin_class r_dlg32770 exe_digit_ratio
 #   raw 17-20 追加为 23-26: parent_explorer parent_system parent_unknown same_proc_prev_fg
 import json
+import hashlib
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -395,6 +396,7 @@ def main():
         "seed": str(seed),
     }
     exported = {}
+    sha = {}
     for kind, final, path in (("rf", rf_final, rf_path), ("lr", lr_final, lr_path)):
         try:
             onx = convert_sklearn(final, initial_types=init)
@@ -402,7 +404,9 @@ def main():
                 entry = onx.metadata_props.add()
                 entry.key = k
                 entry.value = val
-            path.write_bytes(onx.SerializeToString())
+            data = onx.SerializeToString()
+            path.write_bytes(data)
+            sha[kind] = hashlib.sha256(data).hexdigest()
             exported[kind] = True
             print(f"已导出 {path.name}，特征数: {X.shape[1]}，版本 {version}")
         except Exception as e:
@@ -420,6 +424,7 @@ def main():
         "leak_groups": int(n_groups),
         "seed": int(seed),
         "models": {"rf": rf_path.name, "lr": lr_path.name},
+        "sha256": sha,
         "metrics_group_cv": {k: group_metrics(v) for k, v in preds.items() if k in ("rf", "lr", "rf_lr")},
         "exported": exported,
     }

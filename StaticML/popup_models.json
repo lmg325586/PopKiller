@@ -60,5 +60,9 @@
   "exported": {
     "rf": true,
     "lr": true
+  },
+  "sha256": {
+    "rf": "96026a1372eea85b2066115b9df29ff54c78db74a28879e5e25e34540a5dcf17",
+    "lr": "784127ec4a7d2d4049f63b2e1636809209425ef980fabd2af7e49f2e9e5568d6"
   }
 }

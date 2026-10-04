@@ -120,6 +120,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `Sha256Hex(buf)` | IBuffer | `std::wstring` | 计算 SHA256 十六进制串（小写） |
 | `ParseExpectedSha(text)` | UTF-8 文本 | `std::wstring` | 从响应文本解析期望的 SHA256 |
 | `FetchCommunityRulesAsync()` | 无 | `IAsyncAction` | 联网拉取社区规则并合并（SHA256 校验） |
+| `FetchModelUpdateCheckAsync()` | 无 | `IAsyncAction` | 抓远端 `StaticML/popup_models.json` 与本地模型版本比较；结果经 `ModelUpdateCheckCallback(state,remote,local,msg)`（0 已最新/1 有更新/-1 失败） |
+| `ApplyModelUpdateAsync()` | 无 | `IAsyncAction` | 下载 rf/lr 模型，按清单 `sha256` 校验后写入 exe 同级 `StaticML\` 并重载 ML；结果经 `ModelUpdateApplyCallback(ok,msg)` |
 | `Start()` | 无 | `void` | 启动钩子线程（`Running` 置位） |
 | `Stop()` | 无 | `void` | `WM_QUIT` + join 线程 |
 | `PauseForMinutes(minutes)` | 分钟数 | `void` | 暂停拦截指定分钟，后台线程自动恢复 |
@@ -209,6 +211,9 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `EnsureLoaded()` | 无 | `bool` | 首次调用时加载两个 ONNX 模型 |
 | `Predict(hwnd, evTime, prevForegroundPid)` | 句柄、事件时间、前一前台 pid | `bool` | 双模型 AND 投票：true=弹窗 |
 | `ExtractFeatures(hwnd, features&)` | 句柄、特征数组(out) | `bool` | 提取 27 维特征到 float 数组 |
+| `StaticModelVersion()` | 无 | `std::wstring` | 只读 `StaticML/popup_models.json` 的版本号（不加载 ONNX） |
+| `Version()` | 无 | `std::wstring` | 已加载模型的版本号（来自清单，用于展示/日志） |
+| `Reload()` | 无 | `void` | 模型文件更新后重置会话并重新加载 |
 
 全局状态：`GOOD_EXES`（27 个正常软件白名单数组）。
 模型文件：`popup_rf.onnx`（随机森林）、`popup_lr.onnx`（逻辑回归），位于 `StaticML\` 目录。
@@ -362,6 +367,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `MLHeuristicToggle_Toggled(sender, args)` | 开关 | `void` | 写 `MLHeuristic` + Sync |
 | `ToastNotifyToggle_Toggled(sender, args)` | 开关 | `void` | 写 `ToastNotify` + 同步引擎变量 |
 | `GameModeToggle_Toggled(sender, args)` | 开关 | `void` | 写 `GameMode` + 同步引擎变量（默认关） |
+| `CheckModelButton_Click(sender, args)` | 按钮 | `void` | 手动触发 ML 模型更新检查 |
+| `RefreshModelVersion()` | 无 | `void` | 从 `StaticML/popup_models.json` 刷新“关于”里的模型版本 |
 
 ## PrivacyPage.xaml.cpp（隐私声明页）
 
