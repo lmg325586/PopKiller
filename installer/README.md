@@ -28,6 +28,8 @@ pwsh -File installer\New-Msi.ps1 -Version 0.9.1 -MsiName PopKiller-Beta0.9.1-x64
 - 开始菜单快捷方式固定创建；桌面快捷方式可选。
 - 随包携带 **VC++ 运行时**（app-local）；排除 `pdb/lib/exp` 与运行期文件。
 - 固定 `UpgradeCode` + `MajorUpgrade`：升级时用同 `UpgradeCode` 并提升 `-Version` 即可。
+- **卸载时会自动删除程序创建的自启项**（`HKCU\...\Run\PopKiller` 与 `HKLM\...\Run\PopKiller`，见 `installer/CleanupCA`）。
+  > 注意：程序运行时产生的数据文件（`rules.json`、`winui.ini`、`blocklog.txt`、`StaticML\` 等）不在 MSI 跟踪范围内，卸载后会保留，需手动删除。
 
 ## 注意
 - 机器级安装需要管理员：双击或右键“以管理员身份运行”，在 UAC 中确认。

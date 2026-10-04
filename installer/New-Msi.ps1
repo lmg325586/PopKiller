@@ -73,6 +73,20 @@ try {
     else { Write-Warning "未找到 x64 VC++ CRT，目标机需自备 VC++ 运行库" }
   } else { Write-Warning "未找到 VS Redist 目录，目标机需自备 VC++ 运行库" }
 
+  # 卸载清理 CustomAction（删除遗留的自启项 HKCU/HKLM Run\PopKiller）
+  $caProj = Join-Path $PSScriptRoot 'CleanupCA\CleanupCA.vcxproj'
+  $caDll = Join-Path $PSScriptRoot 'CleanupCA\x64\Release\CleanupCA.dll'
+  $msbuild = $null
+  $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+  if (Test-Path $vswhere) { $msbuild = (& $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1) }
+  if (-not $msbuild) { $msbuild = (Get-Command msbuild.exe -ErrorAction SilentlyContinue).Source }
+  if ($msbuild) {
+    Write-Host "构建卸载清理 CustomAction"
+    & $msbuild $caProj /p:Configuration=Release /p:Platform=x64 /nologo /v:minimal | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "CleanupCA 构建失败" }
+  } else { Write-Warning "未找到 MSBuild，跳过卸载清理 CustomAction" }
+  $haveCa = Test-Path $caDll
+
   # 目录树 + 组件
   $dirEls = New-Object System.Collections.Generic.List[string]
   $comps  = New-Object System.Collections.Generic.List[string]
@@ -109,6 +123,10 @@ try {
   [void]$sb.AppendLine("  <Package Name=`"PopKiller`" Manufacturer=`"lmg325586`" Version=`"$Version`" Language=`"2052`" UpgradeCode=`"$UpgradeCode`" Scope=`"perMachine`" Compressed=`"yes`">")
   [void]$sb.AppendLine('    <MajorUpgrade DowngradeErrorMessage="A newer version of PopKiller is already installed." />')
   [void]$sb.AppendLine('    <MediaTemplate EmbedCab="yes" />')
+  if ($haveCa) {
+    [void]$sb.AppendLine('    <Binary Id="CleanupCA" SourceFile="' + (Esc $caDll) + '" />')
+    [void]$sb.AppendLine('    <CustomAction Id="DeleteAutostart" BinaryRef="CleanupCA" DllEntry="DeleteAutostart" Execute="deferred" Impersonate="yes" Return="ignore" />')
+  }
   [void]$sb.AppendLine('    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />')
   [void]$sb.AppendLine('    <Property Id="DESKTOP_SHORTCUT" Value="1" />')
   [void]$sb.AppendLine('    <Property Id="ROOTDRIVE" Value="C:\" />')
@@ -131,6 +149,11 @@ try {
   [void]$sb.AppendLine('      <ComponentRef Id="InstallFolderAcl" />')
   [void]$sb.AppendLine('      <ComponentRef Id="DesktopShortcut" />')
   [void]$sb.AppendLine('    </Feature>')
+  if ($haveCa) {
+    [void]$sb.AppendLine('    <InstallExecuteSequence>')
+    [void]$sb.AppendLine('      <Custom Action="DeleteAutostart" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />')
+    [void]$sb.AppendLine('    </InstallExecuteSequence>')
+  }
   [void]$sb.AppendLine('  </Package>')
 
   [void]$sb.AppendLine('  <Fragment>')
