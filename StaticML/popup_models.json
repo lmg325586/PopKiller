@@ -1,0 +1,64 @@
+{
+  "version": "26.10.1",
+  "trained_at": "2026-10-02T22:32:03",
+  "feature_count": 27,
+  "feature_names": [
+    "r_owner",
+    "r_toolwin",
+    "r_topmost",
+    "r_noact",
+    "r_resizable",
+    "r_minmax",
+    "r_capsys",
+    "r_notitle",
+    "r_small",
+    "r_large",
+    "r_temp",
+    "r_roaming",
+    "r_hexclass",
+    "r_young",
+    "r_unsigned",
+    "r_idle",
+    "r_farcur",
+    "title_len",
+    "ad_kw_hits",
+    "known_good_exe",
+    "widgetwin_class",
+    "r_dlg32770",
+    "exe_digit_ratio",
+    "parent_explorer",
+    "parent_system",
+    "parent_unknown",
+    "same_proc_prev_fg"
+  ],
+  "samples": 69,
+  "popup": 31,
+  "notpopup": 38,
+  "leak_groups": 62,
+  "seed": 42,
+  "models": {
+    "rf": "popup_rf.onnx",
+    "lr": "popup_lr.onnx"
+  },
+  "metrics_group_cv": {
+    "rf": {
+      "acc": 0.913,
+      "popup_precision": 0.8571,
+      "popup_recall": 0.9677
+    },
+    "lr": {
+      "acc": 0.8696,
+      "popup_precision": 0.8056,
+      "popup_recall": 0.9355
+    },
+    "rf_lr": {
+      "acc": 0.8986,
+      "popup_precision": 0.8529,
+      "popup_recall": 0.9355
+    }
+  },
+  "exported": {
+    "rf": true,
+    "lr": true
+  }
+}

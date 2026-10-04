@@ -1,4 +1,4 @@
-# 用法：python train.py cleaned.json [fixes.json] [--model=...] [--seed=N] [--no-goodexe]
+# 用法：python train.py cleaned.json [fixes.json] [--model=...] [--seed=N] [--no-goodexe] [--version=YY.MM.N] [--out-dir=DIR]
 # 特征契约 27 维（必须与 HeuristicML.h 逐位对齐）：
 #   raw 0-11 : owner toolwin topmost noact resizable minmax capsys notitle small large temp roaming
 #   raw 12-16: hexclass young unsigned idle farcur   （缺失记 -1 哨兵；15/16 已解锁真实位）
@@ -6,7 +6,10 @@
 #   raw 17-20 追加为 23-26: parent_explorer parent_system parent_unknown same_proc_prev_fg
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
+
+import onnx
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
@@ -124,16 +127,50 @@ def build_models(spw: float, seed: int):
             scale_pos_weight=spw, random_state=seed, verbose=-1)
     return models
 
+def resolve_version(info_path: Path, rf_path: Path, override=None):
+    # 版本号 YY.MM.N：同月自增，跨月从 1 开始；--version 可强制指定。
+    if override:
+        return override
+    now = datetime.now()
+    yymm = f"{now:%y}.{now:%m}"
+    prev = None
+    if info_path.exists():
+        try:
+            prev = json.loads(info_path.read_text(encoding="utf-8")).get("version")
+        except Exception:
+            prev = None
+    if not prev and rf_path.exists():
+        try:
+            prev = {p.key: p.value for p in onnx.load(str(rf_path)).metadata_props}.get("version")
+        except Exception:
+            prev = None
+    n = 1
+    if isinstance(prev, str):
+        parts = prev.split(".")
+        if len(parts) == 3 and f"{parts[0]}.{parts[1]}" == yymm:
+            try:
+                n = max(1, int(parts[2]) + 1)
+            except Exception:
+                n = 1
+    return f"{yymm}.{n}"
+
+
 def main():
     global USE_GOOD_EXE
     chosen = "rf_lr"
     seed = 42
+    version_override = None
+    out_dir = Path(".")
     paths = []
     for a in sys.argv[1:]:
         if a.startswith("--model="):
             chosen = a.split("=", 1)[1]
         elif a.startswith("--seed="):
             seed = int(a.split("=", 1)[1])
+        elif a.startswith("--version="):
+            version_override = a.split("=", 1)[1]
+        elif a.startswith("--out-dir="):
+            out_dir = Path(a.split("=", 1)[1])
         elif a == "--no-goodexe":
             USE_GOOD_EXE = False
         else:
@@ -330,20 +367,64 @@ def main():
     for name, v in sorted(zip(FEATURE_NAMES, coef), key=lambda t: -abs(t[1])):
         print(f"  {name:<15} : {v:+.3f}")
 
-    print("== 导出双模型 ==")
+    # === 导出双模型（版本号 + ONNX 元数据 + 同目录 popup_models.json）===
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rf_path = out_dir / "popup_rf.onnx"
+    lr_path = out_dir / "popup_lr.onnx"
+    info_path = out_dir / "popup_models.json"
+
+    version = resolve_version(info_path, rf_path, version_override)
+    trained_at = datetime.now().isoformat(timespec="seconds")
+
+    def group_metrics(pre):
+        tp = int(((pre == 1) & (y == 1)).sum())
+        fp = int(((pre == 1) & (y == 0)).sum())
+        fn = int(((pre == 0) & (y == 1)).sum())
+        p = tp / (tp + fp) if tp + fp else 0.0
+        r = tp / (tp + fn) if tp + fn else 0.0
+        return {"acc": round(float(accuracy_score(y, pre)), 4),
+                "popup_precision": round(p, 4), "popup_recall": round(r, 4)}
+
+    print(f"== 导出双模型（版本 {version}）==")
     init = [("input", FloatTensorType([None, X.shape[1]]))]
-    try:
-        onx = convert_sklearn(rf_final, initial_types=init)
-        Path("popup_rf.onnx").write_bytes(onx.SerializeToString())
-        print(f"已导出 popup_rf.onnx，特征数: {X.shape[1]}")
-    except Exception as e:
-        print(f"RF 导出失败: {e}")
-    try:
-        onx = convert_sklearn(lr_final, initial_types=init)
-        Path("popup_lr.onnx").write_bytes(onx.SerializeToString())
-        print(f"已导出 popup_lr.onnx，特征数: {X.shape[1]}")
-    except Exception as e:
-        print(f"LR 导出失败: {e}")
+    meta = {
+        "version": version,
+        "trained_at": trained_at,
+        "feature_count": str(int(X.shape[1])),
+        "samples": str(int(len(X))),
+        "seed": str(seed),
+    }
+    exported = {}
+    for kind, final, path in (("rf", rf_final, rf_path), ("lr", lr_final, lr_path)):
+        try:
+            onx = convert_sklearn(final, initial_types=init)
+            for k, val in meta.items():
+                entry = onx.metadata_props.add()
+                entry.key = k
+                entry.value = val
+            path.write_bytes(onx.SerializeToString())
+            exported[kind] = True
+            print(f"已导出 {path.name}，特征数: {X.shape[1]}，版本 {version}")
+        except Exception as e:
+            exported[kind] = False
+            print(f"{kind.upper()} 导出失败: {e}")
+
+    info = {
+        "version": version,
+        "trained_at": trained_at,
+        "feature_count": int(X.shape[1]),
+        "feature_names": FEATURE_NAMES,
+        "samples": int(len(X)),
+        "popup": int(y.sum()),
+        "notpopup": int(len(y) - y.sum()),
+        "leak_groups": int(n_groups),
+        "seed": int(seed),
+        "models": {"rf": rf_path.name, "lr": lr_path.name},
+        "metrics_group_cv": {k: group_metrics(v) for k, v in preds.items() if k in ("rf", "lr", "rf_lr")},
+        "exported": exported,
+    }
+    info_path.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"已写入 {info_path.name}（版本 {version}）")
     return 0
 
 if __name__ == "__main__":

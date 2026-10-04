@@ -5,6 +5,8 @@
 #include <array>
 #include <algorithm>
 #include <memory>
+#include <fstream>
+#include <iterator>
 #include <onnxruntime_cxx_api.h>
 #include "HeuristicScorer.h"
 
@@ -87,12 +89,33 @@ namespace HeuristicML
         return Lower(name);
     }
 
+    // 从 StaticML/popup_models.json 里提取 "version" 字段（纯 ASCII，够用，不引入 JSON 库）。
+    inline std::wstring ReadModelVersion(std::wstring const& jsonPath)
+    {
+        std::ifstream f(jsonPath, std::ios::binary);
+        if (!f) return {};
+        std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        auto p = s.find("\"version\"");
+        if (p == std::string::npos) return {};
+        auto c = s.find(':', p);
+        if (c == std::string::npos) return {};
+        auto q1 = s.find('"', c);
+        if (q1 == std::string::npos) return {};
+        auto q2 = s.find('"', q1 + 1);
+        if (q2 == std::string::npos) return {};
+        std::string v = s.substr(q1 + 1, q2 - q1 - 1);
+        return std::wstring(v.begin(), v.end());
+    }
+
     // ONNX 静态 ML 引擎：持有 rf/lr 两个会话；未加载（缺模型、维度不符、加载异常）即禁用 ML。
     struct MLEngine {
         std::unique_ptr<Ort::Env> env;
         std::unique_ptr<Ort::Session> sessionRf;
         std::unique_ptr<Ort::Session> sessionLr;
         bool m_warned = false;
+        std::wstring m_version;   // 来自 StaticML/popup_models.json，用于展示/日志
+
+        std::wstring const& Version() const { return m_version; }
 
         void WarnOnce(const wchar_t* msg) {
             if (m_warned) return;
@@ -140,6 +163,12 @@ namespace HeuristicML
                     sessionLr.reset();
                     WarnOnce(L"ML 模型特征维度与当前版本不一致，请重新训练/更新模型；静态ML启发已禁用。");
                     return false;
+                }
+                m_version = ReadModelVersion(dir + L"popup_models.json");
+                if (!m_version.empty()) {
+                    std::wstring vmsg = L"[PopKiller] ML 模型版本: " + m_version;
+                    ::OutputDebugStringW(vmsg.c_str());
+                    ::OutputDebugStringW(L"\n");
                 }
                 m_warned = false;
                 return true;
