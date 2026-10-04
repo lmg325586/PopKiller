@@ -107,6 +107,15 @@ namespace HeuristicML
         return std::wstring(v.begin(), v.end());
     }
 
+    // 只读 StaticML/popup_models.json 的版本号，不加载 ONNX（供设置页展示）。
+    inline std::wstring StaticModelVersion()
+    {
+        std::wstring dir = GetSelfPath();
+        auto pos = dir.find_last_of(L"\\/");
+        if (pos != std::wstring::npos) dir = dir.substr(0, pos + 1);
+        return ReadModelVersion(dir + L"StaticML\\popup_models.json");
+    }
+
     // ONNX 静态 ML 引擎：持有 rf/lr 两个会话；未加载（缺模型、维度不符、加载异常）即禁用 ML。
     struct MLEngine {
         std::unique_ptr<Ort::Env> env;

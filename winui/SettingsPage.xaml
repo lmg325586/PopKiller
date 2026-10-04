@@ -194,6 +194,13 @@
                                    Style="{StaticResource BodyTextBlockStyle}"/>
                     </Grid>
 
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Text="ML 模型" Style="{StaticResource BodyTextBlockStyle}" 
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock x:Name="ModelVersionTextBlock" Text="—" Grid.Column="1" Margin="16,0,0,0" 
+                                   Style="{StaticResource BodyTextBlockStyle}"/>
+                    </Grid>
+
                     <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4,0,0"/>
 
                     <TextBlock Text="开发：Qwen-3.8-max、DeepSeek-V4"

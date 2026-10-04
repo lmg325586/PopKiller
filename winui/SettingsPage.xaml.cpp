@@ -61,6 +61,10 @@ namespace winrt::winui::implementation
         MLHeuristicToggle().IsOn(PopupBlocker::MLHeuristic);
         ToastNotifyToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1);
         VersionTextBlock().Text(APP_VERSION_STRING);
+        {
+            std::wstring mv = HeuristicML::StaticModelVersion();
+            ModelVersionTextBlock().Text(mv.empty() ? L"未找到" : mv);
+        }
 
         m_initialized = true;
     }
