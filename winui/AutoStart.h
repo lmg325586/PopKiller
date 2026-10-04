@@ -1,80 +1,76 @@
 #pragma once
 #include <windows.h>
 #include <string>
-#pragma comment(lib, "advapi32.lib")
+#include <shlobj.h>
+#include <shobjidl.h>
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "ole32.lib")
 
+// Autostart via a shortcut in the user's Startup folder:
+//   %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\PopKiller.lnk
+// The MSI also declares this shortcut, so it is removed automatically on uninstall.
 namespace AutoStart
 {
-    inline const wchar_t* RunKeyPath = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
-    inline const wchar_t* ApprovedPath = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
-    inline const wchar_t* ValueName = L"PopKiller";
-
-    inline std::wstring GetExePathQuoted()
+    inline std::wstring StartupShortcutPath()
     {
-        std::wstring path = GetSelfPath();
-        return std::wstring(L"\"") + path + L"\" --autostart";
+        PWSTR p = nullptr;
+        std::wstring dir;
+        if (SUCCEEDED(::SHGetKnownFolderPath(FOLDERID_Startup, 0, nullptr, &p)) && p)
+        {
+            dir = p;
+            ::CoTaskMemFree(p);
+        }
+        if (dir.empty()) return {};
+        if (dir.back() != L'\\') dir += L'\\';
+        return dir + L"PopKiller.lnk";
     }
 
     inline bool IsEnabled()
     {
-        HKEY hKeyRun{};
-        if (::RegOpenKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, KEY_READ, &hKeyRun) != ERROR_SUCCESS)
-            return false;
-        bool exists = (::RegQueryValueExW(hKeyRun, ValueName, nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS);
-        ::RegCloseKey(hKeyRun);
-        if (!exists) return false;
-
-        HKEY hApproved{};
-        if (::RegOpenKeyExW(HKEY_CURRENT_USER, ApprovedPath, 0, KEY_READ, &hApproved) == ERROR_SUCCESS)
-        {
-            BYTE data[12]{};
-            DWORD dataSize = sizeof(data);
-            DWORD type = 0;
-            if (::RegQueryValueExW(hApproved, ValueName, nullptr, &type, data, &dataSize) == ERROR_SUCCESS)
-            {
-                ::RegCloseKey(hApproved);
-                return !(data[0] == 0x01 || data[0] == 0x03);
-            }
-            ::RegCloseKey(hApproved);
-        }
-        return true;
+        std::wstring p = StartupShortcutPath();
+        return !p.empty() && ::GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES;
     }
 
     inline bool EnableAutoStart()
     {
-        HKEY hKey{};
-        if (::RegCreateKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, nullptr, 0, KEY_SET_VALUE,
-            nullptr, &hKey, nullptr) != ERROR_SUCCESS)
-        {
-            return false;
-        }
-        std::wstring exePath = GetExePathQuoted();
-        LONG result = ::RegSetValueExW(hKey, ValueName, 0, REG_SZ,
-            reinterpret_cast<const BYTE*>(exePath.c_str()),
-            static_cast<DWORD>((exePath.size() + 1) * sizeof(wchar_t)));
-        ::RegCloseKey(hKey);
-        if (result != ERROR_SUCCESS)
-        {
-            return false;
-        }
+        static bool comReady = false;
+        if (!comReady) { ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED); comReady = true; }
 
-        HKEY hApproved{};
-        if (::RegOpenKeyExW(HKEY_CURRENT_USER, ApprovedPath, 0, KEY_SET_VALUE, &hApproved) == ERROR_SUCCESS)
+        std::wstring lnk = StartupShortcutPath();
+        if (lnk.empty()) return false;
+
+        IShellLinkW* link = nullptr;
+        if (FAILED(::CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link))))
+            return false;
+
+        std::wstring exe = GetSelfPath();
+        std::wstring wd = exe;
+        auto pos = wd.find_last_of(L"\\/");
+        if (pos != std::wstring::npos) wd.resize(pos);
+
+        link->SetPath(exe.c_str());
+        link->SetArguments(L"--autostart");
+        link->SetWorkingDirectory(wd.c_str());
+        link->SetDescription(L"PopKiller");
+        link->SetIconLocation(exe.c_str(), 0);
+
+        bool ok = false;
+        IPersistFile* pf = nullptr;
+        if (SUCCEEDED(link->QueryInterface(IID_PPV_ARGS(&pf))))
         {
-            ::RegDeleteValueW(hApproved, ValueName);
-            ::RegCloseKey(hApproved);
+            ok = SUCCEEDED(pf->Save(lnk.c_str(), TRUE));
+            pf->Release();
         }
-        return true;
+        link->Release();
+        return ok;
     }
 
     inline bool DisableAutoStart()
     {
-        HKEY hKey{};
-        if (::RegOpenKeyExW(HKEY_CURRENT_USER, RunKeyPath, 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
-            return false;
-        LONG result = ::RegDeleteValueW(hKey, ValueName);
-        ::RegCloseKey(hKey);
-        return (result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND);
+        std::wstring p = StartupShortcutPath();
+        if (p.empty()) return false;
+        if (::DeleteFileW(p.c_str())) return true;
+        return ::GetLastError() == ERROR_FILE_NOT_FOUND;
     }
 
     inline void SyncPath()
