@@ -1,5 +1,10 @@
 ﻿#include "pch.h"
 #include "PrivacyPage.xaml.h"
+#if __has_include("VersionInfo.h")
+#include "VersionInfo.h"
+#else
+#define APP_VERSION_STRING L"Beta 0.9"
+#endif
 #if __has_include("PrivacyPage.g.cpp")
 #include "PrivacyPage.g.cpp"
 #endif
@@ -13,9 +18,11 @@ namespace winrt::winui::implementation
     {
         InitializeComponent();
 
-        PrivacyText().Text(LR"(
+        std::wstring text = LR"(
 PopKiller 隐私声明
-适用版本：Beta 0.9 ｜ 生效日期：2026 年 10 月 5 日
+适用版本：)";
+        text += APP_VERSION_STRING;
+        text += LR"( ｜ 生效日期：2026 年 10 月 5 日
 
 PopKiller 完全在本机运行，默认不向互联网发送任何数据。
 
@@ -36,7 +43,8 @@ PopKiller 完全在本机运行，默认不向互联网发送任何数据。
 无遥测、统计或崩溃上报，无需账号；不读取文件内容、剪贴板、浏览历史或键盘输入。
 
 四、你的控制
-可随时在设置中关闭弹窗拦截、社区规则或开机自启，并自行删除上述本地文件。以 MSI 安装时，卸载会移除程序文件与自启快捷方式，但 rules.json、winui.ini、blocklog.txt、StaticML 等运行期数据会保留，需手动删除。日志满约 1 MB 会自动截断。)");
+可随时在设置中关闭弹窗拦截、社区规则或开机自启，并自行删除上述本地文件。以 MSI 安装时，卸载会移除程序文件与自启快捷方式，但 rules.json、winui.ini、blocklog.txt、StaticML 等运行期数据会保留，需手动删除。日志满约 1 MB 会自动截断。)";
+        PrivacyText().Text(text);
     }
 
     void PrivacyPage::BackButton_Click(IInspectable const&, RoutedEventArgs const&)
