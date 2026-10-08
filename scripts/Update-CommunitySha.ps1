@@ -6,6 +6,9 @@ param(
     [switch]$Check
 )
 $ErrorActionPreference = "Stop"
+if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt 7) {
+    throw "This script requires PowerShell 7 (pwsh). Run it with: pwsh -File `"$PSCommandPath`""
+}
 
 $jsonName = "community_rules.json"
 $shaName  = "community_rules_sha256"

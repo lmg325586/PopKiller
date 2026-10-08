@@ -1,3 +1,6 @@
+if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt 7) {
+    throw "This script requires PowerShell 7 (pwsh). Run it with: pwsh -File `"$PSCommandPath`""
+}
 $root = Split-Path -Parent $PSScriptRoot
 
 $gitHash = "unknown"
