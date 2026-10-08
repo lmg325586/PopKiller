@@ -63,11 +63,24 @@ static void DeleteTree(const std::wstring& dir)
     RemoveDirectoryW(dir.c_str());
 }
 
+static void DeleteStartupShortcuts()
+{
+    const wchar_t* sub = L"\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\PopKiller.lnk";
+    wchar_t base[1024]{};
+    if (GetEnvironmentVariableW(L"APPDATA", base, ARRAYSIZE(base)))
+        ::DeleteFileW((std::wstring(base) + sub).c_str());
+    if (GetEnvironmentVariableW(L"ProgramData", base, ARRAYSIZE(base)))
+        ::DeleteFileW((std::wstring(base) + sub).c_str());
+}
+
 extern "C" __declspec(dllexport) UINT __stdcall DeleteLeftovers(MSIHANDLE hInstall)
 {
     // 1) autostart registry values
     DeleteRunValue(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run");
     DeleteRunValue(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+
+    // 2) leftover autostart shortcuts (older builds used the Startup folder)
+    DeleteStartupShortcuts();
 
     // 2) runtime data files under the install directory
     wchar_t buf[32768]{};
