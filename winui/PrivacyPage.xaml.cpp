@@ -34,7 +34,7 @@ PopKiller 完全在本机运行，默认不向互联网发送任何数据。
 · winui.ini —— 程序设置
 · StaticML —— 机器学习模型及其版本信息（含从网络更新后的模型）
 机器学习推理全部在本机离线完成。
-若开启“开机自启”，会在当前用户的“启动”文件夹创建快捷方式 PopKiller.lnk（指向本程序）；关闭时删除该快捷方式。
+若开启“开机自启”，会在当前用户的注册表启动项（HKCU\Software\Microsoft\Windows\CurrentVersion\Run）写入一条指向本程序的记录；关闭时删除该记录。
 
 二、网络请求
 联网仅用于两处下载，均来自 raw.githubusercontent.com：①「社区规则库」开启时下载社区规则及其 SHA-256 校验文件；②打开「设置」页时检查 ML 模型更新（下载 popup_models.json），确认更新后再下载模型文件并校验 SHA-256。这些请求会向托管方暴露你的公网 IP、请求时间与 User-Agent，但不含任何本地数据。不打开设置页、不使用社区规则时，运行期间不会因此联网。
@@ -43,7 +43,7 @@ PopKiller 完全在本机运行，默认不向互联网发送任何数据。
 无遥测、统计或崩溃上报，无需账号；不读取文件内容、剪贴板、浏览历史或键盘输入。
 
 四、你的控制
-可随时在设置中关闭弹窗拦截、社区规则或开机自启，并自行删除上述本地文件。以 MSI 安装时，卸载会移除程序文件、自启快捷方式，并删除上述运行期数据文件（rules.json、winui.ini、blocklog.txt、labels.json、StaticML 等）。日志满约 1 MB 会自动截断。)";
+可随时在设置中关闭弹窗拦截、社区规则或开机自启，并自行删除上述本地文件。以 MSI 安装时，卸载会移除程序文件、自启注册表项，并删除上述运行期数据文件（rules.json、winui.ini、blocklog.txt、labels.json、StaticML 等）。日志满约 1 MB 会自动截断。)";
         PrivacyText().Text(text);
     }
 

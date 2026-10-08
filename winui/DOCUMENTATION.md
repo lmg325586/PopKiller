@@ -252,13 +252,13 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
-| `IsEnabled()` | 无 | `bool` | “启动”文件夹里 `PopKiller.lnk` 是否存在 |
-| `EnableAutoStart()` | 无 | `bool` | 在“启动”文件夹创建 `PopKiller.lnk`（指向 `winui.exe --autostart`） |
-| `DisableAutoStart()` | 无 | `bool` | 删除“启动”文件夹里的 `PopKiller.lnk` |
-| `StartupShortcutPath()` | 无 | `std::wstring` | 返回 `PopKiller.lnk` 的完整路径（`FOLDERID_Startup`） |
-| `SyncPath()` | 无 | `void` | 已启用时用当前路径重写快捷方式 |
+| `IsEnabled()` | 无 | `bool` | 检查注册表 Run 键是否存在（含 StartupApproved） |
+| `EnableAutoStart()` | 无 | `bool` | 写入注册表 Run 键（当前用户） |
+| `DisableAutoStart()` | 无 | `bool` | 删除注册表 Run 键 |
+| `GetExePathQuoted()` | 无 | `std::wstring` | 生成带引号的 exe 路径（附 `--autostart`） |
+| `SyncPath()` | 无 | `void` | 已启用时用当前路径刷新注册表 |
 
-MSI 同时声明该“启动”快捷方式（安装选项“开机自动启动”），卸载时自动删除。
+全局常量：`RunKeyPath`、`ApprovedPath`（StartupApproved 兼容）。MSI 卸载时由 `installer/CleanupCA` 删除该注册表值。
 
 ## TrayIcon.h（系统托盘）
 

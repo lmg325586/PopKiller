@@ -73,6 +73,20 @@ try {
     else { Write-Warning "未找到 x64 VC++ CRT，目标机需自备 VC++ 运行库" }
   } else { Write-Warning "未找到 VS Redist 目录，目标机需自备 VC++ 运行库" }
 
+  # 卸载清理 CustomAction：删除自启注册表值 + 运行期数据文件
+  $caProj = Join-Path $PSScriptRoot 'CleanupCA\CleanupCA.vcxproj'
+  $caDll = Join-Path $PSScriptRoot 'CleanupCA\x64\Release\CleanupCA.dll'
+  $msbuild = $null
+  $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+  if (Test-Path $vswhere) { $msbuild = (& $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1) }
+  if (-not $msbuild) { $msbuild = (Get-Command msbuild.exe -ErrorAction SilentlyContinue).Source }
+  if ($msbuild) {
+    Write-Host "构建卸载清理 CustomAction"
+    & $msbuild $caProj /p:Configuration=Release /p:Platform=x64 /nologo /v:minimal | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "CleanupCA 构建失败" }
+  } else { Write-Warning "未找到 MSBuild，跳过卸载清理 CustomAction" }
+  $haveCa = Test-Path $caDll
+
   # 目录树 + 组件
   $dirEls = New-Object System.Collections.Generic.List[string]
   $comps  = New-Object System.Collections.Generic.List[string]
@@ -109,9 +123,13 @@ try {
   [void]$sb.AppendLine("  <Package Name=`"PopKiller`" Manufacturer=`"lmg325586`" Version=`"$Version`" Language=`"2052`" UpgradeCode=`"$UpgradeCode`" Scope=`"perMachine`" Compressed=`"yes`">")
   [void]$sb.AppendLine('    <MajorUpgrade DowngradeErrorMessage="A newer version of PopKiller is already installed." />')
   [void]$sb.AppendLine('    <MediaTemplate EmbedCab="yes" />')
+  if ($haveCa) {
+    [void]$sb.AppendLine('    <Binary Id="CleanupCA" SourceFile="' + (Esc $caDll) + '" />')
+    [void]$sb.AppendLine('    <CustomAction Id="DeleteLeftovers" BinaryRef="CleanupCA" DllEntry="DeleteLeftovers" Execute="deferred" Impersonate="yes" Return="ignore" />')
+    [void]$sb.AppendLine('    <CustomAction Id="SetDeleteLeftoversData" Property="DeleteLeftovers" Value="[INSTALLFOLDER]" Execute="immediate" />')
+  }
   [void]$sb.AppendLine('    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />')
   [void]$sb.AppendLine('    <Property Id="DESKTOP_SHORTCUT" Value="1" />')
-  [void]$sb.AppendLine('    <Property Id="AUTOSTART" Value="1" />')
   [void]$sb.AppendLine('    <Property Id="ROOTDRIVE" Value="C:\" />')
   [void]$sb.AppendLine('    <StandardDirectory Id="TARGETDIR">')
   [void]$sb.AppendLine('      <Directory Id="INSTALLFOLDER" Name="PopKiller" />')
@@ -125,27 +143,19 @@ try {
   [void]$sb.AppendLine('        <RegistryValue Root="HKMU" Key="Software\PopKiller" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />')
   [void]$sb.AppendLine('      </Component>')
   [void]$sb.AppendLine('    </StandardDirectory>')
-  [void]$sb.AppendLine('    <StandardDirectory Id="StartupFolder">')
-  [void]$sb.AppendLine('      <Component Id="StartupShortcut" Guid="8A7C1E20-1111-4A2B-9C3D-000000000004" Condition="AUTOSTART">')
-  [void]$sb.AppendLine('        <Shortcut Id="StartupSC" Name="PopKiller" Target="[INSTALLFOLDER]winui.exe" Arguments="--autostart" WorkingDirectory="INSTALLFOLDER" />')
-  [void]$sb.AppendLine('        <RegistryValue Root="HKMU" Key="Software\PopKiller" Name="StartupShortcut" Type="integer" Value="1" KeyPath="yes" />')
-  [void]$sb.AppendLine('      </Component>')
-  [void]$sb.AppendLine('      <Component Id="RemoveStartupShortcut" Guid="8A7C1E20-1111-4A2B-9C3D-000000000007">')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfStartupLnk" Name="PopKiller.lnk" On="uninstall" />')
-  [void]$sb.AppendLine('        <RegistryValue Root="HKMU" Key="Software\PopKiller" Name="RemoveStartupShortcut" Type="integer" Value="1" KeyPath="yes" />')
-  [void]$sb.AppendLine('      </Component>')
-  [void]$sb.AppendLine('    </StandardDirectory>')
   [void]$sb.AppendLine('    <UIRef Id="PopKillerUI" />')
   [void]$sb.AppendLine('    <Feature Id="Main" Title="PopKiller" Level="1">')
   [void]$sb.AppendLine('      <ComponentGroupRef Id="AppFiles" />')
   [void]$sb.AppendLine('      <ComponentRef Id="StartMenuShortcut" />')
   [void]$sb.AppendLine('      <ComponentRef Id="InstallFolderAcl" />')
-  [void]$sb.AppendLine('      <ComponentRef Id="StartupShortcut" />')
-  [void]$sb.AppendLine('      <ComponentRef Id="RemoveLegacyAutoStart" />')
-  [void]$sb.AppendLine('      <ComponentRef Id="RemoveRuntimeData" />')
-  [void]$sb.AppendLine('      <ComponentRef Id="RemoveStartupShortcut" />')
   [void]$sb.AppendLine('      <ComponentRef Id="DesktopShortcut" />')
   [void]$sb.AppendLine('    </Feature>')
+  if ($haveCa) {
+    [void]$sb.AppendLine('    <InstallExecuteSequence>')
+    [void]$sb.AppendLine('      <Custom Action="SetDeleteLeftoversData" Before="DeleteLeftovers" Condition="REMOVE~=&quot;ALL&quot;" />')
+    [void]$sb.AppendLine('      <Custom Action="DeleteLeftovers" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />')
+    [void]$sb.AppendLine('    </InstallExecuteSequence>')
+  }
   [void]$sb.AppendLine('  </Package>')
 
   [void]$sb.AppendLine('  <Fragment>')
@@ -155,23 +165,6 @@ try {
   [void]$sb.AppendLine('          <Permission User="Users" GenericAll="yes" />')
   [void]$sb.AppendLine('        </CreateFolder>')
   [void]$sb.AppendLine('        <RegistryValue Root="HKMU" Key="Software\PopKiller" Name="Acl" Type="integer" Value="1" KeyPath="yes" />')
-  [void]$sb.AppendLine('      </Component>')
-  [void]$sb.AppendLine('      <Component Id="RemoveLegacyAutoStart" Guid="8A7C1E20-1111-4A2B-9C3D-000000000005">')
-  [void]$sb.AppendLine('        <RemoveRegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="PopKiller" />')
-  [void]$sb.AppendLine('        <RemoveRegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="PopKiller" />')
-  [void]$sb.AppendLine('        <RegistryValue Root="HKMU" Key="Software\PopKiller" Name="RemoveLegacyAutoStart" Type="integer" Value="1" KeyPath="yes" />')
-  [void]$sb.AppendLine('      </Component>')
-  [void]$sb.AppendLine('      <Component Id="RemoveRuntimeData" Guid="8A7C1E20-1111-4A2B-9C3D-000000000006">')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfRules" Name="rules.json" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfRulesBak" Name="rules.json.bak" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfLabels" Name="labels.json" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfIni" Name="winui.ini" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfLog" Name="blocklog.txt" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfCrashLog" Name="crash.log" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfDmp" Name="*.dmp" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfAutostartDbg" Name="autostart_debug.log" On="uninstall" />')
-  [void]$sb.AppendLine('        <RemoveFile Id="rfNotifyDiag" Name="notifydiag.txt" On="uninstall" />')
-  [void]$sb.AppendLine('        <RegistryValue Root="HKMU" Key="Software\PopKiller" Name="RemoveRuntimeData" Type="integer" Value="1" KeyPath="yes" />')
   [void]$sb.AppendLine('      </Component>')
   foreach ($l in $dirEls) { [void]$sb.AppendLine($l) }
   [void]$sb.AppendLine('    </DirectoryRef>')
@@ -253,7 +246,6 @@ try {
         <Control Id="Title" Type="Text" X="15" Y="15" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}安装选项" />
         <Control Id="Description" Type="Text" X="25" Y="35" Width="320" Height="30" Transparent="yes" NoPrefix="yes" Text="请选择要执行的附加任务，然后点击“下一步”。" />
         <Control Id="DesktopCheck" Type="CheckBox" X="25" Y="70" Width="300" Height="17" Property="DESKTOP_SHORTCUT" CheckBoxValue="1" Text="创建桌面快捷方式" />
-        <Control Id="AutoStartCheck" Type="CheckBox" X="25" Y="91" Width="300" Height="17" Property="AUTOSTART" CheckBoxValue="1" Text="开机自动启动" />
         <Control Id="Back" Type="PushButton" X="156" Y="243" Width="56" Height="17" Text="{\WixUI_Font_Normal}上一步" />
         <Control Id="Next" Type="PushButton" X="212" Y="243" Width="80" Height="17" Default="yes" Text="{\WixUI_Font_Normal}下一步" />
         <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="{\WixUI_Font_Normal}取消">
