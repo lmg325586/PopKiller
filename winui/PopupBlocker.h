@@ -1031,14 +1031,39 @@ namespace PopupBlocker
             if (attached) ::AttachThreadInput(ourTid, fgTid, FALSE);
         }
 
-        // 刷新全屏状态缓存：独占全屏(3)、无边框全屏/演示(2)、Store 应用(7) 均视为全屏。
+        // 前台窗口是否真的铺满所在显示器（≥95%）：用于剔除 QUNS_BUSY/QUNS_APP 的误报
+        // （启动画面、锁屏遮罩、演示模式等并不一定是游戏全屏）
+        inline bool ForegroundCoversMonitor()
+        {
+            HWND fg = ::GetForegroundWindow();
+            if (!fg || fg == ::GetDesktopWindow() || fg == ::GetShellWindow()) return false;
+
+            RECT wr{};
+            if (!::GetWindowRect(fg, &wr)) return false;
+
+            HMONITOR mon = ::MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+            if (!::GetMonitorInfoW(mon, &mi)) return false;
+
+            long mw = mi.rcMonitor.right - mi.rcMonitor.left;
+            long mh = mi.rcMonitor.bottom - mi.rcMonitor.top;
+            long w = wr.right - wr.left;
+            long h = wr.bottom - wr.top;
+            if (mw <= 0 || mh <= 0) return false;
+            return w * 100 >= mw * 95 && h * 100 >= mh * 95;
+        }
+
+        // 刷新全屏状态缓存：独占全屏(3)、无边框全屏/演示(2)、Store 应用(7) 均视为全屏，
+        // 但要求前台窗口真的铺满屏幕，避免启动画面/繁忙态被当成游戏。
         // out-of-context 钩子回调在“前台已切换”后才送达，故必须由轮询持续采样；
         // 同时记录当时的全屏前台窗口，供拦截后恢复前台。
         inline void UpdateFullscreenState()
         {
             QUERY_USER_NOTIFICATION_STATE q{};
             bool fs = SUCCEEDED(::SHQueryUserNotificationState(&q))
-                && (q == QUNS_RUNNING_D3D_FULL_SCREEN || q == QUNS_BUSY || q == QUNS_APP);
+                && (q == QUNS_RUNNING_D3D_FULL_SCREEN || q == QUNS_BUSY || q == QUNS_APP)
+                && ForegroundCoversMonitor();
             FullscreenGame.store(fs);
 
             if (fs) {
