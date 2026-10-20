@@ -62,7 +62,15 @@
 
 ## 截图
 
-![主界面](docs/screenshot_main.png)
+| 主页（浅色） | 主页（深色） |
+| :---: | :---: |
+| ![主页 浅色](docs/shot_home_light.png) | ![主页 深色](docs/shot_home_dark.png) |
+
+| 拦截日志（浅色） | 设置（深色） |
+| :---: | :---: |
+| ![拦截日志 浅色](docs/shot_log_light.png) | ![设置 深色](docs/shot_settings_dark.png) |
+
+> 另有 `docs/shot_log_dark.png`、`docs/shot_settings_light.png`。
 
 ---
 
