@@ -527,6 +527,7 @@ namespace HeuristicScorer
             cls.rfind(L"hwndwrapper", 0) == 0 ||
             cls == L"tooltip" || cls.rfind(L"tooltip_", 0) == 0 ||
             cls == L"tooltips_class32" ||
+            cls.find(L"splash") != std::wstring::npos ||
             cls == L"msctfime ui" || cls == L"default ime" ||
             cls == L"dragvisualwindow" ||
             cls == L"#32768" ||
