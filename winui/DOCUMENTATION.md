@@ -126,7 +126,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `Stop()` | 无 | `void` | `WM_QUIT` + join 线程 |
 | `PauseForMinutes(minutes)` | 分钟数 | `void` | 暂停拦截指定分钟，后台线程自动恢复 |
 | `ResumeNow()` | 无 | `void` | 立即恢复拦截（取消暂停） |
-| `InFullscreenGame()` | 无 | `bool` | 只读全屏缓存；缓存由工作线程约每 1s 调 `SHQueryUserNotificationState` 刷新（接受 `QUNS_BUSY`/`QUNS_RUNNING_D3D_FULL_SCREEN`/`QUNS_APP`），避免 out-of-context 回调读到弹窗切换后的前台状态 |
+| `InFullscreenGame()` | 无 | `bool` | 只读全屏缓存；缓存由工作线程约每 1s 调 `SHQueryUserNotificationState` 刷新（接受 `QUNS_BUSY`/`QUNS_RUNNING_D3D_FULL_SCREEN`/`QUNS_APP`，**且**前台窗口须铺满屏幕，见 `ForegroundCoversMonitor`），避免 out-of-context 回调读到弹窗切换后的前台状态 |
+| `ForegroundCoversMonitor()` | 无 | `bool` | 前台窗口矩形须 ≥ 所在显示器 95%×95%，用于剔除启动画面、繁忙态、演示模式等 `QUNS_*` 误报 |
 | `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤 →（引擎运行且游戏模式下全屏时：`EVENT_OBJECT_SHOW`/`EVENT_SYSTEM_FOREGROUND` 的新建非白名单顶层窗 → 隐藏并尝试恢复前台）→ 评估 → 执行 → 日志 → 通知 |
 
 ### detail 命名空间
@@ -187,7 +188,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `ExtractFeatures(hwnd, evTime)` | 句柄、事件时间 | `Features` | 21 项特征（含 `path`、`cls`） |
 | `BuildRawBits(f, rc, evTime)` | 特征、窗口矩形、事件时间 | `std::wstring` | 21 位 T/F/U 特征串：`raw[14]`=`unsigned`（T 未签名/F 已签名/U 未知），含空闲/鼠标距离/父进程/同前台 |
 | `ScoreWindow(f, detail&)` | 特征、明细串(out) | `int` | ≥0 分数；硬过滤时返回 0 且 detail 为 skip 标记 |
-| `IsInfraClass(cls)` | 小写类名 | `bool` | 基础设施类（工具提示 `tooltips_class32`/IME/拖影 `dragvisualwindow`/`#32768`/系统遮罩等）——`ScoreWindow` 与焦点窃取共用同一份名单 |
+| `IsInfraClass(cls)` | 小写类名 | `bool` | 基础设施类（工具提示 `tooltips_class32`/IME/拖影 `dragvisualwindow`/`#32768`/系统遮罩/启动画面 `*splash*` 等）——`ScoreWindow` 与焦点窃取共用同一份名单 |
 | `IsCrashReporterDialog(cls, path)` | 小写类名、小写路径 | `bool` | 类名 `#32770` 且进程为 `werfault.exe` / `dwwin.exe` / `werfaultsecure.exe` 时视为崩溃报告对话框（其余 `#32770` 仍正常评估） |
 
 全局状态：`g_weights`（权重表）、`SigCache`。
