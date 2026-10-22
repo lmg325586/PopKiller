@@ -531,6 +531,7 @@ namespace HeuristicScorer
             cls == L"msctfime ui" || cls == L"default ime" ||
             cls == L"dragvisualwindow" ||
             cls == L"#32768" ||
+            cls == L"sysshadow" ||
             cls == L"shell_systemdialog" ||
             cls == L"shell_systemdialogproxy" ||
             cls == L"shell_systemdim";
