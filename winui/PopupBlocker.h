@@ -900,7 +900,12 @@ namespace PopupBlocker
                 if (r.right - r.left <= 0 || r.bottom - r.top <= 0) return true;
             }
             std::wstring cls = GetClass(hwnd);
-            if (HeuristicScorer::IsInfraClass(cls)) return true;
+            if (HeuristicScorer::IsInfraClass(cls)) {
+                // 可伪造类（SysShadow / tooltips_class32 / dragvisualwindow）只对可信进程跳过
+                if (!HeuristicScorer::IsSpoofableInfraClass(cls) ||
+                    HeuristicScorer::IsTrustedProcess(GetProcessPath(hwnd)))
+                    return true;
+            }
             std::wstring exe = GetProcessName(hwnd);
             if (HeuristicScorer::IsCrashReporterDialog(cls, exe)) return true;
             return IsOverlayProcess(exe);

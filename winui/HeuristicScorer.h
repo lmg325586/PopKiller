@@ -546,10 +546,40 @@ namespace HeuristicScorer
         return exe == L"werfault.exe" || exe == L"dwwin.exe" || exe == L"werfaultsecure.exe";
     }
 
+    // 可伪造的基础设施类：只有进程可信（系统目录 / 微软签名）时才跳过，
+    // 避免流氓软件伪造类名拿到「免评估」白洞。
+    // 注：#32768 是应用自建菜单类，未签名程序也会创建，按签名判定会误杀，故不在此列。
+    inline bool IsSpoofableInfraClass(std::wstring const& cls)
+    {
+        return cls == L"sysshadow" || cls == L"tooltips_class32" || cls == L"dragvisualwindow";
+    }
+
+    inline bool IsTrustedProcess(std::wstring const& path)
+    {
+        if (path.empty()) return false;
+        wchar_t dir[MAX_PATH]{};
+        UINT n = ::GetWindowsDirectoryW(dir, MAX_PATH);
+        if (n > 0 && n < MAX_PATH) {
+            std::wstring root = detail::Lower(std::wstring(dir, n));
+            if (!root.empty() && root.back() != L'\\') root += L'\\';
+            if (path.rfind(root, 0) == 0) return true;
+        }
+        return GetSignatureStatus(path) == SignatureStatus::Signed;
+    }
+
     // 加权打分：输入 Features，返回 ≥0 的分数并填充 detail 明细；命中硬过滤（基础设施类/零尺寸）时返回 0 且 detail 为 *_skip。
     inline int ScoreWindow(Features const& f, std::wstring& detail)
     {
-        if (IsInfraClass(f.cls) || IsCrashReporterDialog(f.cls, f.path))
+        if (IsInfraClass(f.cls))
+        {
+            // 可伪造类只对可信进程跳过；否则继续打分
+            if (!IsSpoofableInfraClass(f.cls) || IsTrustedProcess(f.path))
+            {
+                detail = L"infra_class_skip";
+                return 0;
+            }
+        }
+        if (IsCrashReporterDialog(f.cls, f.path))
         {
             detail = L"infra_class_skip";
             return 0;
