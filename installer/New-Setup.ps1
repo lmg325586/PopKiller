@@ -6,7 +6,7 @@
 #
 # 用法（在仓库根或任意位置）：
 #   pwsh -File installer\New-Setup.ps1
-#   pwsh -File installer\New-Setup.ps1 -Version 0.10.0 -SetupName PopKiller-Beta0.10.0-x64-setup
+#   pwsh -File installer\New-Setup.ps1 -Version 0.10.1 -SetupName PopKiller-Beta0.10.1-x64-setup
 #
 # 说明：脚本把 VC++ 运行时（app-local）与打包所需文件放进临时舞台，排除 pdb/lib/exp 与运行期文件，
 #       再调用 ISCC 编译 installer\PopKiller.iss。产物默认输出到 dist\。
@@ -15,7 +15,7 @@
 param(
   [string]$AppOutput,                                   # 默认 <repo>\x64\Release\winui
   [string]$OutputDir,                                   # 默认 <repo>\dist
-  [string]$Version = "0.10.0",
+  [string]$Version = "0.10.1",
   [string]$SetupName,                                   # 不含扩展名的输出文件名
   [string]$Iscc                                         # 可选：显式指定 ISCC.exe 路径
 )
