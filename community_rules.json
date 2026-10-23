@@ -39,6 +39,10 @@
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "powertoys.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "utools.exe" },
         { "list": "W", "field": "exe", "mode": "contains", "pattern": "quicker.exe" },
-        { "list": "W", "field": "exe", "mode": "contains", "pattern": "ditto.exe" }
+        { "list": "W", "field": "exe", "mode": "contains", "pattern": "ditto.exe" },
+        { "list": "W", "conditions": [
+            { "field": "exe",   "mode": "exact", "pattern": "steamwebhelper.exe" },
+            { "field": "class", "mode": "exact", "pattern": "sdl_app" }
+        ] }
     ]
 }
