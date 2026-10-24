@@ -78,6 +78,7 @@ namespace winrt::winui::implementation
     PopupBlockerPage::~PopupBlockerPage()
     {
         if (m_statusTimer) m_statusTimer.Stop();
+        if (m_searchTimer) m_searchTimer.Stop();
         // 加锁清空回调，防止引擎后台线程在页面析构瞬间调用
         std::lock_guard lock(PopupBlocker::CallbackMutex);
         PopupBlocker::EnabledChangedCallback = nullptr;
@@ -880,8 +881,8 @@ namespace winrt::winui::implementation
 
     void PopupBlockerPage::OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const&)
     {
+        // ReloadRulesFromEngine() 内部已 RefreshList()，不要再刷一次（整表重建）
         ReloadRulesFromEngine();
-        RefreshList();
     }
 
     // 事件挂在 ListView 上（C++/WinRT 的 RightTapped/DoubleTapped 委托无可用构造函数），

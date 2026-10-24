@@ -910,10 +910,13 @@ namespace winrt::winui::implementation
                         }
                         UpdateRowUi(m_rows[0], grp);
                         if (grp.expanded) {
-                            m_rows[0].subPanel.Children().InsertAt(0, BuildSubRow(line));
-                            uint32_t cap = kMaxSubRows + (grp.raws.size() > kMaxSubRows ? 1 : 0);
-                            while (m_rows[0].subPanel.Children().Size() > cap)
-                                m_rows[0].subPanel.Children().RemoveAt(m_rows[0].subPanel.Children().Size() - 1);
+                            // 只往「事件记录」面板（rawPanel）里插，不能插到 subPanel：
+                            // subPanel 里还有 InfoBar/详细信息/链接等固定子项，按尾部裁剪会把它们删掉
+                            EnsureExpandUi(m_rows[0]);
+                            auto& rp = m_rows[0].rawPanel;
+                            rp.Children().InsertAt(0, BuildSubRow(line));
+                            while (rp.Children().Size() > kMaxSubRows)
+                                rp.Children().RemoveAt(rp.Children().Size() - 1);
                         }
                         if (LogList().Items().Size() > 0)
                             LogList().ScrollIntoView(LogList().Items().GetAt(0));

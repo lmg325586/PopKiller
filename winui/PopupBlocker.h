@@ -1097,7 +1097,15 @@ namespace PopupBlocker
         if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
 
-        // 早退 + 去重：同一窗口的「同一事件」50ms 内重复到达只处理一次
+        // 零尺寸窗口（非详细日志模式）先跳过，且不写去重状态：
+        // 很多弹出窗口先以 0×0 触发一次 SHOW，布局完成后再 SHOW 一次，
+        // 若先记去重会把随后那次真正的 SHOW 当成重复吞掉，导致漏拦。
+        if (!VerboseLog) {
+            RECT rc{};
+            if (::GetWindowRect(hwnd, &rc) && (rc.right <= rc.left || rc.bottom <= rc.top)) return;
+        }
+
+        // 去重：同一窗口的「同一事件」50ms 内重复到达只处理一次
         // 注意：不要去重不同事件（SHOW 后紧跟 FG 不应被吞掉，否则可能漏判焦点窃取）
         {
             static thread_local HWND lastHwnd = nullptr;
@@ -1108,10 +1116,6 @@ namespace PopupBlocker
             lastHwnd = hwnd;
             lastEvent = idEvent;
             lastTick = nowTick;
-        }
-        if (!VerboseLog) {
-            RECT rc{};
-            if (::GetWindowRect(hwnd, &rc) && (rc.right <= rc.left || rc.bottom <= rc.top)) return;
         }
 
         // 记录/取用“上一个前台进程”：用于“弹窗是否与刚在前台的进程同进程”特征
