@@ -1076,7 +1076,13 @@ namespace PopupBlocker
             UpdateFullscreenState();
 
             while (::GetMessageW(&msg, nullptr, 0, 0) > 0) {
-                if (msg.message == WM_TIMER && msg.wParam == fsTimer) { UpdateFullscreenState(); continue; }
+                if (msg.message == WM_TIMER && msg.wParam == fsTimer) {
+                    // 游戏模式关闭时降到 5s 一次，减少无意义的 SHQueryUserNotificationState 调用
+                    static ULONGLONG lastFsPoll = 0;
+                    ULONGLONG now = ::GetTickCount64();
+                    if (GameMode || now - lastFsPoll >= 5000) { UpdateFullscreenState(); lastFsPoll = now; }
+                    continue;
+                }
                 ::TranslateMessage(&msg); ::DispatchMessageW(&msg);
             }
             if (fsTimer) ::KillTimer(nullptr, fsTimer);
@@ -1091,13 +1097,16 @@ namespace PopupBlocker
         if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
 
-        // 早退 + 去重：同一窗口 50ms 内的连续事件只处理一次；零尺寸窗口（非详细日志模式）直接跳过
+        // 早退 + 去重：同一窗口的「同一事件」50ms 内重复到达只处理一次
+        // 注意：不要去重不同事件（SHOW 后紧跟 FG 不应被吞掉，否则可能漏判焦点窃取）
         {
             static thread_local HWND lastHwnd = nullptr;
+            static thread_local DWORD lastEvent = 0;
             static thread_local ULONGLONG lastTick = 0;
             ULONGLONG nowTick = ::GetTickCount64();
-            if (hwnd == lastHwnd && nowTick - lastTick < 50) return;
+            if (hwnd == lastHwnd && idEvent == lastEvent && nowTick - lastTick < 50) return;
             lastHwnd = hwnd;
+            lastEvent = idEvent;
             lastTick = nowTick;
         }
         if (!VerboseLog) {

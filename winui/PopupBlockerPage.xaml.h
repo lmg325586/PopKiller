@@ -111,6 +111,21 @@ namespace winrt::winui::implementation
         bool m_initialized{ false };
 
 
+        // 状态栏缓存：内容未变化时不重复设置 InfoBar 属性
+        int m_statusSeverity{ -1 };
+        std::wstring m_statusTitle;
+        std::wstring m_statusMessage;
+        bool m_statusHasAction{ false };
+        bool m_statusValid{ false };
+
+        winrt::Microsoft::UI::Xaml::DispatcherTimer m_searchTimer{ nullptr };
+        std::wstring m_pendingSearch;
+
+        void ApplyStatus(winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity severity,
+            std::wstring const& title, std::wstring const& message, bool showResume);
+        void SearchTimer_Tick(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Windows::Foundation::IInspectable const& e);
+
         std::vector<RuleItem> m_rules;
         std::wstring m_searchText;
         std::vector<size_t> m_visibleIndex;

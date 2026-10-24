@@ -6,7 +6,7 @@
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `IniPath()` | 无 | `std::wstring` | exe 同目录 `winui.ini` 路径 |
-| `ReadInt(section, key, def)` | 段、键、默认值 | `int` | 读 ini |
+| `ReadInt(section, key, def)` | 段、键、默认值 | `int` | 读 ini（内存缓存，`WriteInt` 时同步更新；避免定时器高频读盘） |
 | `WriteInt(section, key, value)` | 段、键、值 | `void` | 写 ini |
 
 ## RuleTypes.h（规则类型与工具）
@@ -126,7 +126,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `Stop()` | 无 | `void` | `WM_QUIT` + join 线程 |
 | `PauseForMinutes(minutes)` | 分钟数 | `void` | 暂停拦截指定分钟，后台线程自动恢复 |
 | `ResumeNow()` | 无 | `void` | 立即恢复拦截（取消暂停） |
-| `InFullscreenGame()` | 无 | `bool` | 只读全屏缓存；缓存由工作线程约每 1s 调 `SHQueryUserNotificationState` 刷新（接受 `QUNS_BUSY`/`QUNS_RUNNING_D3D_FULL_SCREEN`/`QUNS_APP`，**且**前台窗口须铺满屏幕，见 `ForegroundCoversMonitor`），避免 out-of-context 回调读到弹窗切换后的前台状态 |
+| `InFullscreenGame()` | 无 | `bool` | 只读全屏缓存；缓存由工作线程刷新（游戏模式开启时 1s、关闭时 5s 一次 `SHQueryUserNotificationState`，**且**前台窗口须铺满屏幕，见 `ForegroundCoversMonitor`），避免 out-of-context 回调读到弹窗切换后的前台状态 |
 | `ForegroundCoversMonitor()` | 无 | `bool` | 前台窗口矩形须 ≥ 所在显示器 95%×95%，用于剔除启动画面、繁忙态、演示模式等 `QUNS_*` 误报 |
 | `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤 →（引擎运行且游戏模式下全屏时：`EVENT_OBJECT_SHOW`/`EVENT_SYSTEM_FOREGROUND` 的新建非白名单顶层窗 → 隐藏并尝试恢复前台）→ 评估 → 执行 → 日志 → 通知 |
 
@@ -349,7 +349,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `DeleteRule_Click(sender, args)` | 按钮 | `void` | 经 `m_visibleIndex` 映射删除 |
 | `RuleToggle_Toggled(sender, args)` | 行内开关 | `void` | 按 `Tag` 定位真实规则并翻转 `enabled`（`MutateRules` 持久化 + 重建索引），停用不删除 |
 | `Pick_Click(sender, args)` | 按钮 | `void` | 启动拾取器，回填输入框与 PickInfo |
-| `SearchInput_TextChanged(sender, args)` | 文本 | `void` | 更新 `m_searchText`→RefreshList |
+| `SearchInput_TextChanged(sender, args)` | 文本 | `void` | 记录待应用搜索词，200ms 防抖后 `RefreshList`（避免每敲一键重建所有行） |
 | `OpenIO_Click(sender, args)` | 按钮 | `void` | 导航到规则导入导出页 |
 
 ## RuleIOPage.xaml.cpp（导入导出页）
@@ -399,7 +399,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `Clear_Click(sender, args)` | 按钮 | `void` | 清空日志文件 |
 | `RowChevronClick(sender, args)` | 卡片箭头 | `void` | 展开/折叠该条日志（箭头旋转 180°） |
 | `OpenRules_Click(sender, args)` | 展开区链接 | `void` | 导航到「弹窗拦截」规则页 |
-| `BuildRow(gidx)` | 分组下标 | `RowUi` | 构建单条日志卡片：图标 + 标题/时间 + 原因标签 + 箭头；展开区含 `InfoBar` 提示、详细信息键值表、说明、链接、事件记录 |
+| `BuildRow(gidx)` | 分组下标 | `RowUi` | 构建单条日志卡片：图标 + 标题/时间 + 原因标签 + 箭头；**展开区控件（`InfoBar`/详细信息/说明/链接/事件记录）延迟到首次展开时由 `EnsureExpandUi` 创建**，避免每行预建十多个控件 |
 | `UpdateRowUi(ui, g)` | 行 UI、分组 | `void` | 按分组数据刷新卡片文案/配色/展开内容 |
 | `MarkPopup_Click(sender, args)` | 菜单 | `void` | 标记选中行为弹窗（label=popup） |
 | `MarkNotPopup_Click(sender, args)` | 菜单 | `void` | 标记选中行为非弹窗（label=notpopup） |

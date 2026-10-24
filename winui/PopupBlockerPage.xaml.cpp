@@ -96,6 +96,11 @@ namespace winrt::winui::implementation
         m_statusTimer.Interval(std::chrono::milliseconds{ kStatusTimerMs });
         m_statusTimer.Tick({ get_weak(), &PopupBlockerPage::StatusTimer_Tick });
         m_statusTimer.Start();
+
+        // 搜索防抖：输入停顿 200ms 后才重建列表，避免每敲一键重建所有行
+        m_searchTimer = DispatcherTimer();
+        m_searchTimer.Interval(std::chrono::milliseconds{ 200 });
+        m_searchTimer.Tick({ get_weak(), &PopupBlockerPage::SearchTimer_Tick });
         m_resumeButton = winrt::Microsoft::UI::Xaml::Controls::Button();
         m_resumeButton.Content(winrt::box_value(L"立即恢复"));
         m_resumeButton.Click({ get_weak(), &PopupBlockerPage::ResumeButton_Click });
@@ -504,6 +509,9 @@ namespace winrt::winui::implementation
         if (real >= m_rules.size()) return;
 
         // 若该规则被搜索过滤掉，先清空搜索以便显示
+        // 清空搜索时也取消未触发的防抖，避免稍后再刷一次
+        m_pendingSearch.clear();
+        if (m_searchTimer) m_searchTimer.Stop();
         if (!m_searchText.empty())
         {
             SearchInput().Text(L"");
@@ -783,7 +791,16 @@ namespace winrt::winui::implementation
     void PopupBlockerPage::SearchInput_TextChanged(IInspectable const&,
         Controls::TextChangedEventArgs const&)
     {
-        m_searchText = PopupBlocker::Lower(std::wstring(SearchInput().Text()));
+        m_pendingSearch = PopupBlocker::Lower(std::wstring(SearchInput().Text()));
+        m_searchTimer.Stop();
+        m_searchTimer.Start();
+    }
+
+    void PopupBlockerPage::SearchTimer_Tick(IInspectable const&, IInspectable const&)
+    {
+        if (m_searchTimer) m_searchTimer.Stop();
+        if (m_pendingSearch == m_searchText) return;
+        m_searchText = m_pendingSearch;
         RefreshList();
     }
 
@@ -812,15 +829,9 @@ namespace winrt::winui::implementation
         using namespace winrt::Microsoft::UI::Xaml::Controls;
 
         if (!enabled) {
-            StatusInfoBar().Severity(InfoBarSeverity::Informational);
-            StatusInfoBar().Title(L"拦截已关闭");
-            StatusInfoBar().Message(L"当前不会拦截任何弹窗。");
-            StatusInfoBar().ActionButton(nullptr);
+            ApplyStatus(InfoBarSeverity::Informational, L"拦截已关闭", L"当前不会拦截任何弹窗。", false);
         }
         else if (paused) {
-            StatusInfoBar().Severity(InfoBarSeverity::Warning);
-            StatusInfoBar().Title(L"拦截已暂停");
-
             long long deadline = PopupBlocker::PauseDeadlineMs.load();
             long long now = PopupBlocker::NowMs();
             long long remaining = deadline - now;
@@ -832,15 +843,33 @@ namespace winrt::winui::implementation
 
             std::wstring msg = L"将在 " + std::to_wstring(minutes) + L" 分 "
                 + std::to_wstring(seconds) + L" 秒后自动恢复拦截。";
-            StatusInfoBar().Message(winrt::hstring(msg));
-            StatusInfoBar().ActionButton(m_resumeButton);
+            ApplyStatus(InfoBarSeverity::Warning, L"拦截已暂停", msg, true);
         }
         else {
-            StatusInfoBar().Severity(InfoBarSeverity::Success);
-            StatusInfoBar().Title(L"拦截运行中");
-            StatusInfoBar().Message(L"正在实时监控并拦截弹窗。");
-            StatusInfoBar().ActionButton(nullptr);
+            ApplyStatus(InfoBarSeverity::Success, L"拦截运行中", L"正在实时监控并拦截弹窗。", false);
         }
+    }
+
+    // 只在内容变化时写 InfoBar 属性（定时器 2Hz 调用，避免无意义的 UI 通知）
+    void PopupBlockerPage::ApplyStatus(Controls::InfoBarSeverity severity,
+        std::wstring const& title, std::wstring const& message, bool showResume)
+    {
+        int sev = static_cast<int>(severity);
+        if (m_statusValid && sev == m_statusSeverity &&
+            title == m_statusTitle && message == m_statusMessage &&
+            showResume == m_statusHasAction)
+            return;
+
+        m_statusSeverity = sev;
+        m_statusTitle = title;
+        m_statusMessage = message;
+        m_statusHasAction = showResume;
+        m_statusValid = true;
+
+        StatusInfoBar().Severity(severity);
+        StatusInfoBar().Title(winrt::hstring(title));
+        StatusInfoBar().Message(winrt::hstring(message));
+        StatusInfoBar().ActionButton(showResume ? m_resumeButton : nullptr);
     }
 
     void PopupBlockerPage::ResumeButton_Click(IInspectable const&, RoutedEventArgs const&)

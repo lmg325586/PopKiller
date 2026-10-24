@@ -77,6 +77,7 @@ namespace winrt::winui::implementation
         void UpdateCountText();
 
         RowUi BuildRow(size_t gidx);
+        void EnsureExpandUi(RowUi& ui);
         void UpdateRowUi(RowUi& ui, LogGroup const& g);
         winrt::Microsoft::UI::Xaml::Controls::StackPanel BuildSubRow(std::wstring const& raw);
         winrt::Microsoft::UI::Xaml::Controls::Grid BuildDetailRow(std::wstring const& label, std::wstring const& value);

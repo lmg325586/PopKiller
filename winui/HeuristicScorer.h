@@ -39,7 +39,8 @@ namespace HeuristicScorer
         }
 
         // ---- 进程信息缓存（按 PID）：exe 名 / 路径 / 创建时间，避免每次事件重复 OpenProcess ----
-        inline constexpr unsigned long long kProcInfoTtlMs = 20000;
+        // TTL 取 2s：同一事件的 3–4 次查询可合并，同时把「PID 被复用导致信息过期」的窗口压到最小
+        inline constexpr unsigned long long kProcInfoTtlMs = 2000;
         inline constexpr size_t kProcInfoMax = 4096;
 
         struct ProcInfoEntry {

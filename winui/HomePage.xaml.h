@@ -32,6 +32,8 @@ namespace winrt::winui::implementation
             winrt::Windows::Foundation::IInspectable const& e);
 
         winrt::Microsoft::UI::Xaml::DispatcherTimer m_statusTimer{ nullptr };
+        // 提权状态在进程生命周期内不变，只查一次
+        bool m_elevated{ false };
     };
 }
 

@@ -122,6 +122,7 @@ namespace winrt::winui::implementation
         m_statusTimer.Interval(std::chrono::milliseconds{ kStatusTimerMs });
         m_statusTimer.Tick({ get_weak(), &HomePage::StatusTimer_Tick });
         m_statusTimer.Start();
+        m_elevated = IsProcessElevated();
         RefreshEngineStatus();
     }
 
@@ -151,7 +152,7 @@ namespace winrt::winui::implementation
             EnableEngineButton().Visibility(Visibility::Collapsed);
         }
 
-        PrivilegeText().Text(IsProcessElevated()
+        PrivilegeText().Text(m_elevated
             ? L"权限：管理员"
             : L"权限：普通用户（拦截管理员权限的弹窗需以管理员身份运行）");
     }

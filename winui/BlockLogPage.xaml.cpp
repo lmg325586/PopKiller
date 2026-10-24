@@ -493,6 +493,38 @@ namespace winrt::winui::implementation
         return grid;
     }
 
+    // 首次展开时创建展开区控件（懒加载）
+    void BlockLogPage::EnsureExpandUi(RowUi& ui)
+    {
+        if (ui.callout) return;
+
+        ui.callout = Controls::InfoBar();
+        ui.callout.IsOpen(true);
+        ui.callout.IsClosable(false);
+        ui.callout.Severity(Controls::InfoBarSeverity::Informational);
+        ui.subPanel.Children().Append(ui.callout);
+
+        ui.detailPanel = Controls::StackPanel();
+        ui.detailPanel.Spacing(4);
+        ui.subPanel.Children().Append(ui.detailPanel);
+
+        ui.hintText = Controls::TextBlock();
+        ui.hintText.FontSize(12);
+        ui.hintText.Foreground(ResBrush(L"LogSubFgBrush"));
+        ui.hintText.TextWrapping(TextWrapping::Wrap);
+        ui.subPanel.Children().Append(ui.hintText);
+
+        auto link = Controls::HyperlinkButton();
+        link.Content(box_value(hstring(L"打开规则页")));
+        link.Padding(ThicknessHelper::FromUniformLength(0));
+        link.Click({ this, &BlockLogPage::OpenRules_Click });
+        ui.subPanel.Children().Append(link);
+
+        ui.rawPanel = Controls::StackPanel();
+        ui.rawPanel.Spacing(2);
+        ui.subPanel.Children().Append(ui.rawPanel);
+    }
+
     void BlockLogPage::UpdateRowUi(RowUi& ui, LogGroup const& g)
     {
         bool block = (g.action == L"block");
@@ -514,6 +546,7 @@ namespace winrt::winui::implementation
         ui.subPanel.Visibility(g.expanded ? Visibility::Visible : Visibility::Collapsed);
         if (!g.expanded) return;
 
+        EnsureExpandUi(ui);
         ui.callout.Message(hstring(CalloutText(g)));
 
         ui.detailPanel.Children().Clear();
@@ -635,32 +668,8 @@ namespace winrt::winui::implementation
         ui.subPanel.Spacing(12);
         ui.subPanel.Margin(ThicknessHelper::FromLengths(32, 12, 0, 4));
         ui.subPanel.Visibility(Visibility::Collapsed);
-
-        ui.callout = Controls::InfoBar();
-        ui.callout.IsOpen(true);
-        ui.callout.IsClosable(false);
-        ui.callout.Severity(Controls::InfoBarSeverity::Informational);
-        ui.subPanel.Children().Append(ui.callout);
-
-        ui.detailPanel = Controls::StackPanel();
-        ui.detailPanel.Spacing(4);
-        ui.subPanel.Children().Append(ui.detailPanel);
-
-        ui.hintText = Controls::TextBlock();
-        ui.hintText.FontSize(12);
-        ui.hintText.Foreground(ResBrush(L"LogSubFgBrush"));
-        ui.hintText.TextWrapping(TextWrapping::Wrap);
-        ui.subPanel.Children().Append(ui.hintText);
-
-        auto link = Controls::HyperlinkButton();
-        link.Content(box_value(hstring(L"打开规则页")));
-        link.Padding(ThicknessHelper::FromUniformLength(0));
-        link.Click({ this, &BlockLogPage::OpenRules_Click });
-        ui.subPanel.Children().Append(link);
-
-        ui.rawPanel = Controls::StackPanel();
-        ui.rawPanel.Spacing(2);
-        ui.subPanel.Children().Append(ui.rawPanel);
+        // 展开区内容（InfoBar / 详细信息 / 说明 / 链接 / 事件记录）延迟到首次展开时创建，
+        // 避免每行都预建十多个控件（300 行约省 20–40 MB）
 
         ui.body.Children().Append(ui.subPanel);
         ui.root.Child(ui.body);
@@ -680,8 +689,9 @@ namespace winrt::winui::implementation
         }
         if (!ui) return;
 
-        ui->rawPanel.Children().Clear();
         if (g.expanded) {
+            EnsureExpandUi(*ui);
+            ui->rawPanel.Children().Clear();
             size_t n = g.raws.size();
             size_t from = (n > kMaxSubRows) ? n - kMaxSubRows : 0;
             for (size_t i = n; i-- > from; ) ui->rawPanel.Children().Append(BuildSubRow(g.raws[i]));
@@ -805,6 +815,7 @@ namespace winrt::winui::implementation
             auto ui = BuildRow(i);
             UpdateRowUi(ui, m_groups[i]);
             if (m_groups[i].expanded) {
+                EnsureExpandUi(ui);
                 size_t n = m_groups[i].raws.size();
                 size_t from = (n > kMaxSubRows) ? n - kMaxSubRows : 0;
                 for (size_t r = n; r-- > from; ) ui.rawPanel.Children().Append(BuildSubRow(m_groups[i].raws[r]));
