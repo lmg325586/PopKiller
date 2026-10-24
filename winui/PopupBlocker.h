@@ -673,19 +673,7 @@ namespace PopupBlocker
             DWORD pid{};
             ::GetWindowThreadProcessId(hwnd, &pid);
             if (!pid) return {};
-            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (!h) return {};
-            WCHAR path[MAX_PATH]{};
-            DWORD size = MAX_PATH;
-            std::wstring name;
-            if (::QueryFullProcessImageNameW(h, 0, path, &size))
-            {
-                std::wstring p = path;
-                auto pos = p.find_last_of(L"\\/");
-                name = (pos == std::wstring::npos) ? p : p.substr(pos + 1);
-            }
-            ::CloseHandle(h);
-            return Lower(name);
+            return HeuristicScorer::detail::GetProcInfo(pid).name;
         }
 
         inline std::wstring GetProcessPath(HWND hwnd)
@@ -693,14 +681,7 @@ namespace PopupBlocker
             DWORD pid{};
             ::GetWindowThreadProcessId(hwnd, &pid);
             if (!pid) return {};
-            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (!h) return {};
-            WCHAR path[MAX_PATH]{};
-            DWORD size = MAX_PATH;
-            std::wstring result;
-            if (::QueryFullProcessImageNameW(h, 0, path, &size)) result = path;
-            ::CloseHandle(h);
-            return Lower(result);
+            return HeuristicScorer::detail::GetProcInfo(pid).path;
         }
 
         inline bool IsProtected(HWND hwnd)
@@ -972,8 +953,10 @@ namespace PopupBlocker
 
         inline void EnforceBlock(HWND hwnd)
         {
+            // 先同步隐藏（不依赖目标线程消息循环），再请求关闭
+            ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
-            ::ShowWindowAsync(hwnd, SW_HIDE);
         }
 
         // 目标窗口进程是否刚创建（默认 5 秒内）
@@ -982,28 +965,24 @@ namespace PopupBlocker
             DWORD pid = 0;
             ::GetWindowThreadProcessId(hwnd, &pid);
             if (!pid) return false;
-            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (!h) return false;
-            FILETIME creation{}, exitT{}, kernel{}, user{};
-            BOOL ok = ::GetProcessTimes(h, &creation, &exitT, &kernel, &user);
-            ::CloseHandle(h);
-            if (!ok) return false;
+            unsigned long long cre = HeuristicScorer::detail::GetProcInfo(pid).createTime;
+            if (!cre) return false;
 
             FILETIME nowFt{};
             ::GetSystemTimeAsFileTime(&nowFt);
-            ULARGE_INTEGER now{}, cre{};
+            ULARGE_INTEGER now{};
             now.LowPart = nowFt.dwLowDateTime; now.HighPart = nowFt.dwHighDateTime;
-            cre.LowPart = creation.dwLowDateTime; cre.HighPart = creation.dwHighDateTime;
-            if (now.QuadPart <= cre.QuadPart) return false;
-            return ((now.QuadPart - cre.QuadPart) / kFiletimeTicksPerMs) <= withinMs;
+            if (now.QuadPart <= cre) return false;
+            return ((now.QuadPart - cre) / kFiletimeTicksPerMs) <= withinMs;
         }
 
         // 焦点窃取：阻止置顶 + 关闭并隐藏
         inline void EnforceFocusSteal(HWND hwnd)
         {
-            ::SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            // 去置顶 + 同步隐藏（一步完成），再请求关闭
+            ::SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW);
             ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
-            ::ShowWindowAsync(hwnd, SW_HIDE);
         }
 
         inline EventVerdict MakeFocusStealVerdict()
@@ -1111,6 +1090,20 @@ namespace PopupBlocker
     {
         if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
+
+        // 早退 + 去重：同一窗口 50ms 内的连续事件只处理一次；零尺寸窗口（非详细日志模式）直接跳过
+        {
+            static thread_local HWND lastHwnd = nullptr;
+            static thread_local ULONGLONG lastTick = 0;
+            ULONGLONG nowTick = ::GetTickCount64();
+            if (hwnd == lastHwnd && nowTick - lastTick < 50) return;
+            lastHwnd = hwnd;
+            lastTick = nowTick;
+        }
+        if (!VerboseLog) {
+            RECT rc{};
+            if (::GetWindowRect(hwnd, &rc) && (rc.right <= rc.left || rc.bottom <= rc.top)) return;
+        }
 
         // 记录/取用“上一个前台进程”：用于“弹窗是否与刚在前台的进程同进程”特征
         DWORD thisPid = 0; ::GetWindowThreadProcessId(hwnd, &thisPid);

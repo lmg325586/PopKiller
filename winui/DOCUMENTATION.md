@@ -134,8 +134,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
-| `GetProcessName(hwnd)` | 句柄 | `std::wstring` | 小写 exe 名 |
-| `GetProcessPath(hwnd)` | 句柄 | `std::wstring` | 小写完整路径 |
+| `GetProcessName(hwnd)` | 句柄 | `std::wstring` | 小写 exe 名（走 `GetProcInfo` 进程缓存） |
+| `GetProcessPath(hwnd)` | 句柄 | `std::wstring` | 小写完整路径（走 `GetProcInfo` 进程缓存） |
 | `IsProtected(hwnd)` | 句柄 | `bool` | 自身 + 系统进程 + 浏览器白名单 |
 | `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题（动态长度） |
 | `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
@@ -147,9 +147,9 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `IsOverlayProcess(exe)` | 小写 exe 名 | `bool` | 游戏覆盖层进程：`gamebar*`、`rtss.exe`、`rtsshooksloader*` —— 全屏游戏时其新建窗口不算焦点窃取 |
 | `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 综合评估：规则匹配+启发式+ML+raw |
 | `WriteEventLog(hwnd, idEvent, v)` | 句柄、事件、评估结果 | `void` | 写日志（含启发式明细+raw+ml） |
-| `EnforceBlock(hwnd)` | 句柄 | `void` | 关闭/隐藏窗口（黑名单与启发式命中一致） |
-| `IsNewlyCreated(hwnd, withinMs)` | 句柄、阈值(默认 5000ms) | `bool` | 进程创建时间是否在阈值内 |
-| `EnforceFocusSteal(hwnd)` | 句柄 | `void` | 焦点窃取：去置顶 + `WM_CLOSE` + 隐藏 |
+| `EnforceBlock(hwnd)` | 句柄 | `void` | 同步隐藏（`SetWindowPos` + `SWP_HIDEWINDOW`，不等目标消息循环）→ 再 `WM_CLOSE`，视觉上不出现闪烁 |
+| `IsNewlyCreated(hwnd, withinMs)` | 句柄、阈值(默认 5000ms) | `bool` | 进程创建时间是否在阈值内（走 `GetProcInfo` 缓存） |
+| `EnforceFocusSteal(hwnd)` | 句柄 | `void` | 焦点窃取：去置顶 + 同步隐藏（同一次 `SetWindowPos`）+ `WM_CLOSE` |
 | `MakeFocusStealVerdict()` | 无 | `EventVerdict` | 构造 `reason=focus_steal`、`action=block` 的评估结果 |
 | `ThreadMain(lp)` | 无 | `DWORD` | 挂 SHOW/FOREGROUND 双钩子 + 消息循环 |
 | `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→（全屏游戏且非基础设施窗口的焦点窃取分支）→评估→执行→日志→通知 |
@@ -167,6 +167,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `GetTitle(hwnd)` | 句柄 | `std::wstring` | 小写标题 |
 | `GetClass(hwnd)` | 句柄 | `std::wstring` | 小写类名 |
 | `IsUserIdle(evTime)` | 事件时间 | `float` | 计算用户空闲秒数 |
+| `GetProcInfo(pid)` | 进程 ID | `ProcInfoEntry` | 进程信息缓存（exe 名 / 路径 / 创建时间，TTL 20s）：替代每次事件重复 `OpenProcess`；`GetProcessName`/`GetProcessPath`/`ProcCreateTime`/`ProcessAgeSeconds` 均走它 |
 | `IsFarFromMouse(rc, scale)` | 窗口矩形、DPI 缩放(DPI/96) | `float` | 判断窗口距鼠标是否超过 300 *逻辑*像素（按 DPI 归一） |
 
 ### 公共结构
@@ -182,7 +183,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 |---|---|---|---|
 | `DigitRatio(s)` | 串 | `float` | 数字占比 |
 | `HexRatio(s)` | 串 | `float` | 十六进制字符占比 |
-| `ProcessAgeSeconds(hwnd)` | 句柄 | `float` | 进程年龄秒，失败 -1 |
+| `ProcessAgeSeconds(hwnd)` | 句柄 | `float` | 进程年龄秒，失败 -1（走 `GetProcInfo` 缓存） |
 | `GetSignatureStatus(path)` | 路径 | `SignatureStatus` | 三态 `Unknown/Signed/Unsigned`；永不阻塞，未命中即入队并返回 `Unknown` |
 | `IsFileSignedCached(path)` | 路径 | `bool` | 兼容包装：仅“已确认签名”为 true，`Unknown` 亦为 false |
 | `ExtractFeatures(hwnd, evTime)` | 句柄、事件时间 | `Features` | 21 项特征（含 `path`、`cls`） |

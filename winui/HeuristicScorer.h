@@ -38,19 +38,70 @@ namespace HeuristicScorer
             return s;
         }
 
+        // ---- 进程信息缓存（按 PID）：exe 名 / 路径 / 创建时间，避免每次事件重复 OpenProcess ----
+        inline constexpr unsigned long long kProcInfoTtlMs = 20000;
+        inline constexpr size_t kProcInfoMax = 4096;
+
+        struct ProcInfoEntry {
+            std::wstring name;              // 小写 exe 名
+            std::wstring path;              // 小写完整路径
+            unsigned long long createTime{}; // FILETIME
+            unsigned long long cachedMs{};
+        };
+        struct ProcInfoCache {
+            std::mutex mtx;
+            std::unordered_map<DWORD, ProcInfoEntry> map;
+        };
+        inline ProcInfoCache& ProcInfoCacheInstance()
+        {
+            static ProcInfoCache* c = new ProcInfoCache();
+            return *c;
+        }
+
+        // 取进程信息（带 TTL 缓存）；进程已退出时返回空项
+        inline ProcInfoEntry GetProcInfo(DWORD pid)
+        {
+            if (!pid) return {};
+            ProcInfoCache& c = ProcInfoCacheInstance();
+            unsigned long long now = ::GetTickCount64();
+            {
+                std::lock_guard<std::mutex> l(c.mtx);
+                auto it = c.map.find(pid);
+                if (it != c.map.end() && now - it->second.cachedMs <= kProcInfoTtlMs) return it->second;
+            }
+
+            ProcInfoEntry e{};
+            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (h) {
+                WCHAR buf[MAX_PATH]{};
+                DWORD size = MAX_PATH;
+                if (::QueryFullProcessImageNameW(h, 0, buf, &size)) {
+                    e.path = Lower(std::wstring(buf, size));
+                    auto pos = e.path.find_last_of(L"\\/");
+                    e.name = (pos == std::wstring::npos) ? e.path : e.path.substr(pos + 1);
+                }
+                FILETIME ct{}, et{}, kt{}, ut{};
+                if (::GetProcessTimes(h, &ct, &et, &kt, &ut)) {
+                    ULARGE_INTEGER v; v.LowPart = ct.dwLowDateTime; v.HighPart = ct.dwHighDateTime;
+                    e.createTime = v.QuadPart;
+                }
+                ::CloseHandle(h);
+            }
+            e.cachedMs = now;
+            {
+                std::lock_guard<std::mutex> l(c.mtx);
+                if (c.map.size() > kProcInfoMax) c.map.clear();
+                c.map[pid] = e;
+            }
+            return e;
+        }
+
         inline std::wstring GetProcessPath(HWND hwnd)
         {
             DWORD pid{};
             ::GetWindowThreadProcessId(hwnd, &pid);
             if (!pid) return {};
-            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (!h) return {};
-            WCHAR path[MAX_PATH]{};
-            DWORD size = MAX_PATH;
-            std::wstring result;
-            if (::QueryFullProcessImageNameW(h, 0, path, &size)) result = path;
-            ::CloseHandle(h);
-            return Lower(result);
+            return GetProcInfo(pid).path;
         }
 
         inline std::wstring GetTitle(HWND hwnd)
@@ -94,17 +145,7 @@ namespace HeuristicScorer
         inline std::wstring ProcessNameByPid(DWORD pid)
         {
             if (!pid) return {};
-            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (!h) return {};
-            WCHAR buf[MAX_PATH]{}; DWORD size = MAX_PATH;
-            std::wstring name;
-            if (::QueryFullProcessImageNameW(h, 0, buf, &size)) {
-                std::wstring p = buf;
-                auto pos = p.find_last_of(L"\\/");
-                name = Lower((pos == std::wstring::npos) ? p : p.substr(pos + 1));
-            }
-            ::CloseHandle(h);
-            return name;
+            return GetProcInfo(pid).name;
         }
 
         struct ProcEntry { DWORD ppid = 0; std::wstring name; };   // name 为小写 exe 名
@@ -138,15 +179,7 @@ namespace HeuristicScorer
 
         inline unsigned long long ProcCreateTime(DWORD pid)
         {
-            HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (!h) return 0;
-            FILETIME c{}, e{}, k{}, u{};
-            unsigned long long r = 0;
-            if (::GetProcessTimes(h, &c, &e, &k, &u)) {
-                ULARGE_INTEGER v; v.LowPart = c.dwLowDateTime; v.HighPart = c.dwHighDateTime; r = v.QuadPart;
-            }
-            ::CloseHandle(h);
-            return r;
+            return GetProcInfo(pid).createTime;
         }
 
         struct ParentCache {
@@ -273,20 +306,13 @@ namespace HeuristicScorer
     {
         DWORD pid{}; ::GetWindowThreadProcessId(hwnd, &pid);
         if (!pid) return -1.f;
-        HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (!h) return -1.f;
-        float age = -1.f;
-        FILETIME ct, et, kt, ut;
-        if (::GetProcessTimes(h, &ct, &et, &kt, &ut))
-        {
-            FILETIME now; ::GetSystemTimeAsFileTime(&now);
-            ULARGE_INTEGER a{}, b{};
-            a.LowPart = now.dwLowDateTime;  a.HighPart = now.dwHighDateTime;
-            b.LowPart = ct.dwLowDateTime;   b.HighPart = ct.dwHighDateTime;
-            age = float(a.QuadPart - b.QuadPart) / 1e7f;
-        }
-        ::CloseHandle(h);
-        return age;
+        unsigned long long ct = detail::GetProcInfo(pid).createTime;
+        if (!ct) return -1.f;
+        FILETIME now; ::GetSystemTimeAsFileTime(&now);
+        ULARGE_INTEGER a{};
+        a.LowPart = now.dwLowDateTime; a.HighPart = now.dwHighDateTime;
+        if (a.QuadPart <= ct) return -1.f;
+        return float(a.QuadPart - ct) / 1e7f;
     }
 
     // 纯计算：真正调用 WinVerifyTrust（慢，可能数十毫秒）。只允许在后台线程调用，勿在钩子线程直接调用。
