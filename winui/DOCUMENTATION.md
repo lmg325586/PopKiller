@@ -80,9 +80,9 @@
 | `kMLArbitrationLow` | `constexpr int` | ML 仲裁下限分数（35） |
 | `kMLArbitrationHigh` | `constexpr int` | ML 仲裁上限分数（95） |
 | `kCommunityRulesOkTtlMin` | `constexpr int` | 社区规则拉取成功后的免拉取时长（720 分钟） |
-| `kCommunityRulesFailTtlMin` | `constexpr int` | 社区规则拉取失败后的重试间隔（10 分钟） |
 | `EnabledChangedCallback` | `std::function<void()>` | 拦截状态变更回调 |
 | `CommunityRulesFetchCallback` | `std::function<void(bool, std::wstring)>` | 社区规则拉取完成回调 |
+| `CommunityFetching` | `std::atomic<bool>` | 社区规则正在拉取（防止重复请求） |
 | `BlockOccurredCallback` | `std::function<void(exeName, windowTitle, matchResult)>` | 拦截发生回调（用于 Toast 通知） |
 
 ### ⚠️ 重要：写规则只经 MutateRules
@@ -121,9 +121,9 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `StartEngine()` | 无 | `void` | 开启拦截标准流程：`SyncFromSettings()` → 惰性加载 ML → `Start()` |
 | `Sha256Hex(buf)` | IBuffer | `std::wstring` | 计算 SHA256 十六进制串（小写） |
 | `ParseExpectedSha(text)` | UTF-8 文本 | `std::wstring` | 从响应文本解析期望的 SHA256 |
-| `FetchCommunityRulesAsync()` | 无 | `IAsyncAction` | 联网拉取社区规则并合并（SHA256 校验）；结束时把「检查时间 / 是否成功」写入 ini（`Blocker/CommunityRulesCheckedAt`、`CommunityRulesLastOk`） |
-| `ShouldFetchCommunityRules()` | 无 | `bool` | 是否需要拉取：从未成功、上次失败超 10 分钟、或上次成功超 12 小时才返回 true（进入拦截页时用它节流） |
-| `CommunityRulesStatusText()` | 无 | `std::wstring` | 跳过拉取时页面显示的状态文案（刚刚 / N 小时前检查过更新 / 上次失败稍后重试） |
+| `FetchCommunityRulesAsync()` | 无 | `IAsyncAction` | 联网拉取社区规则并合并（SHA256 校验）；成功时把时间戳写入 ini（`Blocker/CommunityRulesFetchedAt`），失败不写（由页面「重试」按钮立即重试） |
+| `ShouldFetchCommunityRules()` | 无 | `bool` | 是否需要拉取：从未成功、或上次成功超过 12 小时才返回 true（进入拦截页时用它节流） |
+| `CommunityRulesStatusText()` | 无 | `std::wstring` | 跳过拉取时页面显示的状态文案（刚刚 / N 小时前检查过更新） |
 | `FetchModelUpdateCheckAsync()` | 无 | `IAsyncAction` | 抓远端 `StaticML/popup_models.json` 与本地模型版本比较；结果经 `ModelUpdateCheckCallback(state,remote,local,msg)`（0 已最新/1 有更新/-1 失败） |
 | `ApplyModelUpdateAsync()` | 无 | `IAsyncAction` | 下载 rf/lr 模型，按清单 `sha256` 校验后写入 exe 同级 `StaticML\` 并重载 ML；结果经 `ModelUpdateApplyCallback(ok,msg)` |
 | `Start()` | 无 | `void` | 启动钩子线程（`Running` 置位） |

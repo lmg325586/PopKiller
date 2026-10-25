@@ -58,7 +58,7 @@
                                           OnContent="开" OffContent="关"
                                           Toggled="CommunityRulesToggle_Toggled"/>
 
-                            <TextBlock Text="自动从 GitHub 拉取最新社区规则并与本地规则合并；成功 12 小时内不重复拉取（失败 10 分钟后重试），离线时使用上次缓存。"
+                            <TextBlock Text="自动从 GitHub 拉取最新社区规则并与本地规则合并；离线时使用上次缓存。"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"/>

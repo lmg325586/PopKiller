@@ -451,34 +451,30 @@ namespace PopupBlocker
         return Lower(hex.substr(b, e - b + 1));
     }
 
-    // 社区规则拉取节流：成功 12 小时内不重复拉取；失败 10 分钟后才重试。
+    // 社区规则拉取节流：成功后 12 小时内不重复拉取（失败不记时间，下次进页面或点「重试」立即重试）。
     // 记录写在 ini 里，重启后仍有效，避免每次进入拦截页都打两枪 GitHub。
     inline constexpr int kCommunityRulesOkTtlMin = 12 * 60;
-    inline constexpr int kCommunityRulesFailTtlMin = 10;
 
     inline long long WallClockMinutes()
     {
         return static_cast<long long>(std::time(nullptr) / 60);
     }
 
+    inline std::atomic<bool> CommunityFetching{ false };   // 已有一次拉取在跑（防重复请求）
+
     inline bool ShouldFetchCommunityRules()
     {
-        long long t = AppSettings::ReadInt(L"Blocker", L"CommunityRulesCheckedAt", 0);
-        if (t <= 0) return true;
+        long long t = AppSettings::ReadInt(L"Blocker", L"CommunityRulesFetchedAt", 0);
+        if (t <= 0) return true;            // 从未成功拉取过
         long long now = WallClockMinutes();
-        if (now < t) return true;   // 系统时间被回拨：按过期处理
-        int ttl = AppSettings::ReadInt(L"Blocker", L"CommunityRulesLastOk", 0) == 1
-            ? kCommunityRulesOkTtlMin : kCommunityRulesFailTtlMin;
-        return now - t >= ttl;
+        if (now < t) return true;           // 系统时间被回拨：按过期处理
+        return now - t >= kCommunityRulesOkTtlMin;
     }
 
     // 不拉取时页面显示的状态文案
     inline std::wstring CommunityRulesStatusText()
     {
-        if (AppSettings::ReadInt(L"Blocker", L"CommunityRulesLastOk", 0) != 1)
-            return L"社区规则已启用（上次检查失败，稍后自动重试）";
-
-        long long t = AppSettings::ReadInt(L"Blocker", L"CommunityRulesCheckedAt", 0);
+        long long t = AppSettings::ReadInt(L"Blocker", L"CommunityRulesFetchedAt", 0);
         long long now = WallClockMinutes();
         long long mins = (t > 0 && now >= t) ? (now - t) : 0;
         if (mins < 60) return L"社区规则已启用（刚刚检查过更新）";
@@ -488,6 +484,8 @@ namespace PopupBlocker
     inline winrt::Windows::Foundation::IAsyncAction FetchCommunityRulesAsync()
     {
         using namespace winrt::Windows::Web::Http;
+        if (CommunityFetching.exchange(true)) co_return;   // 已有请求在跑，直接复用那一次
+        struct FetchGuard { ~FetchGuard() { CommunityFetching.store(false); } } guard;
         bool ok = false;
         std::wstring msg;
         std::string body;
@@ -551,9 +549,9 @@ namespace PopupBlocker
             msg = L"网络错误";
         }
 
-        // 记录本次检查结果（分钟粒度），供下次进入页面时决定是否还要拉取
-        AppSettings::WriteInt(L"Blocker", L"CommunityRulesCheckedAt", static_cast<int>(WallClockMinutes()));
-        AppSettings::WriteInt(L"Blocker", L"CommunityRulesLastOk", ok ? 1 : 0);
+        // 只在成功时记录时间戳（失败由页面上的「重试」按钮立即重试）
+        if (ok)
+            AppSettings::WriteInt(L"Blocker", L"CommunityRulesFetchedAt", static_cast<int>(WallClockMinutes()));
 
         if (ShuttingDown.load()) co_return;
 

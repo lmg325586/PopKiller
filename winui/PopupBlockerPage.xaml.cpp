@@ -152,9 +152,12 @@ namespace winrt::winui::implementation
         m_initialized = true;
 
         if (CommunityRulesToggle().IsOn()) {
-            // 只在从未成功、上次失败超过 10 分钟、或上次成功超过 12 小时后拉取，
-            // 避免每次进入本页都请求 GitHub
-            if (PopupBlocker::ShouldFetchCommunityRules()) {
+            // 只在从未成功或上次成功超过 12 小时后拉取，避免每次进入本页都请求 GitHub；
+            // 失败不记时间，由「重试」按钮或下次进页面立即重试
+            if (PopupBlocker::CommunityFetching.load()) {
+                CommunityStatusText().Text(L"正在拉取社区规则…");
+            }
+            else if (PopupBlocker::ShouldFetchCommunityRules()) {
                 CommunityStatusText().Text(L"正在拉取社区规则…");
                 PopupBlocker::FetchCommunityRulesAsync();
             }
