@@ -146,10 +146,22 @@ namespace winrt::winui::implementation
         PopupBlocker::SyncFromSettings();
         ReloadRulesFromEngine();
 
+        // 初始化开关时必须屏蔽 Toggled：否则每次进入本页都会走一次「打开即拉取」
+        m_initialized = false;
         CommunityRulesToggle().IsOn(AppSettings::ReadInt(L"Blocker", L"CommunityRulesEnabled", 1) == 1);
+        m_initialized = true;
+
         if (CommunityRulesToggle().IsOn()) {
-            CommunityStatusText().Text(L"正在拉取社区规则…");
-            PopupBlocker::FetchCommunityRulesAsync();
+            // 只在从未成功、上次失败超过 10 分钟、或上次成功超过 12 小时后拉取，
+            // 避免每次进入本页都请求 GitHub
+            if (PopupBlocker::ShouldFetchCommunityRules()) {
+                CommunityStatusText().Text(L"正在拉取社区规则…");
+                PopupBlocker::FetchCommunityRulesAsync();
+            }
+            else {
+                CommunityStatusText().Text(winrt::hstring(PopupBlocker::CommunityRulesStatusText()));
+                RetryFetchButton().Visibility(Visibility::Collapsed);
+            }
         }
     }
 

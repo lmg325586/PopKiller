@@ -28,6 +28,7 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <cstdio>
 #include <cwchar>
+#include <ctime>
 
 namespace PopupBlocker
 {
@@ -450,6 +451,40 @@ namespace PopupBlocker
         return Lower(hex.substr(b, e - b + 1));
     }
 
+    // 社区规则拉取节流：成功 12 小时内不重复拉取；失败 10 分钟后才重试。
+    // 记录写在 ini 里，重启后仍有效，避免每次进入拦截页都打两枪 GitHub。
+    inline constexpr int kCommunityRulesOkTtlMin = 12 * 60;
+    inline constexpr int kCommunityRulesFailTtlMin = 10;
+
+    inline long long WallClockMinutes()
+    {
+        return static_cast<long long>(std::time(nullptr) / 60);
+    }
+
+    inline bool ShouldFetchCommunityRules()
+    {
+        long long t = AppSettings::ReadInt(L"Blocker", L"CommunityRulesCheckedAt", 0);
+        if (t <= 0) return true;
+        long long now = WallClockMinutes();
+        if (now < t) return true;   // 系统时间被回拨：按过期处理
+        int ttl = AppSettings::ReadInt(L"Blocker", L"CommunityRulesLastOk", 0) == 1
+            ? kCommunityRulesOkTtlMin : kCommunityRulesFailTtlMin;
+        return now - t >= ttl;
+    }
+
+    // 不拉取时页面显示的状态文案
+    inline std::wstring CommunityRulesStatusText()
+    {
+        if (AppSettings::ReadInt(L"Blocker", L"CommunityRulesLastOk", 0) != 1)
+            return L"社区规则已启用（上次检查失败，稍后自动重试）";
+
+        long long t = AppSettings::ReadInt(L"Blocker", L"CommunityRulesCheckedAt", 0);
+        long long now = WallClockMinutes();
+        long long mins = (t > 0 && now >= t) ? (now - t) : 0;
+        if (mins < 60) return L"社区规则已启用（刚刚检查过更新）";
+        return L"社区规则已启用（" + std::to_wstring(mins / 60) + L" 小时前检查过更新）";
+    }
+
     inline winrt::Windows::Foundation::IAsyncAction FetchCommunityRulesAsync()
     {
         using namespace winrt::Windows::Web::Http;
@@ -515,6 +550,10 @@ namespace PopupBlocker
         catch (...) {
             msg = L"网络错误";
         }
+
+        // 记录本次检查结果（分钟粒度），供下次进入页面时决定是否还要拉取
+        AppSettings::WriteInt(L"Blocker", L"CommunityRulesCheckedAt", static_cast<int>(WallClockMinutes()));
+        AppSettings::WriteInt(L"Blocker", L"CommunityRulesLastOk", ok ? 1 : 0);
 
         if (ShuttingDown.load()) co_return;
 
