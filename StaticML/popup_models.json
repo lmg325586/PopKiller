@@ -1,6 +1,6 @@
 {
-  "version": "26.10.2",
-  "trained_at": "2026-10-04T11:25:48",
+  "version": "26.10.3",
+  "trained_at": "2026-10-27T18:45:05",
   "feature_count": 27,
   "feature_names": [
     "r_owner",
@@ -31,38 +31,38 @@
     "parent_unknown",
     "same_proc_prev_fg"
   ],
-  "samples": 69,
+  "samples": 72,
   "popup": 31,
-  "notpopup": 38,
-  "leak_groups": 62,
+  "notpopup": 41,
+  "leak_groups": 64,
   "seed": 42,
   "models": {
     "rf": "popup_rf.onnx",
     "lr": "popup_lr.onnx"
   },
+  "sha256": {
+    "rf": "0b412ae0621b24b4f129a0e76f10d322d3482ad5effa4241d5f0112374c434cf",
+    "lr": "f0c9b8314f3f5465d4470980fa939dd1dc71c2bf63b8c1b02afdc786e22d191e"
+  },
   "metrics_group_cv": {
     "rf": {
-      "acc": 0.913,
+      "acc": 0.9167,
       "popup_precision": 0.8571,
       "popup_recall": 0.9677
     },
     "lr": {
-      "acc": 0.8696,
-      "popup_precision": 0.8056,
+      "acc": 0.9028,
+      "popup_precision": 0.8529,
       "popup_recall": 0.9355
     },
     "rf_lr": {
-      "acc": 0.8986,
-      "popup_precision": 0.8529,
-      "popup_recall": 0.9355
+      "acc": 0.9167,
+      "popup_precision": 0.8571,
+      "popup_recall": 0.9677
     }
   },
   "exported": {
     "rf": true,
     "lr": true
-  },
-  "sha256": {
-    "rf": "96026a1372eea85b2066115b9df29ff54c78db74a28879e5e25e34540a5dcf17",
-    "lr": "784127ec4a7d2d4049f63b2e1636809209425ef980fabd2af7e49f2e9e5568d6"
   }
 }
