@@ -196,7 +196,6 @@
       <SubType>Code</SubType>
     </ClInclude>
     <ClInclude Include="TrayIcon.h" />
-    <None Include="app.rc" />
     <None Include="Assets\app.ico" />
     <None Include="Assets\app.png" />
     <ClInclude Include="WindowPicker.h" />
