@@ -72,6 +72,11 @@ try {
         Where-Object { $_.Name -in @('rules.json','labels.json','winui.ini','blocklog.txt','autostart_debug.log','notifydiag.txt') -or $_.Extension -eq '.log' } |
         Remove-Item -Force
 
+    Write-Host "只保留 zh-CN/en-US 语言资源"
+    Get-ChildItem $stage -Directory |
+        Where-Object { $_.Name -match '^[a-z]{2}(-[A-Za-z]+)*$' -and $_.Name -notin @('zh-CN','en-US') } |
+        Remove-Item -Recurse -Force
+
     # VC++ 运行时（app-local）
     $redistRoot = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC" -Directory -ErrorAction SilentlyContinue |
         Sort-Object Name -Descending | Select-Object -First 1
