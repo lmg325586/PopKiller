@@ -82,10 +82,16 @@ namespace PopupBlocker
             for (wchar_t c : p) {
                 auto it = nodes[cur].next.find(c);
                 if (it == nodes[cur].next.end()) {
-                    it = nodes[cur].next.emplace(c, static_cast<int>(nodes.size())).first;
+                    // 先扩容再插入：emplace_back 会移动 Node（含 map），
+                    // 先取到的迭代器随后失效（Debug 断言 _Mycont 为空）。
+                    const int next = static_cast<int>(nodes.size());
                     nodes.emplace_back();
+                    nodes[cur].next.emplace(c, next);
+                    cur = next;
                 }
-                cur = it->second;
+                else {
+                    cur = it->second;
+                }
             }
             nodes[cur].out |= flags;
         }
