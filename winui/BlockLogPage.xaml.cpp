@@ -23,8 +23,7 @@ namespace
     // 展开行时最多显示的最近记录条数
     constexpr uint32_t kMaxSubRows = 100;
 
-    // 日志读取缓冲区大小（字节）
-    constexpr size_t kReadBuf = 4096;
+    // 增量读取分块大小（字节）
     constexpr size_t kChunkBuf = 65536;
 
     // 图标列宽（逻辑像素）
@@ -36,25 +35,8 @@ namespace
     // 判定“已置顶”的垂直偏移阈值（逻辑像素）
     constexpr double kTopEpsilon = 4.0;
 
-    std::wstring ReadLogText()
-    {
-        FILE* f{};
-        if (_wfopen_s(&f, PopupBlocker::LogPath().c_str(), L"rb") != 0 || !f) return {};
-        std::string data;
-        char buf[kReadBuf];
-        size_t n;
-        while ((n = ::fread(buf, 1, sizeof(buf), f)) > 0) data.append(buf, n);
-        ::fclose(f);
-        if (data.size() >= 3 && (unsigned char)data[0] == 0xEF && (unsigned char)data[1] == 0xBB && (unsigned char)data[2] == 0xBF)
-            data.erase(0, 3);
-        int len = static_cast<int>(data.size());
-        int need = ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), len, nullptr, 0);
-        if (need <= 0) return {};
-        std::wstring wide(static_cast<size_t>(need), 0);
-        ::MultiByteToWideChar(CP_UTF8, 0, data.c_str(), len, wide.data(), need);
-        return wide;
-    }
-
+    // 从 offset 读到文件尾，只保留到最后一个换行为止（末尾没写完的半行留给下次），
+    // consumed 返回对齐到整行后的新偏移，供增量读取接着往后读。
     std::wstring ReadLogTextFrom(uint64_t offset, uint64_t& consumed)
     {
         consumed = 0;
@@ -759,7 +741,9 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::ReloadFromFile()
     {
-        std::wstringstream ss(ReadLogText());
+        uint64_t consumed = 0;
+        std::wstringstream ss(ReadLogTextFrom(0, consumed));
+        if (consumed > 0) m_lastFileSize = consumed;
         std::wstring line;
         m_groups.clear();
         m_groupIndex.clear();
@@ -940,9 +924,6 @@ namespace winrt::winui::implementation
             SampleLabels::Load(m_labels);
             ApplyFilter();
         }
-        WIN32_FILE_ATTRIBUTE_DATA fad{};
-        if (::GetFileAttributesExW(PopupBlocker::LogPath().c_str(), GetFileExInfoStandard, &fad))
-            m_lastFileSize = (static_cast<uint64_t>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow;
     }
 
     void BlockLogPage::Timer_Tick(IInspectable const&, IInspectable const&)
