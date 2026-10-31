@@ -7,5 +7,7 @@ namespace winui
         void NavView_SelectionChanged(Microsoft.UI.Xaml.Controls.NavigationView sender,
                                       Microsoft.UI.Xaml.Controls.NavigationViewSelectionChangedEventArgs args);
         void NavigateToTag(String tag);
+        void NavView_ItemInvoked(Microsoft.UI.Xaml.Controls.NavigationView sender,
+                                 Microsoft.UI.Xaml.Controls.NavigationViewItemInvokedEventArgs args);
     }
 }

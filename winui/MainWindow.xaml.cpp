@@ -427,7 +427,7 @@ namespace winrt::winui::implementation
     {
         if (args.IsSettingsSelected())
         {
-            ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
+            NavigateFrameToTag(L"Settings");
             return;
         }
 
@@ -441,20 +441,59 @@ namespace winrt::winui::implementation
         NavigateFrameToTag(tag);
     }
 
+    // 点击已选中项不触发 SelectionChanged，靠 ItemInvoked 补上导航；
+    // 两个入口都走幂等导航，所以不会重复建页。
+    void MainWindow::NavView_ItemInvoked(NavigationView const&,
+        NavigationViewItemInvokedEventArgs const& args)
+    {
+        if (args.IsSettingsInvoked())
+        {
+            NavigateFrameToTag(L"Settings");
+            return;
+        }
+
+        auto item = args.InvokedItemContainer().try_as<NavigationViewItem>();
+        if (!item)
+        {
+            return;
+        }
+
+        auto tag = item.Tag().try_as<hstring>();
+        if (tag)
+        {
+            NavigateFrameToTag(*tag);
+        }
+    }
+
     void MainWindow::NavigateFrameToTag(hstring const& tag)
     {
         if (tag == L"Home")
         {
-            ContentFrame().Navigate(xaml_typename<winrt::winui::HomePage>());
+            NavigateFrame(xaml_typename<winrt::winui::HomePage>());
         }
         else if (tag == L"Blocker")
         {
-            ContentFrame().Navigate(xaml_typename<winrt::winui::PopupBlockerPage>());
+            NavigateFrame(xaml_typename<winrt::winui::PopupBlockerPage>());
         }
         else if (tag == L"BlockLog")
         {
-            ContentFrame().Navigate(xaml_typename<winrt::winui::BlockLogPage>());
+            NavigateFrame(xaml_typename<winrt::winui::BlockLogPage>());
         }
+        else if (tag == L"Settings")
+        {
+            NavigateFrame(xaml_typename<winrt::winui::SettingsPage>());
+        }
+    }
+
+    // 幂等导航：已经停在该页时不重建页面（例如从子页点回当前分区）。
+    void MainWindow::NavigateFrame(Windows::UI::Xaml::Interop::TypeName const& target)
+    {
+        auto frame = ContentFrame();
+        if (frame.CurrentSourcePageType().Name == target.Name)
+        {
+            return;
+        }
+        frame.Navigate(target);
     }
 
     void MainWindow::NavigateToTag(hstring const& tag)

@@ -394,20 +394,21 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `ReloadFromFile()` | 无 | `void` | 从 `blocklog.txt` 逐行解析并按「动作\|原因\|进程\|标题」聚合为 `LogGroup` |
-| `ApplyFilter()` | 无 | `void` | 按当前过滤标签+搜索词过滤分组，重建卡片列表 |
+| `ApplyFilter()` | 无 | `void` | 按当前结果标签+依据标签+搜索词过滤分组，重建卡片列表 |
 | `Load()` | 无 | `void` | 读文件→应用过滤→刷新列表 |
-| `Filter_Changed(sender, args)` | 下拉 | `void` | 切换过滤标签→ApplyFilter |
+| `Filter_Changed(sender, args)` | 下拉 | `void` | 切换结果/依据筛选→ApplyFilter |
 | `Search_Changed(sender, args)` | 文本 | `void` | 更新搜索词→ApplyFilter |
 | `Timer_Tick(sender, args)` | 定时器 | `void` | 自动刷新日志（1 秒间隔；日志含焦点窃取等事件） |
 | `Refresh_Click(sender, args)` | 按钮 | `void` | 手动刷新 |
-| `Clear_Click(sender, args)` | 按钮 | `void` | 清空日志文件 |
+| `Clear_Click(sender, args)` | 按钮 | `void` | 先弹 `ContentDialog` 确认，确认后清空日志文件 |
 | `RowChevronClick(sender, args)` | 卡片箭头 | `void` | 展开/折叠该条日志（箭头旋转 180°） |
+| `RowHeadTapped(sender, args)` | 卡片主体 | `void` | 点击卡片任意位置展开/折叠（箭头按钮自己处理点击，不重复触发） |
 | `OpenRules_Click(sender, args)` | 展开区链接 | `void` | 导航到「弹窗拦截」规则页 |
 | `BuildRow(gidx)` | 分组下标 | `RowUi` | 构建单条日志卡片：图标 + 标题/时间 + 原因标签 + 箭头；**展开区控件（`InfoBar`/详细信息/说明/链接/事件记录）延迟到首次展开时由 `EnsureExpandUi` 创建**，避免每行预建十多个控件 |
 | `UpdateRowUi(ui, g)` | 行 UI、分组 | `void` | 按分组数据刷新卡片文案/配色/展开内容 |
 | `MarkPopup_Click(sender, args)` | 菜单 | `void` | 标记选中行为弹窗（label=popup） |
 | `MarkNotPopup_Click(sender, args)` | 菜单 | `void` | 标记选中行为非弹窗（label=notpopup） |
-| `ExportSamples_Click(sender, args)` | 菜单 | `void` | 导出标注样本为 JSON，清空标注缓存 |
+| `ExportSamples_Click(sender, args)` | 菜单 | `void` | 导出标注样本为 JSON 并清空标注缓存；没有标注时只提示，不选文件、不清缓存 |
 | `AddToBlacklist_Click(sender, args)` | 菜单 | `void` | 将选中行 exe 加入黑名单 |
 | `AddToWhitelist_Click(sender, args)` | 菜单 | `void` | 将选中行 exe 加入白名单 |
 | `AddRuleFromSelection(whitelist)` | bool | `void` | 内部：从选中日志行提取 exe 并加规则 |

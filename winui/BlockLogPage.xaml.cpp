@@ -7,6 +7,8 @@
 #include "MainWindow.xaml.h"
 #include <sstream>
 #include <winrt/Windows.UI.Text.h>
+#include <winrt/Microsoft.UI.Xaml.Input.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <vector>
 #include <algorithm>
 #include <functional>
@@ -61,6 +63,14 @@ namespace
         ::MultiByteToWideChar(CP_UTF8, 0, buf.c_str(), len, wide.data(), need);
         if (!wide.empty() && wide[0] == 0xFEFF) wide.erase(0, 1);
         return wide;
+    }
+
+    // ContentDialog 首次 ShowAsync 可能缺入场动画（WinUI 已知问题 microsoft/microsoft-ui-xaml#8476）：
+    // ShowAsync 前显式指定默认样式，使模板在进入弹窗树前即定型。
+    void ApplyDefaultDialogStyle(winrt::Microsoft::UI::Xaml::Controls::ContentDialog const& d)
+    {
+        if (auto res = winrt::Microsoft::UI::Xaml::Application::Current().Resources().TryLookup(winrt::box_value(L"DefaultContentDialogStyle")))
+            if (auto style = res.try_as<winrt::Microsoft::UI::Xaml::Style>()) d.Style(style);
     }
 
     uint64_t LogWriteTime()
@@ -221,6 +231,17 @@ namespace winrt::winui::implementation
         return filterTag;
     }
 
+    std::wstring BlockLogPage::CurrentReasonTag()
+    {
+        std::wstring reasonTag = L"any";
+        if (ReasonFilterCombo() && ReasonFilterCombo().SelectedItem()) {
+            if (auto item = ReasonFilterCombo().SelectedItem().try_as<Controls::ComboBoxItem>()) {
+                if (auto tagObj = item.Tag()) reasonTag = winrt::unbox_value<winrt::hstring>(tagObj).c_str();
+            }
+        }
+        return reasonTag;
+    }
+
     std::wstring BlockLogPage::CurrentSearchText()
     {
         std::wstring searchText;
@@ -306,6 +327,16 @@ namespace winrt::winui::implementation
     {
         if (auto btn = sender.try_as<Controls::Button>()) {
             if (auto tag = btn.Tag()) {
+                size_t gidx = static_cast<size_t>(winrt::unbox_value<uint64_t>(tag));
+                if (gidx < m_groups.size()) ToggleExpand(gidx);
+            }
+        }
+    }
+
+    void BlockLogPage::RowHeadTapped(IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&)
+    {
+        if (auto head = sender.try_as<Controls::Grid>()) {
+            if (auto tag = head.Tag()) {
                 size_t gidx = static_cast<size_t>(winrt::unbox_value<uint64_t>(tag));
                 if (gidx < m_groups.size()) ToggleExpand(gidx);
             }
@@ -514,12 +545,19 @@ namespace winrt::winui::implementation
         ui.actionIcon.Glyph(block ? L"\xE72E" : allow ? L"\xE73E" : L"\xE7B3");
         ui.actionIcon.Foreground(block ? BrushBad() : allow ? BrushOk() : BrushDim());
 
-        ui.titleText.Text(ActionSentence(g.action));
+        // 标题优先显示窗口标题，没有标题时退化为进程名，再没有才用动作句
+        ui.titleText.Text(!g.title.empty() ? g.title : (!g.exe.empty() ? g.exe : ActionSentence(g.action)));
 
-        std::wstring sub = g.lastTime;
-        if (!g.exe.empty()) sub += L" · " + g.exe;
+        std::wstring sub = ActionSentence(g.action);
+        if (!g.lastTime.empty()) sub += L" · " + g.lastTime;
+        if (!g.exe.empty() && !g.title.empty()) sub += L" · " + g.exe;
         if (g.count > 1) sub += L" · 共 " + std::to_wstring(g.count) + L" 次";
         ui.subText.Text(sub);
+
+        // 标题被截断时，悬停能看到完整进程名与标题
+        std::wstring tip = g.exe;
+        if (!g.title.empty()) tip += (tip.empty() ? L"" : L"\n") + g.title;
+        Controls::ToolTipService::SetToolTip(ui.titleText, tip.empty() ? nullptr : box_value(hstring(tip)));
 
         ui.tagText.Text(ReasonLabel(g.reason));
         SetLabelIcon(ui.labelIcon, g.lastRaw);
@@ -575,6 +613,10 @@ namespace winrt::winui::implementation
         // 头部：[图标][标题/时间][原因][箭头]
         auto head = Controls::Grid();
         head.ColumnSpacing(12);
+        // 透明背景让空白区域也能响应点击；整行可展开，不必非点右侧箭头
+        head.Background(Media::SolidColorBrush(winrt::Windows::UI::Colors::Transparent()));
+        head.Tag(box_value(static_cast<uint64_t>(gidx)));
+        head.Tapped({ this, &BlockLogPage::RowHeadTapped });
         auto cdIcon = Controls::ColumnDefinition();
         cdIcon.Width(GridLengthHelper::FromValueAndType(0, GridUnitType::Auto));
         auto cdText = Controls::ColumnDefinition();
@@ -632,6 +674,7 @@ namespace winrt::winui::implementation
         ui.chevronBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
         ui.chevronBtn.Tag(box_value(static_cast<uint64_t>(gidx)));
         ui.chevronBtn.Click({ this, &BlockLogPage::RowChevronClick });
+        Automation::AutomationProperties::SetName(ui.chevronBtn, L"展开事件记录");
 
         ui.chevron = Controls::FontIcon();
         ui.chevron.Glyph(L"\xE70D");
@@ -688,7 +731,8 @@ namespace winrt::winui::implementation
         UpdateRowUi(*ui, g);
     }
 
-    bool BlockLogPage::GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& searchText, int threshold)
+    bool BlockLogPage::GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& reasonTag,
+        std::wstring const& searchText, int threshold)
     {
         if (!searchText.empty()) {
             std::wstring lowerExe = g.exe, lowerTitle = g.title, lowerCls = g.cls, lowerSearch = searchText;
@@ -700,20 +744,22 @@ namespace winrt::winui::implementation
                 lowerCls.find(lowerSearch) == std::wstring::npos)
                 return false;
         }
-        if (filterTag == L"all") return true;
-        if (filterTag == L"action_block")   return g.action == L"block";
-        if (filterTag == L"action_allow")   return g.action == L"allow";
-        if (filterTag == L"action_monitor") return g.action == L"monitor";
-        if (filterTag == L"list") return (g.reason == L"whitelist" || g.reason == L"blacklist");
-        if (filterTag == L"ml_heur" || filterTag == L"ml_list") {
-            // ML 跳过/未记录不属于「ML 冲突」
-            if (g.ml != L"Y" && g.ml != L"N") return false;
-        }
-        if (filterTag == L"ml_heur") {
+
+        // 结果维度
+        if (filterTag == L"action_block"   && g.action != L"block")   return false;
+        if (filterTag == L"action_allow"   && g.action != L"allow")   return false;
+        if (filterTag == L"action_monitor" && g.action != L"monitor") return false;
+
+        // 依据维度
+        if (reasonTag == L"any") return true;
+        if (reasonTag == L"list") return (g.reason == L"whitelist" || g.reason == L"blacklist");
+        // ML 跳过/未记录不属于「ML 冲突」
+        if (g.ml != L"Y" && g.ml != L"N") return false;
+        if (reasonTag == L"ml_heur") {
             if (g.reason == L"heuristic") return (g.score >= threshold) != g.mlY;
             return false;
         }
-        if (filterTag == L"ml_list") {
+        if (reasonTag == L"ml_list") {
             if (g.reason == L"whitelist") return g.mlY;
             if (g.reason == L"blacklist") return !g.mlY;
             return false;
@@ -785,12 +831,13 @@ namespace winrt::winui::implementation
         m_rows.clear();
 
         std::wstring filterTag = CurrentFilterTag();
+        std::wstring reasonTag = CurrentReasonTag();
         std::wstring searchText = CurrentSearchText();
         int threshold = PopupBlocker::HeuristicThreshold;
 
         std::vector<size_t> passIdx;
         for (size_t i = 0; i < m_groups.size(); ++i)
-            if (GroupPassFilter(m_groups[i], filterTag, searchText, threshold)) passIdx.push_back(i);
+            if (GroupPassFilter(m_groups[i], filterTag, reasonTag, searchText, threshold)) passIdx.push_back(i);
         std::stable_sort(passIdx.begin(), passIdx.end(),
             [this](size_t a, size_t b) { return m_groups[a].seq > m_groups[b].seq; });
 
@@ -835,6 +882,7 @@ namespace winrt::winui::implementation
         if (newLines.empty()) return;
 
         std::wstring filterTag = CurrentFilterTag();
+        std::wstring reasonTag = CurrentReasonTag();
         std::wstring searchText = CurrentSearchText();
         int threshold = PopupBlocker::HeuristicThreshold;
 
@@ -866,7 +914,7 @@ namespace winrt::winui::implementation
             }
 
             auto& grp = m_groups[gidx];
-            bool pass = GroupPassFilter(grp, filterTag, searchText, threshold);
+            bool pass = GroupPassFilter(grp, filterTag, reasonTag, searchText, threshold);
 
             if (m_pinnedToTop) {
                 if (isNewGroup && pass) {
@@ -964,6 +1012,36 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::Clear_Click(IInspectable const&, RoutedEventArgs const&)
     {
+        ClearLogWithConfirm();
+    }
+
+    // 清空不可恢复，先弹确认；AsyncAction 不能直接做 Click 处理器，包一层。
+    winrt::fire_and_forget BlockLogPage::ClearLogWithConfirm()
+    {
+        auto lifetime = get_strong();
+
+        auto xamlRoot = this->XamlRoot();
+        if (!xamlRoot) co_return;
+
+        // 代码创建：声明在页面 XAML 树里的 ContentDialog 无入场动画（WinUI #8476 §9）
+        Controls::ContentDialog dialog;
+        dialog.Title(box_value(hstring(L"清空日志？")));
+        dialog.Content(box_value(hstring(L"清空后 blocklog.txt 中的全部记录将被删除，且无法恢复。")));
+        dialog.PrimaryButtonText(L"清空");
+        dialog.CloseButtonText(L"取消");
+        dialog.DefaultButton(Controls::ContentDialogButton::Close);
+        ApplyDefaultDialogStyle(dialog);
+        dialog.XamlRoot(xamlRoot);
+
+        Controls::ContentDialogResult result{ Controls::ContentDialogResult::None };
+        try {
+            result = co_await dialog.ShowAsync();
+        }
+        catch (...) {
+            co_return;   // 已有弹窗打开等异常：不动日志
+        }
+        if (result != Controls::ContentDialogResult::Primary) co_return;
+
         PopupBlocker::ClearLog();
         m_lastWrite = 0;
         Load();
@@ -997,6 +1075,10 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::ExportSamples_Click(IInspectable const&, RoutedEventArgs const&)
     {
+        if (m_labels.empty()) {
+            MessageBoxW(nullptr, L"当前没有可导出的标注，请在日志卡片上右键标注样本。", L"提示", MB_OK | MB_ICONINFORMATION);
+            return;
+        }
         std::wstring path = FilePicker::PickJsonFile(true);
         if (path.empty()) return;
         std::string json = SampleLabels::ExportJson(m_labels);

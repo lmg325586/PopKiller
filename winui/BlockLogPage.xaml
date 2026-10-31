@@ -25,16 +25,24 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap"/>
             </StackPanel>
-            <ComboBox x:Name="FilterCombo" Grid.Column="1" MinWidth="160" VerticalAlignment="Top"
-                      PlaceholderText="筛选器" SelectionChanged="Filter_Changed">
-                <ComboBoxItem Content="全部日志" Tag="all"/>
-                <ComboBoxItem Content="仅拦截" Tag="action_block"/>
-                <ComboBoxItem Content="仅放行" Tag="action_allow"/>
-                <ComboBoxItem Content="仅监控" Tag="action_monitor"/>
-                <ComboBoxItem Content="命中黑/白名单" Tag="list"/>
-                <ComboBoxItem Content="ML与启发冲突" Tag="ml_heur"/>
-                <ComboBoxItem Content="ML与名单冲突" Tag="ml_list"/>
-            </ComboBox>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                <ComboBox x:Name="FilterCombo" MinWidth="130" SelectedIndex="0"
+                          SelectionChanged="Filter_Changed"
+                          AutomationProperties.Name="按结果筛选">
+                    <ComboBoxItem Content="全部日志" Tag="all"/>
+                    <ComboBoxItem Content="仅拦截" Tag="action_block"/>
+                    <ComboBoxItem Content="仅放行" Tag="action_allow"/>
+                    <ComboBoxItem Content="仅监控" Tag="action_monitor"/>
+                </ComboBox>
+                <ComboBox x:Name="ReasonFilterCombo" MinWidth="150" SelectedIndex="0"
+                          SelectionChanged="Filter_Changed"
+                          AutomationProperties.Name="按判定依据筛选">
+                    <ComboBoxItem Content="全部依据" Tag="any"/>
+                    <ComboBoxItem Content="命中黑/白名单" Tag="list"/>
+                    <ComboBoxItem Content="ML与启发冲突" Tag="ml_heur"/>
+                    <ComboBoxItem Content="ML与名单冲突" Tag="ml_list"/>
+                </ComboBox>
+            </StackPanel>
         </Grid>
 
         <!-- 工具条：搜索 / 计数 / 操作 -->

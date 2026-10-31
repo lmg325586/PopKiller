@@ -19,7 +19,8 @@
                         IsSettingsVisible="True"
                         OpenPaneLength="280"
                         CompactPaneLength="48"
-                        SelectionChanged="NavView_SelectionChanged">
+                        SelectionChanged="NavView_SelectionChanged"
+                        ItemInvoked="NavView_ItemInvoked">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="主页" Tag="Home">
                     <NavigationViewItem.Icon>

@@ -59,19 +59,23 @@ namespace winrt::winui::implementation
         void OnLogListLoaded(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void NewLogJumpButton_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void RowChevronClick(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
+        void RowHeadTapped(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& e);
         void OpenRules_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
 
     private:
         void Load();
         void ReloadFromFile();
+        winrt::fire_and_forget ClearLogWithConfirm();
         void ApplyFilter();
         void Timer_Tick(winrt::Windows::Foundation::IInspectable const&, winrt::Windows::Foundation::IInspectable const&);
         void AddRuleFromSelection(bool whitelist);
 
         void AppendNewLines();
         std::wstring ExtractKey(std::wstring const& raw, LogGroup& g);
-        bool GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& searchText, int threshold);
+        bool GroupPassFilter(LogGroup const& g, std::wstring const& filterTag, std::wstring const& reasonTag,
+            std::wstring const& searchText, int threshold);
         std::wstring CurrentFilterTag();
+        std::wstring CurrentReasonTag();
         std::wstring CurrentSearchText();
         void SyncJumpButton();
         void UpdateCountText();
