@@ -789,7 +789,8 @@ namespace winrt::winui::implementation
     {
         uint64_t consumed = 0;
         std::wstringstream ss(ReadLogTextFrom(0, consumed));
-        if (consumed > 0) m_lastFileSize = consumed;
+        // 空文件也归零：否则清空/轮转后残留旧大小，增量读取会长期失配
+        m_lastFileSize = consumed;
         std::wstring line;
         m_groups.clear();
         m_groupIndex.clear();
@@ -962,11 +963,11 @@ namespace winrt::winui::implementation
         UpdateCountText();
     }
 
-    void BlockLogPage::Load()
+    void BlockLogPage::Load(bool force)
     {
         PopupBlocker::FlushLog();
         uint64_t t = LogWriteTime();
-        if (t != m_lastWrite) {
+        if (force || t != m_lastWrite) {
             m_lastWrite = t;
             ReloadFromFile();
             SampleLabels::Load(m_labels);
@@ -990,7 +991,7 @@ namespace winrt::winui::implementation
         uint64_t wt = u.QuadPart;
 
         if (wt == m_lastWrite && size == m_lastFileSize) return;
-        if (size < m_lastFileSize) { m_lastWrite = wt; Load(); return; }
+        if (size < m_lastFileSize) { m_lastFileSize = 0; Load(true); return; }
         m_lastWrite = wt;
         AppendNewLines();
     }
@@ -1008,7 +1009,7 @@ namespace winrt::winui::implementation
         if (LogList().Items().Size() > 0) LogList().ScrollIntoView(LogList().Items().GetAt(0));
     }
 
-    void BlockLogPage::Refresh_Click(IInspectable const&, RoutedEventArgs const&) { m_lastWrite = 0; Load(); }
+    void BlockLogPage::Refresh_Click(IInspectable const&, RoutedEventArgs const&) { Load(true); }
 
     void BlockLogPage::Clear_Click(IInspectable const&, RoutedEventArgs const&)
     {
@@ -1043,8 +1044,7 @@ namespace winrt::winui::implementation
         if (result != Controls::ContentDialogResult::Primary) co_return;
 
         PopupBlocker::ClearLog();
-        m_lastWrite = 0;
-        Load();
+        Load(true);
     }
 
     void BlockLogPage::MarkPopup_Click(IInspectable const& sender, RoutedEventArgs const&)
@@ -1056,8 +1056,7 @@ namespace winrt::winui::implementation
         s.label = L"popup";
         m_labels[m_selectedRaw] = s;
         SampleLabels::Save(m_labels);
-        m_lastWrite = 0;
-        Load();
+        Load(true);
     }
 
     void BlockLogPage::MarkNotPopup_Click(IInspectable const& sender, RoutedEventArgs const&)
@@ -1069,8 +1068,7 @@ namespace winrt::winui::implementation
         s.label = L"notpopup";
         m_labels[m_selectedRaw] = s;
         SampleLabels::Save(m_labels);
-        m_lastWrite = 0;
-        Load();
+        Load(true);
     }
 
     void BlockLogPage::ExportSamples_Click(IInspectable const&, RoutedEventArgs const&)
@@ -1084,8 +1082,7 @@ namespace winrt::winui::implementation
         std::string json = SampleLabels::ExportJson(m_labels);
         if (PopupBlocker::WriteUtf8StringToFile(path, json)) {
             SampleLabels::Clear(m_labels);
-            m_lastWrite = 0;
-            Load();
+            Load(true);
             MessageBoxW(nullptr, L"训练数据导出成功，本地缓存已清空", L"提示", MB_OK | MB_ICONINFORMATION);
         }
         else MessageBoxW(nullptr, L"导出失败", L"提示", MB_OK | MB_ICONERROR);

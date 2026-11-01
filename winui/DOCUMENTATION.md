@@ -393,9 +393,9 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
-| `ReloadFromFile()` | 无 | `void` | 从 `blocklog.txt` 逐行解析并按「动作\|原因\|进程\|标题」聚合为 `LogGroup` |
+| `ReloadFromFile()` | 无 | `void` | 从 `blocklog.txt` 逐行解析并按「动作\|原因\|进程\|标题」聚合为 `LogGroup`；把 `m_lastFileSize` 对齐到已消费字节（空文件归零，避免清空/轮转后增量失配） |
 | `ApplyFilter()` | 无 | `void` | 按当前结果标签+依据标签+搜索词过滤分组，重建卡片列表 |
-| `Load()` | 无 | `void` | 读文件→应用过滤→刷新列表 |
+| `Load(force)` | `bool`（默认 `false`） | `void` | 先 `FlushLog`；`force` 为真或文件写入时间变化时重载并应用过滤。清空/轮转/标注/刷新等主动场景传 `true`，不靠改 `m_lastWrite` 触发重载 |
 | `Filter_Changed(sender, args)` | 下拉 | `void` | 切换结果/依据筛选→ApplyFilter |
 | `Search_Changed(sender, args)` | 文本 | `void` | 更新搜索词→ApplyFilter |
 | `Timer_Tick(sender, args)` | 定时器 | `void` | 自动刷新日志（1 秒间隔；日志含焦点窃取等事件） |

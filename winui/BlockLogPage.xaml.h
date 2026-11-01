@@ -63,7 +63,7 @@ namespace winrt::winui::implementation
         void OpenRules_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
 
     private:
-        void Load();
+        void Load(bool force = false);
         void ReloadFromFile();
         winrt::fire_and_forget ClearLogWithConfirm();
         void ApplyFilter();
