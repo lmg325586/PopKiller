@@ -138,7 +138,7 @@
                                      PlaceholderText="搜索规则"
                                      TextChanged="SearchInput_TextChanged"/>
 
-                            <ListView x:Name="RulesList" MinHeight="120" SelectionMode="Single"
+                            <ListView x:Name="RulesList" Height="260" SelectionMode="Single"
                                       RightTapped="RuleItem_RightTapped"
                                       DoubleTapped="RuleItem_DoubleTapped">
                                 <ListView.ItemContainerStyle>

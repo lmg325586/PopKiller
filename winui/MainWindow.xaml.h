@@ -14,8 +14,8 @@ namespace winrt::winui::implementation
         void NavView_ItemInvoked(winrt::Microsoft::UI::Xaml::Controls::NavigationView const& sender,
             winrt::Microsoft::UI::Xaml::Controls::NavigationViewItemInvokedEventArgs const& args);
 
-        void NavigateFrameToTag(winrt::hstring const& tag);
-        void NavigateFrame(winrt::Windows::UI::Xaml::Interop::TypeName const& target);
+        void NavigateFrameToTag(winrt::hstring const& tag, bool force = false);
+        void NavigateFrame(winrt::Windows::UI::Xaml::Interop::TypeName const& target, bool force = false);
         void HandleCloseRequested(
             winrt::Microsoft::UI::Windowing::AppWindow const& sender,
             winrt::Microsoft::UI::Windowing::AppWindowClosingEventArgs const& args);

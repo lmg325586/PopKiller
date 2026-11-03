@@ -318,7 +318,8 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
 | `NavView_SelectionChanged(sender, args)` | 导航视图选中 | `void` | 根据 tag 导航到对应页面 |
-| `NavigateFrameToTag(tag)` | 页面 tag 字符串 | `void` | ContentFrame 导航（Home/Blocker/BlockLog）；被导航选择与托盘还原复用 |
+| `NavigateFrameToTag(tag, force)` | 页面 tag 字符串、是否强制重建 | `void` | ContentFrame 导航（Home/Blocker/BlockLog/Settings）；托盘还原传 `force=true` 强制重建 |
+| `NavigateFrame(target, force)` | 目标页面类型、是否强制重建 | `void` | 幂等导航：已停在该页时直接返回；`force` 时总是重建（托盘还原时内容区已被置空） |
 | `NavigateToTag(tag)` | 页面 tag 字符串 | `void` | 外部调用入口（托盘菜单等），同步选中 NavView |
 
 ## HomePage.xaml.cpp（主页）

@@ -288,6 +288,15 @@ namespace winrt::winui::implementation
             {
                 auto w = winrt::winui::implementation::App::window;
                 if (!w) return;
+
+                // 应用在托盘时窗口被 SW_HIDE、内容区已被清空；只 Activate 不会把窗口显示出来，
+                // 而选中项本来就是日志页时也不会触发 SelectionChanged，内容区会一直空白。
+                // 先走托盘还原：显示窗口、移除托盘图标、恢复背景并强制重建当前页。
+                if (TrayIcon::Visible)
+                {
+                    TrayIcon::Restore();
+                }
+
                 w.Activate();
 
                 if (action == L"log")

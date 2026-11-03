@@ -333,8 +333,15 @@ namespace winrt::winui::implementation
         }
     }
 
-    void BlockLogPage::RowHeadTapped(IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&)
+    void BlockLogPage::RowHeadTapped(IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& e)
     {
+        // 行内按钮（展开箭头、更多操作）自己处理点击。Tapped 会从按钮冒泡到整行，
+        // 若这里再展开一次，同一次点击会把刚展开的行又折回去，表现就是「点箭头有时不展开」。
+        if (auto src = e.OriginalSource().try_as<DependencyObject>()) {
+            for (auto p = Media::VisualTreeHelper::GetParent(src); p; p = Media::VisualTreeHelper::GetParent(p)) {
+                if (p.try_as<Controls::Button>()) return;
+            }
+        }
         if (auto head = sender.try_as<Controls::Grid>()) {
             if (auto tag = head.Tag()) {
                 size_t gidx = static_cast<size_t>(winrt::unbox_value<uint64_t>(tag));
@@ -674,6 +681,11 @@ namespace winrt::winui::implementation
         ui.chevronBtn.BorderThickness(ThicknessHelper::FromUniformLength(0));
         ui.chevronBtn.Tag(box_value(static_cast<uint64_t>(gidx)));
         ui.chevronBtn.Click({ this, &BlockLogPage::RowChevronClick });
+        // Tapped 会从按钮冒泡到整行 head，与 Click 各切换一次，展开后又被折回；
+        // 在按钮上吃掉 Tapped，保证一次点击只切换一次。
+        ui.chevronBtn.Tapped([](IInspectable const&, winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& e) {
+            e.Handled(true);
+        });
         Automation::AutomationProperties::SetName(ui.chevronBtn, L"展开事件记录");
 
         ui.chevron = Controls::FontIcon();
@@ -704,15 +716,16 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::ToggleExpand(size_t gidx)
     {
-        auto& g = m_groups[gidx];
-        g.expanded = !g.expanded; // 允许单次记录展开
-
-        // 找该行 UI
+        // 先找该行 UI；找不到说明该行已不在列表里，此时不要翻转状态，
+        // 否则会出现「点了没反应、状态却变了」，下次点又折回去。
         RowUi* ui = nullptr;
         for (size_t i = 0; i < m_visibleGroups.size(); ++i) {
             if (m_visibleGroups[i] == gidx && i < m_rows.size()) { ui = &m_rows[i]; break; }
         }
         if (!ui) return;
+
+        auto& g = m_groups[gidx];
+        g.expanded = !g.expanded; // 允许单次记录展开
 
         if (g.expanded) {
             EnsureExpandUi(*ui);

@@ -243,10 +243,12 @@ namespace winrt::winui::implementation
                             if (auto t = item.Tag().try_as<hstring>()) tag = *t;
                         }
 
+                        // 隐藏到托盘时内容区已被清空，Frame 仍记着上次的页面类型，
+                        // 普通导航会被幂等判断直接跳过；还原时必须强制重建，否则内容区是空白。
                         if (tag == L"Home" || tag == L"Blocker" || tag == L"BlockLog")
-                            self->NavigateFrameToTag(tag);
+                            self->NavigateFrameToTag(tag, /*force=*/true);
                         else
-                            self->ContentFrame().Navigate(xaml_typename<winrt::winui::SettingsPage>());
+                            self->NavigateFrame(xaml_typename<winrt::winui::SettingsPage>(), /*force=*/true);
                     };
             }
         }
@@ -465,31 +467,35 @@ namespace winrt::winui::implementation
         }
     }
 
-    void MainWindow::NavigateFrameToTag(hstring const& tag)
+    void MainWindow::NavigateFrameToTag(hstring const& tag, bool force)
     {
         if (tag == L"Home")
         {
-            NavigateFrame(xaml_typename<winrt::winui::HomePage>());
+            NavigateFrame(xaml_typename<winrt::winui::HomePage>(), force);
         }
         else if (tag == L"Blocker")
         {
-            NavigateFrame(xaml_typename<winrt::winui::PopupBlockerPage>());
+            NavigateFrame(xaml_typename<winrt::winui::PopupBlockerPage>(), force);
         }
         else if (tag == L"BlockLog")
         {
-            NavigateFrame(xaml_typename<winrt::winui::BlockLogPage>());
+            NavigateFrame(xaml_typename<winrt::winui::BlockLogPage>(), force);
         }
         else if (tag == L"Settings")
         {
-            NavigateFrame(xaml_typename<winrt::winui::SettingsPage>());
+            NavigateFrame(xaml_typename<winrt::winui::SettingsPage>(), force);
         }
     }
 
     // 幂等导航：已经停在该页时不重建页面（例如从子页点回当前分区）。
-    void MainWindow::NavigateFrame(Windows::UI::Xaml::Interop::TypeName const& target)
+    // force 供托盘还原使用：隐藏到托盘时内容区被置空，但 Frame 仍记着上次的页面类型，
+    // 不强制重建就会被这里直接跳过，还原出来的窗口内容区是空白。
+    void MainWindow::NavigateFrame(Windows::UI::Xaml::Interop::TypeName const& target, bool force)
     {
         auto frame = ContentFrame();
-        if (frame.CurrentSourcePageType().Name == target.Name)
+        // 内容区被清空后（隐藏到托盘），Frame 仍记着上次的页面类型；只看类型会把重建跳过，
+        // 所以内容为空时一律重建，任何入口（点击导航项、通知动作）都能自愈。
+        if (!force && frame.Content() && frame.CurrentSourcePageType().Name == target.Name)
         {
             return;
         }
