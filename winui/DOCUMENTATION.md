@@ -132,7 +132,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `ResumeNow()` | 无 | `void` | 立即恢复拦截（取消暂停） |
 | `InFullscreenGame()` | 无 | `bool` | 只读全屏缓存；缓存由工作线程刷新（游戏模式开启时 1s、关闭时 5s 一次 `SHQueryUserNotificationState`，**且**前台窗口须铺满屏幕，见 `ForegroundCoversMonitor`），避免 out-of-context 回调读到弹窗切换后的前台状态 |
 | `ForegroundCoversMonitor()` | 无 | `bool` | 前台窗口矩形须 ≥ 所在显示器 95%×95%，用于剔除启动画面、繁忙态、演示模式等 `QUNS_*` 误报 |
-| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤 →（引擎运行且游戏模式下全屏时：`EVENT_OBJECT_SHOW`/`EVENT_SYSTEM_FOREGROUND` 的新建非白名单顶层窗 → 隐藏并尝试恢复前台）→ 评估 → 执行 → 日志 → 通知 |
+| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤 →（引擎运行且游戏模式下全屏时：`EVENT_OBJECT_SHOW`/`EVENT_SYSTEM_FOREGROUND` 的新建非白名单顶层窗 → 隐藏并尝试恢复前台）→ 评估 → 执行 → 日志 → 通知（Toast 投递 UI 线程发送） |
 
 ### detail 命名空间
 
@@ -156,7 +156,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `EnforceFocusSteal(hwnd)` | 句柄 | `void` | 焦点窃取：去置顶 + 同步隐藏（同一次 `SetWindowPos`）+ `WM_CLOSE` |
 | `MakeFocusStealVerdict()` | 无 | `EventVerdict` | 构造 `reason=focus_steal`、`action=block` 的评估结果 |
 | `ThreadMain(lp)` | 无 | `DWORD` | 挂 SHOW/FOREGROUND 双钩子 + 消息循环 |
-| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→（全屏游戏且非基础设施窗口的焦点窃取分支）→评估→执行→日志→通知 |
+| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→（全屏游戏且非基础设施窗口的焦点窃取分支）→评估→执行→日志→通知（Toast 投递 UI 线程发送） |
 
 输出结构：`EventVerdict{ action, reason, detail, shouldBlock, shouldLog, matchResult }`。
 

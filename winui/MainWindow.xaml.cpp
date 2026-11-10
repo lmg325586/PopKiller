@@ -296,19 +296,31 @@ namespace winrt::winui::implementation
                 }
                 xml += L"</binding></visual>" + actionsXml + L"</toast>";
 
-                // duration="short" 让横幅按系统短时长（默认约 5s）自动消失；
-                // 勿设 AppNotification.Expiration——未来过期时间会让通知长时间停留
-                winrt::Microsoft::Windows::AppNotifications::AppNotification notification{ winrt::hstring(xml) };
-                winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().Show(notification);
-            }
-            catch (winrt::hresult_error const& e) {
-                wchar_t buf[128]{};
-                swprintf_s(buf, L"[PopKiller] Toast 发送失败: %s (0x%08X)\n",
-                    e.message().c_str(), static_cast<unsigned>(e.code().value));
-                ::OutputDebugStringW(buf);
+                // 通知的构造与 Show 是同步 COM 调用，与拦截判定无关；投递到 UI 线程执行，
+                // 让钩子回调线程立刻返回去接下一个 SHOW 事件，不等通知平台。
+                auto window = winrt::winui::implementation::App::window;
+                if (!window) return;
+                window.DispatcherQueue().TryEnqueue([xml]() {
+                    try {
+                        // duration="short" 让横幅按系统短时长（默认约 5s）自动消失；
+                        // 勿设 AppNotification.Expiration——未来过期时间会让通知长时间停留
+                        winrt::Microsoft::Windows::AppNotifications::AppNotification notification{ winrt::hstring(xml) };
+                        winrt::Microsoft::Windows::AppNotifications::AppNotificationManager::Default().Show(notification);
+                    }
+                    catch (winrt::hresult_error const& e) {
+                        wchar_t buf[128]{};
+                        swprintf_s(buf, L"[PopKiller] Toast 发送失败: %s (0x%08X)\n",
+                            e.message().c_str(), static_cast<unsigned>(e.code().value));
+                        ::OutputDebugStringW(buf);
+                    }
+                    catch (...) {
+                        ::OutputDebugStringW(L"[PopKiller] Toast 未知异常\n");
+                    }
+                    });
             }
             catch (...) {
-                ::OutputDebugStringW(L"[PopKiller] Toast 未知异常\n");
+                // 构造 XML 阶段的异常不阻断引擎线程
+                ::OutputDebugStringW(L"[PopKiller] Toast 构造异常\n");
             }
             };
 
