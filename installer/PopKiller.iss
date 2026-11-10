@@ -1,10 +1,10 @@
 ﻿; PopKiller.iss —— Inno Setup 脚本（机器级安装 / 简体中文界面）
 ;
 ; 通常不直接编译本文件，而是用打包脚本生成（脚本会先用临时舞台整理文件）：
-;   pwsh -File installer\New-Setup.ps1 -Version 0.10.5
+;   pwsh -File installer\New-Setup.ps1 -Version 0.11
 ;
 ; 也可单独编译（StageDir 默认指向构建输出）：
-;   ISCC.exe /DAppVer=0.10.5 installer\PopKiller.iss
+;   ISCC.exe /DAppVer=0.11 installer\PopKiller.iss
 ;
 ; 行为对齐原 MSI：
 ;   * 机器级安装（需管理员），默认目录 C:\PopKiller，简体中文界面
@@ -18,7 +18,7 @@
   #define StageDir "..\x64\Release\winui"
 #endif
 #ifndef AppVer
-  #define AppVer "0.10.5"
+  #define AppVer "0.11"
 #endif
 #ifndef OutDir
   #define OutDir "..\dist"
