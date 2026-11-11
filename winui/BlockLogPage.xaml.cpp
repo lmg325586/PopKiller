@@ -117,6 +117,7 @@ namespace
         ReplaceAll(s, L"reason=heuristic_off", L"原因=启发式关闭");
         ReplaceAll(s, L"reason=focus_steal", L"原因=焦点窃取");
         ReplaceAll(s, L"raw=", L"特征=");
+        ReplaceAll(s, L"content=", L"内容=");
         ReplaceAll(s, L"ml=Y", L"ML=是");
         ReplaceAll(s, L"ml=N", L"ML=否");
         ReplaceAll(s, L"ml=-", L"ML=跳过");
@@ -260,6 +261,12 @@ namespace winrt::winui::implementation
         g.exe = ExtractVal(raw, L"exe");
         g.title = ExtractVal(raw, L"title");
         g.cls = ExtractVal(raw, L"class");
+        {
+            // 正文是最长的一段，只在解析到非空值时才更新，避免聚合时被无内容的新行清空
+            std::wstring content = ExtractVal(raw, L"content");
+            if (content.rfind(L"content=", 0) == 0) content = content.substr(8);
+            if (!content.empty()) g.content = content;
+        }
         if (g.reason.find(L"heuristic") == 0) g.reason = L"heuristic";
 
         if (raw.find(L" ml=Y") != std::wstring::npos) g.ml = L"Y";
@@ -586,6 +593,7 @@ namespace winrt::winui::implementation
         if (!g.exe.empty())   ui.detailPanel.Children().Append(BuildDetailRow(L"进程", g.exe));
         if (!g.title.empty()) ui.detailPanel.Children().Append(BuildDetailRow(L"窗口标题", g.title));
         if (!g.cls.empty())   ui.detailPanel.Children().Append(BuildDetailRow(L"窗口类名", g.cls));
+        if (!g.content.empty()) ui.detailPanel.Children().Append(BuildDetailRow(L"弹窗内容", g.content));
         ui.detailPanel.Children().Append(BuildDetailRow(L"判定依据", ReasonLabel(g.reason)));
         if (g.reason.rfind(L"heuristic", 0) == 0)
             ui.detailPanel.Children().Append(BuildDetailRow(L"启发式分数", std::to_wstring(g.score)));

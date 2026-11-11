@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "BlockLogPage.g.h"
 #include "LabelStorage.h"
@@ -11,6 +11,7 @@ namespace winrt::winui::implementation
 {
     struct LogGroup {
         std::wstring exe, title, cls;
+        std::wstring content;      // 弹窗正文（开启「记录弹窗内容」时才有）
         std::wstring action, ev, reason;
         int count = 0;
         std::wstring firstTime, lastTime;
