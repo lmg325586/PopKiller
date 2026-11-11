@@ -5,6 +5,7 @@
 #include "FilePicker.h"
 #include "App.xaml.h"
 #include "MainWindow.xaml.h"
+#include "PopupBlockerPage.xaml.h"
 #include <sstream>
 #include <winrt/Windows.UI.Text.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
@@ -545,6 +546,7 @@ namespace winrt::winui::implementation
         link.Content(box_value(hstring(L"打开规则页")));
         link.Padding(ThicknessHelper::FromUniformLength(0));
         link.Click({ this, &BlockLogPage::OpenRules_Click });
+        ui.rulesLink = link;
         ui.subPanel.Children().Append(link);
 
         ui.rawPanel = Controls::StackPanel();
@@ -554,6 +556,9 @@ namespace winrt::winui::implementation
 
     void BlockLogPage::UpdateRowUi(RowUi& ui, LogGroup const& g)
     {
+        // 每行的「打开规则页」带上本行的进程名
+        if (ui.rulesLink) ui.rulesLink.Tag(box_value(hstring(g.exe)));
+
         bool block = (g.action == L"block");
         bool allow = (g.action == L"allow");
         ui.actionIcon.Glyph(block ? L"\xE72E" : allow ? L"\xE73E" : L"\xE7B3");
@@ -1109,10 +1114,18 @@ namespace winrt::winui::implementation
         else MessageBoxW(nullptr, L"导出失败", L"提示", MB_OK | MB_ICONERROR);
     }
 
-    void BlockLogPage::OpenRules_Click(IInspectable const&, RoutedEventArgs const&)
+    void BlockLogPage::OpenRules_Click(IInspectable const& sender, RoutedEventArgs const&)
     {
         auto window = winrt::winui::implementation::App::window;
         if (!window) return;
+
+        // 把这条日志的进程名带过去，规则页导航后自动填进搜索框
+        if (auto link = sender.try_as<Controls::HyperlinkButton>())
+        {
+            if (auto tag = link.Tag().try_as<hstring>())
+                PopupBlockerPage::PendingSearch = std::wstring(*tag);
+        }
+
         if (auto mainWindow = window.try_as<winrt::winui::MainWindow>())
             mainWindow.NavigateToTag(L"Blocker");
     }

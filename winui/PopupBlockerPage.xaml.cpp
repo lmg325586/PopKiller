@@ -74,6 +74,7 @@ namespace
 
 namespace winrt::winui::implementation
 {
+    std::wstring PopupBlockerPage::PendingSearch;
 
     PopupBlockerPage::~PopupBlockerPage()
     {
@@ -898,6 +899,14 @@ namespace winrt::winui::implementation
     {
         // ReloadRulesFromEngine() 内部已 RefreshList()，不要再刷一次（整表重建）
         ReloadRulesFromEngine();
+
+        // 从日志页跳转过来时，把该条日志的进程名填进搜索框，直接筛出相关规则
+        if (!PendingSearch.empty())
+        {
+            auto pending = PendingSearch;
+            PendingSearch.clear();
+            SearchInput().Text(hstring(pending));
+        }
     }
 
     // 事件挂在 ListView 上（C++/WinRT 的 RightTapped/DoubleTapped 委托无可用构造函数），

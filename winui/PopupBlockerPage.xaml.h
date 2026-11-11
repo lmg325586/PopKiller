@@ -43,6 +43,9 @@ namespace winrt::winui::implementation
         void ResumeButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
 
+        // 从日志页跳转时携带的搜索词（进程名），导航后填入搜索框并清空
+        static std::wstring PendingSearch;
+
         void OnNavigatedTo(winrt::Microsoft::UI::Xaml::Navigation::NavigationEventArgs const& e);
 
         void RuleItem_RightTapped(winrt::Windows::Foundation::IInspectable const& sender,

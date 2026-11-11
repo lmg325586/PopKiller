@@ -40,6 +40,7 @@ namespace winrt::winui::implementation
         winrt::Microsoft::UI::Xaml::Controls::StackPanel detailPanel{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::TextBlock hintText{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::StackPanel rawPanel{ nullptr };
+        winrt::Microsoft::UI::Xaml::Controls::HyperlinkButton rulesLink{ nullptr };
     };
 
     struct BlockLogPage : BlockLogPageT<BlockLogPage>
