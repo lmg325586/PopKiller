@@ -550,6 +550,7 @@ namespace HeuristicScorer
     {
         return cls == L"consolewindowclass" ||
             cls.find(L"microsoftwindowstooltip") != std::wstring::npos ||
+            cls == L"microsoft.ui.content.popupwindowsitebridge" ||
             cls.find(L"pseudoconsole") != std::wstring::npos ||
             cls.rfind(L"hwndwrapper", 0) == 0 ||
             cls == L"tooltip" || cls.rfind(L"tooltip_", 0) == 0 ||
@@ -578,7 +579,9 @@ namespace HeuristicScorer
     // 注：#32768 是应用自建菜单类，未签名程序也会创建，按签名判定会误杀，故不在此列。
     inline bool IsSpoofableInfraClass(std::wstring const& cls)
     {
-        return cls == L"sysshadow" || cls == L"tooltips_class32" || cls == L"dragvisualwindow";
+        return cls == L"sysshadow" || cls == L"tooltips_class32" || cls == L"dragvisualwindow" ||
+            cls.find(L"microsoftwindowstooltip") != std::wstring::npos ||
+            cls == L"microsoft.ui.content.popupwindowsitebridge";
     }
 
     inline bool IsTrustedProcess(std::wstring const& path)

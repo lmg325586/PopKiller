@@ -209,7 +209,7 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `ExtractFeatures(hwnd, evTime)` | 句柄、事件时间 | `Features` | 21 项特征（含 `path`、`cls`） |
 | `BuildRawBits(f, rc, evTime)` | 特征、窗口矩形、事件时间 | `std::wstring` | 21 位 T/F/U 特征串：`raw[14]`=`unsigned`（T 未签名/F 已签名/U 未知），含空闲/鼠标距离/父进程/同前台 |
 | `ScoreWindow(f, detail&)` | 特征、明细串(out) | `int` | ≥0 分数；硬过滤时返回 0 且 detail 为 skip 标记 |
-| `IsInfraClass(cls)` | 小写类名 | `bool` | 基础设施类（工具提示 `tooltips_class32`/IME/拖影 `dragvisualwindow`/`#32768`/系统遮罩/启动画面 `*splash*` 等）——`ScoreWindow` 与焦点窃取共用同一份名单 |
+| `IsInfraClass(cls)` | 小写类名 | `bool` | 基础设施类（工具提示 `tooltips_class32`、WinUI 3 的 `MicrosoftWindowsTooltip` 与 `Microsoft.UI.Content.PopupWindowSiteBridge`、IME/拖影 `dragvisualwindow`/`#32768`/系统遮罩/启动画面 `*splash*` 等）——`ScoreWindow` 与焦点窃取共用同一份名单；其中两个 WinUI 3 类与 `tooltips_class32`/`dragvisualwindow`/`sysshadow` 需进程可信（系统目录或签名）才跳过 |
 | `IsCrashReporterDialog(cls, path)` | 小写类名、小写路径 | `bool` | 类名 `#32770` 且进程为 `werfault.exe` / `dwwin.exe` / `werfaultsecure.exe` 时视为崩溃报告对话框（其余 `#32770` 仍正常评估） |
 
 全局状态：`g_weights`（权重表）、`SigCache`。
