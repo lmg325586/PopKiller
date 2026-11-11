@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "SettingsPage.g.h"
 
@@ -25,6 +25,8 @@ namespace winrt::winui::implementation
         void HeuristicModeCombo_SelectionChanged(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& args);
         void VerboseLogToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void ContentLogToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void GameModeToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);

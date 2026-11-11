@@ -145,6 +145,19 @@
 
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="记录弹窗内容" Style="{StaticResource BodyTextBlockStyle}"/>
+                                <TextBlock Text="拦截时读取弹窗正文并写入日志。读取有超时上限，读不到或超时留空。"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <ToggleSwitch x:Name="ContentLogToggle" Grid.Column="1" VerticalAlignment="Center"
+                                          OnContent="开" OffContent="关" Toggled="ContentLogToggle_Toggled"/>
+                        </Grid>
+
+                        <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="游戏模式" Style="{StaticResource BodyTextBlockStyle}"/>
                                 <TextBlock Text="全屏游戏时，拦截新建且不在白名单的进程抢夺前台（阻止置顶并关闭），日志标记为“焦点窃取”。"
                                            Style="{StaticResource CaptionTextBlockStyle}"

@@ -19,6 +19,7 @@
 #include "HeuristicScorer.h"
 #include "RuleTypes.h"
 #include "RuleStorage.h"
+#include "WindowText.h"
 #include <shellapi.h>
 #pragma comment(lib, "shell32.lib")
 #include <winrt/Windows.Web.Http.h>
@@ -202,6 +203,7 @@ namespace PopupBlocker
     inline int HeuristicThreshold = kHeuristicThresholdDefault;
     inline bool VerboseLog = false;
     inline bool MLHeuristic = false;
+    inline bool LogContent = false;   // 把弹窗正文写进日志（默认关，读取带超时）
 
     inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
 
@@ -425,6 +427,7 @@ namespace PopupBlocker
         VerboseLog = AppSettings::ReadInt(L"Blocker", L"VerboseLog", 0) == 1;
         MLHeuristic = AppSettings::ReadInt(L"Blocker", L"MLHeuristic", 0) == 1;
         ToastNotify = AppSettings::ReadInt(L"Blocker", L"ToastNotify", 1) == 1;
+        LogContent = AppSettings::ReadInt(L"Blocker", L"LogContent", 0) == 1;
         GameMode = AppSettings::ReadInt(L"Blocker", L"GameMode", 0) == 1;
 
         EnsureDefaultRules();
@@ -994,12 +997,24 @@ namespace PopupBlocker
             Log(logMsg);
         }
 
+        // 隐藏与关闭拆开：拦截时需要在「已隐藏、尚未销毁」的窗口上读一次正文
+        inline void HideWindow(HWND hwnd)
+        {
+            // 同步隐藏（不依赖目标线程消息循环）
+            ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+
+        inline void RequestCloseWindow(HWND hwnd)
+        {
+            ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        }
+
         inline void EnforceBlock(HWND hwnd)
         {
             // 先同步隐藏（不依赖目标线程消息循环），再请求关闭
-            ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-                SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-            ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            HideWindow(hwnd);
+            RequestCloseWindow(hwnd);
         }
 
         // 目标窗口进程是否刚创建（默认 5 秒内）
@@ -1186,9 +1201,18 @@ namespace PopupBlocker
         }
 
         detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime, prevFgPid);
+        if (v.shouldBlock) {
+            // 先隐藏（不等目标消息循环，视觉上不闪烁），趁窗口还在读一次正文写进日志，再请求关闭：
+            // 窗口一旦销毁内容就读不到；读取有硬超时上限，失败留空，不拖住后续事件。
+            detail::HideWindow(hwnd);
+            if (LogContent) {
+                auto content = WindowText::Read(hwnd);
+                if (!content.empty()) v.detail += L" content=" + content;
+            }
+        }
         if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
         if (v.shouldBlock) {
-            detail::EnforceBlock(hwnd);
+            detail::RequestCloseWindow(hwnd);
 
             if (!ShuttingDown.load()) {
                 SafeInvoke(BlockOccurredCallback, detail::GetProcessName(hwnd), detail::GetTitle(hwnd), v.matchResult);

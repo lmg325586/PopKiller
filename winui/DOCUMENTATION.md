@@ -75,6 +75,7 @@
 | `VerboseLog` | `bool` | 详细日志开关 |
 | `MLHeuristic` | `bool` | 机器学习识别开关（启发式灰区 35–95 由双模型投票决定是否拦截） |
 | `ToastNotify` | `bool` | 拦截通知开关（默认开） |
+| `LogContent` | `bool` | 记录弹窗正文到日志（默认关，读取见 WindowText.h） |
 | `FullscreenGame` | `std::atomic<bool>` | 全屏游戏/应用检测缓存 |
 | `GameMode` | `bool` | 游戏模式开关（全屏时拦截焦点窃取，默认关） |
 | `kMLArbitrationLow` | `constexpr int` | ML 仲裁下限分数（35） |
@@ -151,14 +152,29 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 | `IsOverlayProcess(exe)` | 小写 exe 名 | `bool` | 游戏覆盖层进程：`gamebar*`、`rtss.exe`、`rtsshooksloader*` —— 全屏游戏时其新建窗口不算焦点窃取 |
 | `EvaluateWindow(hwnd, idEventTime)` | 句柄、事件时间 | `EventVerdict` | 综合评估：规则匹配+启发式+ML+raw |
 | `WriteEventLog(hwnd, idEvent, v)` | 句柄、事件、评估结果 | `void` | 写日志（含启发式明细+raw+ml） |
-| `EnforceBlock(hwnd)` | 句柄 | `void` | 同步隐藏（`SetWindowPos` + `SWP_HIDEWINDOW`，不等目标消息循环）→ 再 `WM_CLOSE`，视觉上不出现闪烁 |
+| `HideWindow(hwnd)` | 句柄 | `void` | 同步隐藏（`SetWindowPos` + `SWP_HIDEWINDOW`，不等目标消息循环） |
+| `RequestCloseWindow(hwnd)` | 句柄 | `void` | 投递 `WM_CLOSE`，不等待目标处理 |
+| `EnforceBlock(hwnd)` | 句柄 | `void` | 隐藏 + 请求关闭；拦截路径改为拆开调用，以便在隐藏后、销毁前读一次正文 |
 | `IsNewlyCreated(hwnd, withinMs)` | 句柄、阈值(默认 5000ms) | `bool` | 进程创建时间是否在阈值内（走 `GetProcInfo` 缓存） |
 | `EnforceFocusSteal(hwnd)` | 句柄 | `void` | 焦点窃取：去置顶 + 同步隐藏（同一次 `SetWindowPos`）+ `WM_CLOSE` |
 | `MakeFocusStealVerdict()` | 无 | `EventVerdict` | 构造 `reason=focus_steal`、`action=block` 的评估结果 |
 | `ThreadMain(lp)` | 无 | `DWORD` | 挂 SHOW/FOREGROUND 双钩子 + 消息循环 |
-| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→（全屏游戏且非基础设施窗口的焦点窃取分支）→评估→执行→日志→通知（Toast 投递 UI 线程发送） |
+| `WinEventProc(hook, event, hwnd, idObject, idChild, thread, time)` | 事件参数 | `void` | 入口：过滤→（全屏游戏且非基础设施窗口的焦点窃取分支）→评估→（拦截时先隐藏，开启「记录弹窗内容」则读一次正文）→日志→关闭→通知（Toast 投递 UI 线程发送） |
 
 输出结构：`EventVerdict{ action, reason, detail, shouldBlock, shouldLog, matchResult }`。
+
+## WindowText.h（弹窗正文读取）
+
+| 函数 | 输入 | 输出 | 说明/副作用 |
+|---|---|---|---|
+| `Read(hwnd)` | 窗口句柄 | `std::wstring` | 读取弹窗正文：UIA（Name → Value → TextPattern，均先探测再取）失败后回退 `EnumChildWindows` + `SendMessageTimeout(WM_GETTEXT)`；整次预算 120ms，超时/失败返回空串 |
+| `Sanitize(s)` | 原始文本 | `std::wstring` | 换行/制表符压空格、折叠连续空格、截断到 200 字符 |
+| `GetUia()` | 无 | `IUIAutomation*` | 首次调用创建 UIA 客户端（MTA），连接/事务超时各 200ms；失败返回 null |
+| `ReadElement(el)` | UIA 元素 | `std::wstring` | 单元素文本：先查 `IsValuePatternAvailable` / `IsTextPatternAvailable` 再取，避免对不存在的模式发起调用 |
+| `ReadViaUia(hwnd, startTick)` | 句柄、起始时刻 | `std::wstring` | 最多遍历 12 个元素，每次迭代检查剩余预算 |
+| `ReadViaMessages(hwnd, startTick)` | 句柄、起始时刻 | `std::wstring` | 最多枚举 8 个子窗口，单个 `SendMessageTimeout` 40ms 且 `SMTO_ABORTIFHUNG` |
+
+约束：只应在拦截路径（窗口已隐藏、尚未销毁）调用；本模块不抛异常，任何失败都退化为空串，日志里不出现 `content=`。
 
 ## HeuristicScorer.h（启发式打分）
 
