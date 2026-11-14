@@ -598,7 +598,7 @@ namespace winrt::winui::implementation
         if (!g.exe.empty())   ui.detailPanel.Children().Append(BuildDetailRow(L"进程", g.exe));
         if (!g.title.empty()) ui.detailPanel.Children().Append(BuildDetailRow(L"窗口标题", g.title));
         if (!g.cls.empty())   ui.detailPanel.Children().Append(BuildDetailRow(L"窗口类名", g.cls));
-        if (!g.content.empty()) ui.detailPanel.Children().Append(BuildDetailRow(L"弹窗内容", g.content));
+        if (!g.content.empty()) ui.detailPanel.Children().Append(BuildDetailRow(L"弹窗内容", g.content == L"none" ? L"未读取到" : g.content));
         ui.detailPanel.Children().Append(BuildDetailRow(L"判定依据", ReasonLabel(g.reason)));
         if (g.reason.rfind(L"heuristic", 0) == 0)
             ui.detailPanel.Children().Append(BuildDetailRow(L"启发式分数", std::to_wstring(g.score)));
@@ -1119,7 +1119,9 @@ namespace winrt::winui::implementation
         auto window = winrt::winui::implementation::App::window;
         if (!window) return;
 
-        // 把这条日志的进程名带过去，规则页导航后自动填进搜索框
+        // 把这条日志的进程名带过去，规则页导航后自动填进搜索框；
+        // 先清空，避免本条没有进程名时残留上次的值
+        PopupBlockerPage::PendingSearch.clear();
         if (auto link = sender.try_as<Controls::HyperlinkButton>())
         {
             if (auto tag = link.Tag().try_as<hstring>())

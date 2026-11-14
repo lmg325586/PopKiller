@@ -87,23 +87,26 @@ namespace WindowText
         return s_uia;
     }
 
-    // 单个元素的文本：先探测再取，Name -> ValuePattern -> TextPattern
-    inline std::wstring ReadElement(IUIAutomationElement* el)
+    // 单个元素的文本：先探测再取，Name -> ValuePattern -> TextPattern。
+    // 每次跨进程调用前都检查预算，避免目标无响应时连吃多个超时。
+    inline std::wstring ReadElement(IUIAutomationElement* el, ULONGLONG deadlineTick)
     {
         if (!el) return {};
+        auto expired = [deadlineTick]() { return ::GetTickCount64() > deadlineTick; };
 
         std::wstring text;
         VARIANT v{};
         ::VariantInit(&v);
 
-        if (SUCCEEDED(el->GetCurrentPropertyValue(UIA_NamePropertyId, &v)) &&
+        if (!expired() &&
+            SUCCEEDED(el->GetCurrentPropertyValue(UIA_NamePropertyId, &v)) &&
             v.vt == VT_BSTR && v.bstrVal)
         {
             text = v.bstrVal;
         }
         ::VariantClear(&v);
 
-        if (text.empty())
+        if (text.empty() && !expired())
         {
             ::VariantInit(&v);
             BOOL hasValue = FALSE;
@@ -130,7 +133,7 @@ namespace WindowText
             }
         }
 
-        if (text.empty())
+        if (text.empty() && !expired())
         {
             ::VariantInit(&v);
             BOOL hasText = FALSE;
@@ -165,7 +168,7 @@ namespace WindowText
         return text;
     }
 
-    inline std::wstring ReadViaUia(HWND hwnd, ULONGLONG startTick)
+    inline std::wstring ReadViaUia(HWND hwnd, ULONGLONG deadlineTick)
     {
         IUIAutomation* uia = GetUia();
         if (!uia) return {};
@@ -174,7 +177,7 @@ namespace WindowText
         if (FAILED(uia->ElementFromHandle(hwnd, &root)) || !root) return {};
 
         std::wstring out;
-        AppendPart(out, ReadElement(root));
+        AppendPart(out, ReadElement(root, deadlineTick));
 
         IUIAutomationCondition* cond = nullptr;
         IUIAutomationElementArray* arr = nullptr;
@@ -185,13 +188,13 @@ namespace WindowText
             arr->get_Length(&len);
             for (int i = 0; i < len && i < kMaxElements; ++i)
             {
-                if (::GetTickCount64() - startTick > kTotalBudgetMs) break;
+                if (::GetTickCount64() > deadlineTick) break;
                 if (out.size() >= kMaxChars) break;
 
                 IUIAutomationElement* child = nullptr;
                 if (SUCCEEDED(arr->GetElement(i, &child)) && child)
                 {
-                    AppendPart(out, ReadElement(child));
+                    AppendPart(out, ReadElement(child, deadlineTick));
                     child->Release();
                 }
             }
@@ -206,14 +209,14 @@ namespace WindowText
     struct EnumCtx
     {
         std::wstring* out;
-        ULONGLONG startTick;
+        ULONGLONG deadlineTick;
         int count;
     };
 
     inline BOOL CALLBACK EnumChildProc(HWND child, LPARAM lp)
     {
         auto* ctx = reinterpret_cast<EnumCtx*>(lp);
-        if (::GetTickCount64() - ctx->startTick > kTotalBudgetMs) return FALSE;
+        if (::GetTickCount64() > ctx->deadlineTick) return FALSE;
         if (++ctx->count > kMaxChildren) return FALSE;
 
         wchar_t buf[512]{};
@@ -226,10 +229,10 @@ namespace WindowText
     }
 
     // 回退路径：UIA 拿不到时直接向子控件要 WM_GETTEXT（受控超时，目标是死窗口时立即放弃）
-    inline std::wstring ReadViaMessages(HWND hwnd, ULONGLONG startTick)
+    inline std::wstring ReadViaMessages(HWND hwnd, ULONGLONG deadlineTick)
     {
         std::wstring out;
-        EnumCtx ctx{ &out, startTick, 0 };
+        EnumCtx ctx{ &out, deadlineTick, 0 };
         ::EnumChildWindows(hwnd, EnumChildProc, reinterpret_cast<LPARAM>(&ctx));
         return out;
     }
@@ -238,11 +241,11 @@ namespace WindowText
     {
         if (!hwnd || !::IsWindow(hwnd)) return {};
 
-        ULONGLONG start = ::GetTickCount64();
-        std::wstring text = ReadViaUia(hwnd, start);
-        if (text.empty() && ::GetTickCount64() - start < kTotalBudgetMs)
+        ULONGLONG deadline = ::GetTickCount64() + kTotalBudgetMs;
+        std::wstring text = ReadViaUia(hwnd, deadline);
+        if (text.empty() && ::GetTickCount64() < deadline)
         {
-            text = ReadViaMessages(hwnd, start);
+            text = ReadViaMessages(hwnd, deadline);
         }
         return Sanitize(std::move(text));
     }

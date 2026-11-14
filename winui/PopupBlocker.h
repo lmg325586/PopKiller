@@ -203,7 +203,7 @@ namespace PopupBlocker
     inline int HeuristicThreshold = kHeuristicThresholdDefault;
     inline bool VerboseLog = false;
     inline bool MLHeuristic = false;
-    inline bool LogContent = false;   // 把弹窗正文写进日志（默认关，读取带超时）
+    inline std::atomic<bool> LogContent{ false };   // 把弹窗正文写进日志（默认关，读取带超时）
 
     inline std::function<void(std::wstring const& exeName, std::wstring const& windowTitle, int matchResult)> BlockOccurredCallback;
 
@@ -1202,13 +1202,13 @@ namespace PopupBlocker
 
         detail::EventVerdict v = detail::EvaluateWindow(hwnd, idEventTime, prevFgPid);
         if (v.shouldBlock) {
-            // 先隐藏（不等目标消息循环，视觉上不闪烁），趁窗口还在读一次正文写进日志，再请求关闭：
-            // 窗口一旦销毁内容就读不到；读取有硬超时上限，失败留空，不拖住后续事件。
-            detail::HideWindow(hwnd);
+            // 趁窗口仍在显示、内容已渲染时读一次正文：隐藏之后部分窗口的 UIA 树/子控件文本会失效，
+            // 那时再读多半是空的。读取有硬超时上限，失败记 content=none 便于排查。
             if (LogContent) {
                 auto content = WindowText::Read(hwnd);
-                if (!content.empty()) v.detail += L" content=" + content;
+                v.detail += content.empty() ? L" content=none" : (L" content=" + content);
             }
+            detail::HideWindow(hwnd);
         }
         if (v.shouldLog) detail::WriteEventLog(hwnd, idEvent, v);
         if (v.shouldBlock) {
