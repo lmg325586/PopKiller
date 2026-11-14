@@ -919,6 +919,14 @@ namespace PopupBlocker
             return false;
         }
 
+        // 系统选择器宿主进程（文件/文件夹选择器等）：其窗口不是弹窗，直接跳过。
+        // 进程名可伪造，只有进程可信（系统目录或签名）时才跳过。
+        inline bool IsTrustedPickerHost(HWND hwnd)
+        {
+            if (GetProcessName(hwnd) != L"pickerhost.exe") return false;
+            return HeuristicScorer::IsTrustedProcess(GetProcessPath(hwnd));
+        }
+
         // 基础设施窗口（与启发式硬过滤同源）：类名命中、崩溃报告对话框、覆盖层进程或尺寸为 0 → 不当作弹窗/焦点窃取
         inline bool IsInfraWindow(HWND hwnd)
         {
@@ -1154,6 +1162,7 @@ namespace PopupBlocker
     {
         if (ShuttingDown.load()) return;   // 退出链路早退守卫：关闭中不再评估/拦截
         if (!detail::PassEventFilter(hwnd, idObject, idChild)) return;
+        if (detail::IsTrustedPickerHost(hwnd)) return;   // 系统选择器宿主：过滤且不记日志
 
         // 零尺寸窗口（非详细日志模式）先跳过，且不写去重状态：
         // 很多弹出窗口先以 0×0 触发一次 SHOW，布局完成后再 SHOW 一次，
