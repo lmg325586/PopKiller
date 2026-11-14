@@ -420,6 +420,7 @@
 - [nlohmann/json](https://github.com/nlohmann/json) — JSON 解析（已包含在 `vendor/` 目录）
 - [Microsoft.ML.OnnxRuntime](https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime) — ONNX 模型推理引擎（NuGet 自动还原，用于机器学习识别）
 - Windows App SDK — WinUI 3 框架（NuGet 自动还原）
+- [Crashpad](https://crashpad.chromium.org/) — Chromium 崩溃处理组件（Apache License 2.0），以预编译包 `Crashpad_Windows_x64_v0.3.0`（`client.lib` + `crashpad_handler.exe`）接入，用于崩溃转储
 
 ### 编译步骤
 
@@ -431,7 +432,7 @@ cd PopKiller
 
 1. 双击 `winui.slnx` 打开解决方案；
 2. 选择 `x64 / Release` 配置；
-3. 生成解决方案（首次生成会自动还原 NuGet 包，包括 Windows App SDK 与 ONNX Runtime）；
+3. 生成解决方案（首次生成会自动还原 NuGet 包，包括 Windows App SDK 与 ONNX Runtime）；另需把 Crashpad 预编译包放在仓库同级目录 `Crashpad_Windows_x64_v0.3.0`（或用 `msbuild /p:CrashpadRoot=<路径>` 指定），构建后会把 `crashpad_handler.exe` 复制到输出目录；
 4. 预构建事件会自动运行 `scripts/GenerateVersion.ps1`，根据 git 提交哈希与日期生成 `VersionInfo.h`；
 5. 输出目录下的 `winui.exe` 即为可执行文件；
 6. 确保 `StaticML\` 目录下的两个 `.onnx` 模型文件与 `winui.exe` 在同一目录层级；
@@ -563,6 +564,8 @@ PopKiller/
 ## 许可证
 
 [MIT License](LICENSE.txt)
+
+第三方组件：Crashpad 采用 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)，以预编译库与 `crashpad_handler.exe` 形式随程序分发，未修改其源码。
 
 ## Contributors ✨
 
