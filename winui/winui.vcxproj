@@ -97,7 +97,9 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros">
+    <CrashpadRoot Condition="'$(CrashpadRoot)'==''">$(MSBuildThisFileDirectory)..\..\Crashpad_Windows_x64_v0.3.0</CrashpadRoot>
+  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -108,7 +110,16 @@
       <LanguageStandard Condition="'$(VisualStudioVersion)' &lt; '18.0'">stdcpp17</LanguageStandard>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(CrashpadRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(CrashpadRoot)\bin;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>client.lib;winhttp.lib;dbghelp.lib;shlwapi.lib;version.lib;advapi32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>if exist "$(CrashpadRoot)\bin\crashpad_handler.exe" copy /Y "$(CrashpadRoot)\bin\crashpad_handler.exe" "$(OutDir)" &gt;nul</Command>
+      <Message>复制 crashpad_handler.exe</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
@@ -152,7 +163,7 @@
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="AppTheme.h" />
     <ClInclude Include="AutoStart.h" />
-    <ClInclude Include="CrashHandler.h" />
+    <ClInclude Include="CrashpadReport.h" />
     <ClInclude Include="BlockLogPage.xaml.h">
       <DependentUpon>BlockLogPage.xaml</DependentUpon>
       <SubType>Code</SubType>

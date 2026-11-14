@@ -5,7 +5,7 @@
 #include "PopupBlocker.h"
 #include "AutoStart.h"
 #include "AppTheme.h"
-#include "CrashHandler.h"
+#include "CrashpadReport.h"
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
 #include <winrt/Microsoft.Windows.AppNotifications.h>
 #include <shellapi.h>
@@ -150,7 +150,7 @@ namespace winrt::winui::implementation
 {
     App::App()
     {
-        CrashHandler::Init();
+        CrashpadReport::Init();
 
         DarkMode::Init();
 
@@ -162,7 +162,7 @@ namespace winrt::winui::implementation
 #endif
                 e.Handled(true);   // 阻止 XAML 再次抛出/递归
                 // 记录转储与日志后结束进程：不再停留在未响应状态
-                CrashHandler::ReportCrash(message.empty() ? L"XAML 未处理异常" : message.c_str(), nullptr, true);
+                CrashpadReport::ReportFatal(message.empty() ? L"XAML 未处理异常" : std::wstring(message));
             });
     }
 

@@ -302,14 +302,18 @@ MutateRules([&](std::vector<Rule>& rules, std::vector<std::wstring>&) {
 全局常量：`WM_TRAYICON`, `IDM_SHOW`, `IDM_EXIT`, `IDM_TOGGLE`, `IDM_PAUSE_*`, `IDM_RESUME`。
 全局状态：`Hwnd`, `Visible`, `OnHideToTray`, `OnRestoreFromTray`, `OnExitRequested`, `IconNormal`, `IconGray`。
 
-## CrashHandler.h（崩溃转储与全局异常）
+## CrashpadReport.h（崩溃转储，基于 Crashpad）
 
 | 函数 | 输入 | 输出 | 说明/副作用 |
 |---|---|---|---|
-| `Init()` | 无 | `void` | 安装 `SetUnhandledExceptionFilter`、`std::set_terminate`、CRT 无效参数/纯虚处理器 |
-| `ReportCrash(reason, ep)` | 原因文本、可选异常指针 | `void` | 在 exe 目录写 `PopKiller_crash_<时间>.dmp` 并追加 `crash.log`，弹出提示框；带防重入 |
+| `Init()` | 无 | `bool` | 启动同目录 `crashpad_handler.exe`，数据库为 `<exe 目录>\crashpad`，带 `--no-upload`；handler 缺失时静默禁用 |
+| `ReportFatal(reason)` | 原因文本 | `void` | 写 `crash.log`，用 `DumpWithoutCrash` 取一份快照，提示用户后结束进程 |
+| `WriteCrashLog(line)` | 文本 | `void` | 追加 `crash.log`（UTF-8、带时间戳） |
+| `LogPendingReports()` | 无 | `void` | 启动时把上次未处理的 dump 数量记进 `crash.log`，不弹窗打扰 |
 
-转储用 `MiniDumpWriteDump`（`dbghelp.lib`），类型 `MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithDataSegs`。`App::App()` 调用 `Init()`，并把 XAML `UnhandledException` 接到 `ReportCrash()`（Release 亦生效）。
+原生崩溃由 Crashpad handler 生成标准 minidump，不再使用 `MiniDumpWriteDump`。`App::App()` 调用 `Init()`；XAML `UnhandledException` 走 `ReportFatal()`（Release 亦生效）。
+
+构建依赖 Crashpad 预编译包，默认路径 `$(MSBuildThisFileDirectory)..\..\Crashpad_Windows_x64_v0.3.0`，可用 `-p:CrashpadRoot=<path>` 覆盖；链接 `bin\client.lib`，构建后事件把 `crashpad_handler.exe` 复制到输出目录。
 
 ## AppTheme.h（主题与标题栏）
 
