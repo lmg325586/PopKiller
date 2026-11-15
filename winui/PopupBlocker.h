@@ -433,11 +433,15 @@ namespace PopupBlocker
         EnsureDefaultRules();
         std::vector<Rule> rules;
         std::vector<std::wstring> removed;
-        LoadRulesJson(rules, removed);
-        MutateRules([&](std::vector<Rule>& curRules, std::vector<std::wstring>& curRemoved) {
-            curRules = std::move(rules);
-            curRemoved = std::move(removed);
-        });
+        // 读取失败（文件损坏/被占用）时保留内存里的现状，绝不拿空列表覆盖并落盘：
+        // 否则一次读取失败就会把本地规则连同已合并的社区规则一起清掉。
+        if (LoadRulesJson(rules, removed))
+        {
+            MutateRules([&](std::vector<Rule>& curRules, std::vector<std::wstring>& curRemoved) {
+                curRules = std::move(rules);
+                curRemoved = std::move(removed);
+            });
+        }
     }
 
     inline std::wstring Sha256Hex(winrt::Windows::Storage::Streams::IBuffer const& buf)
